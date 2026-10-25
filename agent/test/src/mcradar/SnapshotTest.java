@@ -15,6 +15,48 @@ public final class SnapshotTest {
         if (!ok) { fails++; System.out.println("FAIL: " + what); }
     }
 
+    /**
+     * What the encoder must write for the full sample at wire 5 (token 0123..., session abcdef01, number 7). The same text is in tests/wire_v5_sample.h
+     * (kV5Full), which the C++ parser tests parse. It is a literal on both sides, not a file, so nothing between two repositories can alter it.
+     */
+    static final String V5_FULL =
+            "MCRADAR 5\n" +
+            "K 0123456789abcdef0123456789abcdef\n" +
+            "Q abcdef01 7\n" +
+            "T 123456789012345\n" +
+            "S agent ok: 1 other player(s)\n" +
+            "C 97.9276 65.6200 -45.4497 -175.83 18.91 68.02 2\n" +
+            "L Alice 100.000 64.000 -50.000 12.50 -3.25 17.50 0.60 1.80 069a79f4-44e9-4726-a5be-fca90e38aaf5\n" +
+            "P Bob 90.500 70.000 -60.250 12.50 -3.25 17.50 0.60 1.80 069a79f4-44e9-4726-a5be-fca90e38aaf5\n" +
+            "F 1\n" +
+            "I 103.000 64.000 -47.000 0.25 0.25 1 minecraft:diamond_sword minecraft:sharpness@5,minecraft:unbreaking@3 %7BEnchantments:%5B%7Bid:%22minecraft:sharpness%22%7D%5D%7D\n" +
+            "I 98.000 64.000 -52.000 - - 37 minecraft:cobblestone - -\n";
+
+    /** The "full" sample snapshot (camera, local player, one player, two items): the source of full_v4.dgram and of V5_FULL. */
+    private static Snapshot fullSample() {
+        Snapshot full = new Snapshot();
+        full.status = "agent ok: 1 other player(s)";
+        full.sampleNs = 123456789012345L; full.hasSampleTime = true;
+        full.camera = new Snapshot.Cam(97.9276, 65.62, -45.4497, -175.83f, 18.91f, 68.02f, 2);
+        full.local = rec("Alice", 100, 64, -50);
+        full.players.add(rec("Bob", 90.5, 70, -60.25));
+        full.items.add(new Snapshot.Item(103, 64, -47, 0.25f, 0.25f, 1, "minecraft:diamond_sword",
+                "minecraft:sharpness@5,minecraft:unbreaking@3", "{Enchantments:[{id:\"minecraft:sharpness\"}]}"));
+        full.items.add(new Snapshot.Item(98, 64, -52, Float.NaN, Float.NaN, 37, "minecraft:cobblestone", null, null));
+        return full;
+    }
+
+    /** First difference between two texts, readable in a CI log. */
+    private static String firstDifference(String want, String got) {
+        int n = Math.min(want.length(), got.length()), i = 0;
+        while (i < n && want.charAt(i) == got.charAt(i)) i++;
+        String[] w = want.split("\n", -1), g = got.split("\n", -1);
+        int line = 0;
+        for (int k = 0; k < Math.min(w.length, g.length); k++) { if (!w[k].equals(g[k])) { line = k; break; } line = k + 1; }
+        return "first difference at char " + i + " (line " + (line + 1) + ")\n  want: " + (line < w.length ? w[line] : "<end>") + "\n  got:  " + (line < g.length ? g[line] : "<end>")
+                + "\n  lengths: want " + want.length() + ", got " + got.length();
+    }
+
     private static String enc(Snapshot s) { return new String(s.encode(), Charset.forName("UTF-8")); }
 
     private static Snapshot.Rec rec(String name, double x, double y, double z) {
@@ -27,19 +69,8 @@ public final class SnapshotTest {
      */
     private static void dump(java.io.File dir) throws java.io.IOException {
         dir.mkdirs();
-        Snapshot full = new Snapshot();
-        full.status = "agent ok: 1 other player(s)";
-        full.sampleNs = 123456789012345L; full.hasSampleTime = true;
-        full.camera = new Snapshot.Cam(97.9276, 65.62, -45.4497, -175.83f, 18.91f, 68.02f, 2);
-        full.local = rec("Alice", 100, 64, -50);
-        full.players.add(rec("Bob", 90.5, 70, -60.25));
-        full.items.add(new Snapshot.Item(103, 64, -47, 0.25f, 0.25f, 1, "minecraft:diamond_sword",
-                "minecraft:sharpness@5,minecraft:unbreaking@3", "{Enchantments:[{id:\"minecraft:sharpness\"}]}"));
-        full.items.add(new Snapshot.Item(98, 64, -52, Float.NaN, Float.NaN, 37, "minecraft:cobblestone", null, null));
+        Snapshot full = fullSample();
         write(dir, "full_v4.dgram", full);
-        full.wire = 5; full.token = "0123456789abcdef0123456789abcdef"; full.session = 0xABCDEF01; full.seq = 7;
-        write(dir, "v5_full.dgram", full);
-        full.wire = 4; full.token = null; full.session = 0; full.seq = 0;
 
         Snapshot bare = new Snapshot();
         bare.itemsFresh = false;
@@ -95,6 +126,15 @@ public final class SnapshotTest {
         check(lines[8].equals("I 98.000 64.000 -52.000 - - 37 minecraft:cobblestone - -"), "unknown size / ench / tags are '-': " + lines[8]);
         check(lines[9].isEmpty() && lines.length == 10, "datagram ends with exactly one newline");
         check(lines[4].split(" ").length == 11, "L has 11 columns");
+
+        // ---- the v5 sample is exactly the literal the C++ tests parse ----
+        {
+            Snapshot v5 = fullSample();
+            v5.wire = 5; v5.token = "0123456789abcdef0123456789abcdef"; v5.session = 0xABCDEF01; v5.seq = 7;
+            String got = enc(v5);
+            check(got.equals(V5_FULL), "v5 sample differs from V5_FULL (and tests/wire_v5_sample.h): " + firstDifference(V5_FULL, got));
+            check(V5_FULL.indexOf('\r') < 0 && V5_FULL.endsWith("\n") && !V5_FULL.endsWith("\n\n"), "V5_FULL has LF line ends and one final newline");
+        }
 
         // ---- v5: the session token is the second line, only at wire >= 5 and only when there is one ----
         {

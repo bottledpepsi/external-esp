@@ -5,15 +5,11 @@
 #include "Logger.h"
 #include "Token.h"
 #include "Wire.h"
+#include "wire_v5_sample.h"
 #include <cstdio>
 #include <fstream>
-#include <iterator>
 #include <set>
 #include <string>
-
-#ifndef ESP_TEST_DATA_DIR
-#error "ESP_TEST_DATA_DIR must point at tests/data"
-#endif
 
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL line %d: %s\n", __LINE__, #c); ++fails; } } while (0)
@@ -64,12 +60,10 @@ int main()
         WorldSnapshot w1, w2;
         CHECK(ParseDatagram(weird.data(), weird.size(), w1) && w1.token.empty() && w1.ignoredLines == 1);
         CHECK(ParseDatagram(longTok.data(), longTok.size(), w2) && w2.token.empty() && w2.ignoredLines == 1);
-        // the real Java encoder's v5 datagram
-        std::ifstream f(std::string(ESP_TEST_DATA_DIR) + "/wire/v5_full.dgram", std::ios::binary);
-        const std::string j((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        // the Java encoder's v5 datagram for the full sample (tests/wire_v5_sample.h; the Java test checks the encoder still writes exactly this)
+        const std::string j = kV5Full;
         WorldSnapshot js;
-        if (j.empty()) std::printf("tests/data/wire/v5_full.dgram is missing or empty: the corpus is made by `sh agent/test/run-java-tests.sh --update-corpus`; check the file arrived intact (git am, not patch(1))\n");
-        CHECK(!j.empty() && ParseDatagram(j.data(), j.size(), js) && js.token == kTok && js.protocolVersion == 5 && js.hasSampleTime && js.items.size() == 2 && js.local.name == "Alice");
+        CHECK(ParseDatagram(j.data(), j.size(), js) && js.token == kV5FullToken && js.protocolVersion == 5 && js.hasSampleTime && js.items.size() == 2 && js.local.name == "Alice");
     }
 
     // ---- the ingest check ----

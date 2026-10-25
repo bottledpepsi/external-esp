@@ -3,14 +3,10 @@
 #include "Replay.h"
 #include "StreamIngest.h"
 #include "Wire.h"
+#include "wire_v5_sample.h"
 #include <cstdio>
 #include <fstream>
-#include <iterator>
 #include <string>
-
-#ifndef ESP_TEST_DATA_DIR
-#error "ESP_TEST_DATA_DIR must point at tests/data"
-#endif
 
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL line %d: %s\n", __LINE__, #c); ++fails; } } while (0)
@@ -53,11 +49,9 @@ int main()
         const std::string v4 = "MCRADAR 4\nQ abcdef01 7\n";
         WorldSnapshot w4;
         CHECK(ParseDatagram(v4.data(), v4.size(), w4) && !w4.hasWireSeq);              // Q means nothing before v5
-        std::ifstream f(std::string(ESP_TEST_DATA_DIR) + "/wire/v5_full.dgram", std::ios::binary);
-        const std::string j((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        const std::string j = kV5Full;                                                   // what the Java encoder writes for the full sample (tests/wire_v5_sample.h)
         WorldSnapshot js;
-        if (j.empty()) std::printf("tests/data/wire/v5_full.dgram is missing or empty: the corpus is made by `sh agent/test/run-java-tests.sh --update-corpus`; check the file arrived intact (git am, not patch(1))\n");
-        CHECK(!j.empty() && ParseDatagram(j.data(), j.size(), js) && js.hasWireSeq && js.wireSession == 0xABCDEF01u && js.wireSeq == 7);   // from the real Java encoder
+        CHECK(ParseDatagram(j.data(), j.size(), js) && js.hasWireSeq && js.wireSession == 0xABCDEF01u && js.wireSeq == 7);
     }
 
     // ---- in order: nothing to report ----

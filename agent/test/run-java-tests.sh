@@ -19,8 +19,19 @@ java -cp "out${SEP}test/out" mcradar.SnapshotTest --dump test/out/corpus
 if [ "$1" = "--update-corpus" ]; then
   mkdir -p ../tests/data/wire && cp test/out/corpus/*.dgram ../tests/data/wire/ && echo "corpus updated"
 else
+  # Compared after removing CRs and making sure there is one final newline: a corpus file that went through a line-ending conversion is still the same
+  # datagram (the parser strips CRs). Anything else is a real difference, and the log shows what.
+  norm() { tr -d '\r' < "$1" | sed -e '$a\'; }
   for f in test/out/corpus/*.dgram; do
-    cmp -s "$f" "../tests/data/wire/$(basename "$f")" || { echo "FAIL: tests/data/wire/$(basename "$f") differs from what the encoder writes now (run with --update-corpus)"; exit 1; }
+    c="../tests/data/wire/$(basename "$f")"
+    if [ ! -f "$c" ]; then echo "FAIL: $c is missing (run with --update-corpus)"; exit 1; fi
+    norm "$f" > test/out/a.tmp; norm "$c" > test/out/b.tmp
+    if ! cmp -s test/out/a.tmp test/out/b.tmp; then
+      echo "FAIL: $c differs from what the encoder writes now (run with --update-corpus)"
+      echo "  encoder: $(wc -c < "$f") bytes, committed: $(wc -c < "$c") bytes, first difference: $(cmp test/out/a.tmp test/out/b.tmp 2>&1 | head -1)"
+      diff test/out/a.tmp test/out/b.tmp | head -10
+      exit 1
+    fi
   done
   echo "wire corpus matches the encoder"
 fi
