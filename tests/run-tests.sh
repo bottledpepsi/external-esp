@@ -1,9 +1,10 @@
 #!/bin/sh
 # Host-side unit tests (Linux/macOS/MSYS2): config <-> JSON, C# config compatibility, friends, profiles,
-# wire parser, camera projection (orientation at 4 yaws, pitch, FOV edge), smoother.
+# wire parser, camera projection (orientation at 4 yaws, pitch, FOV edge), smoother. Needs cmake + a C++20 compiler.
+# Extra arguments are passed to ctest, e.g.  tests/run-tests.sh -R unit_tests
 set -e
-cd "$(dirname "$0")"
-S=../src
-g++ -std=c++20 -O1 -Wall -Wextra -I$S unit_tests.cpp $S/Json.cpp $S/Presets.cpp $S/EspConfig.cpp \
-    $S/FriendList.cpp $S/ProfileManager.cpp $S/Wire.cpp $S/Logger.cpp -o /tmp/mcesp_unit_tests
-rm -rf /tmp/mcesp_ut && mkdir -p /tmp/mcesp_ut && cd /tmp/mcesp_ut && /tmp/mcesp_unit_tests | grep -E "FAIL|ALL OK|FAILURES"
+cd "$(dirname "$0")/.."
+B=build/tests
+cmake -S tests -B "$B" -DCMAKE_BUILD_TYPE=Debug >/dev/null
+cmake --build "$B" -j "$(nproc 2>/dev/null || echo 4)"
+ctest --test-dir "$B" --output-on-failure "$@"

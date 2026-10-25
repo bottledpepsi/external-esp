@@ -3,3 +3,5 @@
 /radar.ini
 /.idea/
 /agent/esp-agent.jar
+/build/
+/build-*/
