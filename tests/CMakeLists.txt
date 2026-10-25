@@ -44,6 +44,8 @@ esp_add_test(esprec_test esprec_test.cpp)
 esp_add_test(ingest_test ingest_test.cpp)
 esp_add_test(recorder_test recorder_test.cpp)
 esp_add_test(replay_test replay_test.cpp)
+esp_add_test(wire_fuzz_test wire_fuzz_test.cpp)
+target_compile_definitions(wire_fuzz_test PRIVATE ESP_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 
 # ---- golden tests: replay a recording through parser + smoother + camera on a fake clock and compare the pixel jitter ----
 add_library(esp_golden STATIC golden.cpp)
