@@ -40,3 +40,8 @@ into `agent/test/out-smoke/`, launches each game with `-javaagent`, listens on a
 header `MCRADAR 4`, non-decreasing `T` stamps, Alice local + Bob/Carol, Carol's sneaking hitbox (1.50), camera FOV in the fake 63-77 sweep and
 the right view mode, exactly the three real items (the item frame is filtered; the sword's `sharpness@5` is parsed), five items for `RealisticGame`.
 It stops a case as soon as everything is satisfied (about 2 s) or fails after `--timeout` (45 s). Needs a JDK 8+ and Python 3.8+.
+
+## Wire corpus (Java -> C++ contract)
+`run-java-tests.sh` also runs `SnapshotTest --dump` and compares the datagrams with `tests/data/wire/*.dgram` (a full snapshot, an empty one, unicode names,
+a crowd of 40 players and 60 items). The C++ parser tests read exactly those files, so an encoder change that the parser does not understand
+fails a test instead of a game session. After an intentional wire change: `sh agent/test/run-java-tests.sh --update-corpus` and review the diff.

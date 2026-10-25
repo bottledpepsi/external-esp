@@ -21,7 +21,52 @@ public final class SnapshotTest {
         return new Snapshot.Rec(name, x, y, z, 12.5f, -3.25f, 17.5f, 0.6f, 1.8f, "069a79f4-44e9-4726-a5be-fca90e38aaf5");
     }
 
-    public static void main(String[] args) {
+    /**
+     * The datagrams the C++ parser tests read (tests/data/wire/*.dgram): produced by the REAL encoder, so the two languages are tested
+     * against each other. Written by "SnapshotTest --dump DIR"; agent/test/run-java-tests.sh fails when they differ from the committed ones.
+     */
+    private static void dump(java.io.File dir) throws java.io.IOException {
+        dir.mkdirs();
+        Snapshot full = new Snapshot();
+        full.status = "agent ok: 1 other player(s)";
+        full.sampleNs = 123456789012345L; full.hasSampleTime = true;
+        full.camera = new Snapshot.Cam(97.9276, 65.62, -45.4497, -175.83f, 18.91f, 68.02f, 2);
+        full.local = rec("Alice", 100, 64, -50);
+        full.players.add(rec("Bob", 90.5, 70, -60.25));
+        full.items.add(new Snapshot.Item(103, 64, -47, 0.25f, 0.25f, 1, "minecraft:diamond_sword",
+                "minecraft:sharpness@5,minecraft:unbreaking@3", "{Enchantments:[{id:\"minecraft:sharpness\"}]}"));
+        full.items.add(new Snapshot.Item(98, 64, -52, Float.NaN, Float.NaN, 37, "minecraft:cobblestone", null, null));
+        write(dir, "full_v4.dgram", full);
+
+        Snapshot bare = new Snapshot();
+        bare.itemsFresh = false;
+        write(dir, "bare_v4.dgram", bare);
+
+        Snapshot uni = new Snapshot();
+        uni.status = "agent ok: \u00e9\u00e8 \ud83d\ude00";
+        uni.local = rec("Alice", 1, 2, 3);
+        uni.players.add(rec("J\u00fcrgen", 4, 5, 6));
+        uni.players.add(rec("\u0416\u0435\u043d\u044f", 7, 8, 9));
+        uni.players.add(rec("\ud83d\ude00", 10, 11, 12));
+        write(dir, "unicode_v4.dgram", uni);
+
+        Snapshot crowd = new Snapshot();
+        crowd.sampleNs = 5000000000L; crowd.hasSampleTime = true;
+        crowd.camera = new Snapshot.Cam(0, 65.62, 0, 0f, 0f, 70f, 1);
+        crowd.local = rec("Me", 0, 64, 0);
+        for (int i = 0; i < 40; i++) crowd.players.add(rec("Player" + i, i * 2.5, 64, -i * 1.5));
+        for (int i = 0; i < 60; i++)
+            crowd.items.add(new Snapshot.Item(i, 64, i / 2.0, 0.25f, 0.25f, 1 + i % 64, "minecraft:item_" + i, i % 3 == 0 ? "minecraft:efficiency@" + (i % 5 + 1) : null, null));
+        write(dir, "crowd_v4.dgram", crowd);
+    }
+
+    private static void write(java.io.File dir, String name, Snapshot s) throws java.io.IOException {
+        java.io.FileOutputStream o = new java.io.FileOutputStream(new java.io.File(dir, name));
+        try { o.write(s.encode()); } finally { o.close(); }
+    }
+
+    public static void main(String[] args) throws Exception {
+        if (args.length == 2 && args[0].equals("--dump")) { dump(new java.io.File(args[1])); return; }
         Locale saved = Locale.getDefault();
 
         // ---- layout of a full snapshot ----
