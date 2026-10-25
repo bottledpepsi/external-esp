@@ -895,7 +895,7 @@ final class Probe {
             FileOutputStream fos = new FileOutputStream(out);
             try { fos.write(b.toString().getBytes("UTF-8")); } finally { fos.close(); }
         } catch (Throwable t) {
-            Log.info("Could not write layout export: " + t);
+            Log.warn("Could not write layout export: " + t);
         }
     }
 }

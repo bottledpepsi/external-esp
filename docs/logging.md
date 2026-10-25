@@ -19,4 +19,7 @@ HH:MM:SS.mmm [LEVEL] [source] message         e.g.  14:03:22.517 [WARN ] [esp] D
 * **Size cap.** Each file is capped at 1 MiB. When it is full it is renamed to `*.1.*` (replacing the previous backup) and a new one is started, so a log never
   uses more than about 2 MiB however long the session runs. An oversized log left by a previous run is rotated at start-up.
 * **Crash safety.** Every line is flushed when it is written.
+* **Repeats.** The agent writes the same message once and then `last message repeated N times` (window 5 s), so a failure that recurs on every tick (120 Hz) cannot fill the log.
+  Indentation inside a message (the agent's diagnostic dumps) is kept.
+* `esp_items_debug.txt` (written when no dropped items are recognised) is overwritten each time, not appended, so it does not grow.
 * **Flood protection.** Warnings about the datagram stream (wrong token, unsupported version) are logged once per kind, not once per datagram.

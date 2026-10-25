@@ -33,6 +33,10 @@ public final class AgentConfigTest {
         check(AgentConfig.parse("wire= 5 ").wire == 5, "whitespace around the value");
         check(AgentConfig.parse("wire=99999999999999999999").wire == 4, "overflowing value is ignored");
 
+        // verbose option
+        check(!AgentConfig.parse(null).verbose && !AgentConfig.parse("verbose=0").verbose && !AgentConfig.parse("verbose=").verbose && AgentConfig.parse("verbose=1").verbose
+                && AgentConfig.parse("verbose=true").verbose && AgentConfig.parse("port=1;verbose=1;wire=5").verbose, "verbose option");
+
         // session token option
         check("0123456789abcdef0123456789abcdef".equals(AgentConfig.parse("token=0123456789abcdef0123456789abcdef").token), "token option");
         check(AgentConfig.parse("token=short").token == null && AgentConfig.parse("token=has space in it 123456").token == null && AgentConfig.parse("token=0123456789abcdef!").token == null

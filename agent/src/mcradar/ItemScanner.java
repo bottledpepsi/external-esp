@@ -496,7 +496,7 @@ final class ItemScanner {
             FileOutputStream fos = new FileOutputStream(new File(dir, "esp_items_debug.txt"));
             try { fos.write(b.toString().getBytes("UTF-8")); } finally { fos.close(); }
             Log.info("No items recognised among " + elements.length + " entities - wrote esp_items_debug.txt");
-        } catch (Throwable t) { Log.info("Could not write items debug: " + t); }
+        } catch (Throwable t) { Log.warn("Could not write items debug: " + t); }
     }
 
     /** Why `v` is not accepted as a stack although it may have the shape of one (an int, no doubles, few fields). */

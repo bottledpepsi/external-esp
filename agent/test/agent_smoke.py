@@ -193,7 +193,7 @@ CASES = {
 }
 
 # extra agent options and the negotiation line expected in esp_agent.log, per case (default: wire=4, no token)
-EXTRA_OPTS = {"fake-v5": "wire=5;token=" + TOKEN}
+EXTRA_OPTS = {"fake-v5": "wire=5;token=" + TOKEN + ";verbose=1"}
 NEGOTIATION = {"fake-v5": "overlay reads up to v5, agent writes up to v5 -> sending v5, session token set"}
 
 
@@ -243,6 +243,13 @@ def run_case(case, java_home, jar, timeout):
         shutil.rmtree(export, ignore_errors=True)
     problems = []
     check(dgs, problems)
+    # every line of the agent's log has the common format (docs/logging.md); verbose=1 (fake-v5) adds the DEBUG line
+    fmt = re.compile(r"^\d\d:\d\d:\d\d\.\d\d\d \[(DEBUG|INFO |WARN |ERROR)\] \[agent\] .*$")
+    bad = [l for l in agent_log.split("\n") if l and not fmt.match(l)]
+    if bad:
+        problems.append("agent log line without the common format: %r" % bad[0])
+    if (case == "fake-v5") != ("[DEBUG] [agent] verbose logging is on" in agent_log):
+        problems.append("DEBUG line 'verbose logging is on' present=%s but verbose option was %s" % ("[DEBUG]" in agent_log, case == "fake-v5"))
     want = NEGOTIATION.get(case, "overlay reads up to v4, agent writes up to v5 -> sending v4")
     if want not in agent_log:
         problems.append("agent log has no wire-version negotiation line %r (esp_agent.log: %r)" % (want, agent_log[:300]))

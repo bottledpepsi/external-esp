@@ -17,6 +17,7 @@ struct AppOptions
     bool screenOverlay = false; // cover the whole primary monitor instead of tracking the game window
     bool openConfig = false; // open the config window as soon as the overlay is visible
     std::string token; // session token (wire v5): generated at start-up unless --token / --no-auth
+    bool verbose = false; // --verbose: DEBUG logging in the overlay and (option verbose=1) in the agent
     bool requireAuth = true; // --no-auth: accept datagrams without / with any token
     std::filesystem::path replayPath; // --replay FILE: play an .esprec recording instead of listening to the agent
     double replaySpeed = 1.0;         // --replay-speed X

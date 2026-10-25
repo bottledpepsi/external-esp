@@ -25,6 +25,7 @@ struct InjectorConfig
     std::string javaPath; // optional override
     uint16_t port = 47615;
     int agentHz = 120; // snapshots/second requested from the agent
+    bool verbose = false; // pass verbose=1: the agent logs DEBUG lines too
     std::string token; // wire v5 session token handed to the agent (empty = none: the agent then writes v4)
 };
 

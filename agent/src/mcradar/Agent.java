@@ -23,16 +23,17 @@ public final class Agent {
         if (started) { System.err.println("[mcradar-agent] already running; ignoring second load."); return; }
         started = true;
         AgentConfig cfg = AgentConfig.parse(args);
-        Log.init(cfg.exportDir);
+        Log.init(cfg.exportDir, cfg.verbose);
         Log.info("Starting (Java " + System.getProperty("java.version") + ", port " + cfg.port + ", export " + cfg.exportDir + ")");
         int wire = cfg.negotiatedWire();
+        Log.debug("verbose logging is on");
         Log.info("Wire protocol: overlay reads up to v" + cfg.wire + ", agent writes up to v" + Snapshot.WIRE_VERSION + " -> sending v" + wire
                 + (wire >= 5 ? (cfg.token != null ? ", session token set" : ", NO session token (an overlay that checks tokens will drop everything)") : ""));
         if (cfg.wire < Snapshot.WIRE_MIN)
-            Log.info("WARNING: the overlay asked for wire v" + cfg.wire + " but this agent cannot write anything older than v" + Snapshot.WIRE_MIN
+            Log.warn("The overlay asked for wire v" + cfg.wire + " but this agent cannot write anything older than v" + Snapshot.WIRE_MIN
                     + "; sending v" + wire + " anyway. Rebuild mcesp.exe and esp-agent.jar together.");
         else if (cfg.wire > Snapshot.WIRE_VERSION)
-            Log.info("The overlay understands a newer protocol (v" + cfg.wire + ") than this agent writes (v" + Snapshot.WIRE_VERSION + "): rebuild esp-agent.jar to use its features.");
+            Log.warn("The overlay understands a newer protocol (v" + cfg.wire + ") than this agent writes (v" + Snapshot.WIRE_VERSION + "): rebuild esp-agent.jar to use its features.");
         Thread t = new Thread(new Worker(cfg, inst), "mcradar-agent");
         t.setDaemon(true);                       // never keeps the game from exiting
         t.setPriority(Thread.MIN_PRIORITY);
@@ -72,7 +73,7 @@ public final class Agent {
                     } catch (Throwable t) {
                         snap = new Snapshot();
                         snap.status = "agent error: " + t;
-                        Log.info("Error in tick: " + t);
+                        Log.error("Error in tick: " + t);
                         probe.reset();
                     }
                     snap.sampleNs = tSample;
@@ -85,7 +86,7 @@ public final class Agent {
                     try { sock.send(new DatagramPacket(data, data.length, lo, cfg.port)); } catch (Throwable ignored) { }
 
                     // Slow work goes AFTER the send, in the idle part of the period (see Probe.pollItemsIfDue).
-                    try { probe.pollItemsIfDue(); } catch (Throwable t) { Log.info("Error polling items: " + t); probe.reset(); }
+                    try { probe.pollItemsIfDue(); } catch (Throwable t) { Log.error("Error polling items: " + t); probe.reset(); }
 
                     // Absolute schedule: sleep jitter does not accumulate, and a late wake-up is made up for by a shorter
                     // next sleep. The sample instants are stamped, so uneven spacing is harmless to the overlay.
