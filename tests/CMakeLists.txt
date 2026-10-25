@@ -52,6 +52,8 @@ esp_add_test(golden_selftest golden_selftest.cpp)
 target_link_libraries(golden_selftest PRIVATE esp_golden)
 add_executable(golden_runner golden_runner.cpp)
 target_link_libraries(golden_runner PRIVATE esp_golden)
+add_executable(golden_sensitivity golden_sensitivity.cpp)
+target_link_libraries(golden_sensitivity PRIVATE esp_golden)
 # one ctest entry per tests/data/<name>.esprec that has a <name>.golden.json next to it
 file(GLOB ESP_RECORDINGS ${CMAKE_CURRENT_SOURCE_DIR}/data/*.esprec)
 foreach(rec IN LISTS ESP_RECORDINGS)
@@ -59,5 +61,13 @@ foreach(rec IN LISTS ESP_RECORDINGS)
   set(gold ${CMAKE_CURRENT_SOURCE_DIR}/data/${base}.golden.json)
   add_test(NAME golden_${base}
     COMMAND ${CMAKE_COMMAND} -DEXE=$<TARGET_FILE:golden_runner> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/run/golden_${base}
-            "-DARGS=${rec}\\;${gold}" -P ${CMAKE_CURRENT_SOURCE_DIR}/run_clean.cmake)
+            "-DARGS=${rec}|${gold}" -P ${CMAKE_CURRENT_SOURCE_DIR}/run_clean.cmake)
+  # ...and proof that it can fail: the same recording without motion smoothing must be rejected
+  add_test(NAME golden_sensitivity_${base}
+    COMMAND ${CMAKE_COMMAND} -DEXE=$<TARGET_FILE:golden_sensitivity> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/run/golden_sensitivity_${base}
+            "-DARGS=${rec}|${gold}" -P ${CMAKE_CURRENT_SOURCE_DIR}/run_clean.cmake)
 endforeach()
+
+# gen_recording writes the synthetic recording(s) under tests/data (see tests/regen-recordings.sh); not run by ctest.
+add_executable(gen_recording tools/gen_recording.cpp)
+target_link_libraries(gen_recording PRIVATE esp_core)

@@ -35,9 +35,14 @@ namespace golden
     // The metric itself, for a track of on-screen positions (NaN = not visible that frame). Frames before `firstMeasured` are skipped.
     Metrics Jitter(const std::vector<std::pair<double, double>>& px, size_t firstMeasured = 0);
 
-    // Probes: "world_anchor" (a fixed world point 8 m in front of the first camera: its motion is the camera's motion) and
-    // "player:<name>" (box centre of every remote player). false + *error if the recording cannot be replayed.
-    bool Measure(const std::string& esprecPath, const Options& opt, Result& out, std::string* error);
+    // Probes: "world_anchor" (a fixed world point 500 m in front of the first camera: effectively at infinity, so its screen motion is
+    // the camera's ROTATION) and "player:<name>" (box centre of every remote player). A probe is measured only on frames where the point
+    // is in front of the camera by >= 1.5 m and within 10 % of the viewport edge: perspective makes the pixel speed of a point blow up
+    // toward the edge of a wide FOV and near the camera plane, and that is geometry, not smoothing quality.
+    // false + *error if the recording cannot be replayed.
+    // Optional `tracks`: the per-frame screen positions behind the metrics (NaN = not measured that frame), for plotting / debugging.
+    using Tracks = std::map<std::string, std::vector<std::pair<double, double>>>;
+    bool Measure(const std::string& esprecPath, const Options& opt, Result& out, std::string* error, Tracks* tracks = nullptr);
 
     // Flat JSON, one number per key: "probe/<name>/<metric>", plus the options used.
     std::string ToJson(const std::string& recordingName, const Options& opt, const Result& r);

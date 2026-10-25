@@ -1,0 +1,3 @@
+12:58:06.625 [INFO ] Replay: loaded 1440 datagram(s), 11.99 s, wire v4 from tests/data/synthetic_walk.esprec
+12:58:06.682 [INFO ] Replay: loaded 1440 datagram(s), 11.99 s, wire v4 from tests/data/synthetic_walk.esprec
+02:18:07.237 [INFO ] Replay: loaded 1440 datagram(s), 11.99 s, wire v4 from tests/data/synthetic_walk.esprec

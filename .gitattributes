@@ -1,0 +1,2 @@
+*.esprec binary
+*.golden.json text eol=lf

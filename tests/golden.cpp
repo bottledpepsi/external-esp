@@ -52,7 +52,7 @@ namespace golden
         }
     } // namespace
 
-    bool Measure(const std::string& path, const Options& opt, Result& out, std::string* error)
+    bool Measure(const std::string& path, const Options& opt, Result& out, std::string* error, Tracks* outTracks)
     {
         ReplayPlayer player;
         if (!player.Load(path, error)) return false;
@@ -108,19 +108,31 @@ namespace golden
             if (!haveAnchor)
             {
                 haveAnchor = true;
-                anchor = {cam.eye.x + cam.f.x * 8, cam.eye.y + cam.f.y * 8, cam.eye.z + cam.f.z * 8};
+                anchor = {cam.eye.x + cam.f.x * 500, cam.eye.y + cam.f.y * 500, cam.eye.z + cam.f.z * 500};
             }
             auto record = [&](const std::string& name, const Vec3& world)
             {
                 auto& tr = tracks[name];
                 if (tr.size() < frames) tr.resize(frames);
+                // measure only what is plainly on screen: a point grazing the near plane or far outside the viewport has an arbitrarily
+                // large pixel position, and the "jitter" of that is a property of perspective, not of the smoothing
+                double xc, yc, zc;
+                cam.ToCamera(world, xc, yc, zc);
                 float sx, sy;
-                if (cam.Project(world, sx, sy)) tr[k] = Pt{sx, sy};
+                if (zc >= 1.5 && cam.Project(world, sx, sy) && sx > -0.1 * opt.width && sx < 1.1 * opt.width && sy > -0.1 * opt.height &&
+                    sy < 1.1 * opt.height)
+                    tr[k] = Pt{sx, sy};
             };
             record("world_anchor", anchor);
             for (const auto& p : snap.players) record("player:" + p.name, Vec3{p.pos.x, p.pos.y + 0.9, p.pos.z});
         }
         out.clear();
+        if (outTracks)
+        {
+            outTracks->clear();
+            for (const auto& [name, tr] : tracks)
+                for (const Pt& p : tr) (*outTracks)[name].push_back({p.x, p.y});
+        }
         for (const auto& [name, tr] : tracks)
         {
             Metrics m = Compute(tr, warm);

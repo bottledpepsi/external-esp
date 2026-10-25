@@ -1,8 +1,10 @@
-# Runs a test executable in a freshly created directory:  cmake -DEXE=<exe> -DWORKDIR=<dir> [-DARGS=a;b] -P run_clean.cmake
+# Runs a test executable in a freshly created directory:  cmake -DEXE=<exe> -DWORKDIR=<dir> [-DARGS=a|b] -P run_clean.cmake
+# (arguments are separated by '|' because ';' cannot be passed through -D)
 # Used by tests/CMakeLists.txt. The exit code of the test is the exit code of this script.
 if(NOT EXE OR NOT WORKDIR)
   message(FATAL_ERROR "run_clean.cmake: EXE and WORKDIR are required")
 endif()
+string(REPLACE "|" ";" ARGS "${ARGS}")
 file(REMOVE_RECURSE "${WORKDIR}")
 file(MAKE_DIRECTORY "${WORKDIR}")
 get_filename_component(_name "${EXE}" NAME)
