@@ -44,3 +44,20 @@ esp_add_test(esprec_test esprec_test.cpp)
 esp_add_test(ingest_test ingest_test.cpp)
 esp_add_test(recorder_test recorder_test.cpp)
 esp_add_test(replay_test replay_test.cpp)
+
+# ---- golden tests: replay a recording through parser + smoother + camera on a fake clock and compare the pixel jitter ----
+add_library(esp_golden STATIC golden.cpp)
+target_link_libraries(esp_golden PUBLIC esp_core)
+esp_add_test(golden_selftest golden_selftest.cpp)
+target_link_libraries(golden_selftest PRIVATE esp_golden)
+add_executable(golden_runner golden_runner.cpp)
+target_link_libraries(golden_runner PRIVATE esp_golden)
+# one ctest entry per tests/data/<name>.esprec that has a <name>.golden.json next to it
+file(GLOB ESP_RECORDINGS ${CMAKE_CURRENT_SOURCE_DIR}/data/*.esprec)
+foreach(rec IN LISTS ESP_RECORDINGS)
+  get_filename_component(base ${rec} NAME_WE)
+  set(gold ${CMAKE_CURRENT_SOURCE_DIR}/data/${base}.golden.json)
+  add_test(NAME golden_${base}
+    COMMAND ${CMAKE_COMMAND} -DEXE=$<TARGET_FILE:golden_runner> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/run/golden_${base}
+            "-DARGS=${rec}\\;${gold}" -P ${CMAKE_CURRENT_SOURCE_DIR}/run_clean.cmake)
+endforeach()
