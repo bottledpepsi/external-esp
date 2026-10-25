@@ -6,3 +6,4 @@
 /build/
 /build-*/
 /agent/test/out/
+/agent/test/out-smoke/

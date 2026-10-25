@@ -33,3 +33,10 @@ java ... RealisticGame hidden     # layout the search cannot see: expects 0 item
 `sh agent/test/run-java-tests.sh` compiles the agent and `test/src/mcradar/SnapshotTest.java` (package `mcradar`, so it can see
 the package-private encoder) and runs it. It checks the wire layout, locale independence (decimal comma, non-ASCII digits),
 percent encoding, NaN/Infinity -> `-`, name/status sanitising and the datagram size cap. Needs any JDK 8+.
+
+## Smoke test (agent -> UDP, no Minecraft)
+`python3 agent/test/agent_smoke.py [--java-home DIR] [--timeout S] [fake|fake-old|fake-third|realistic ...]` builds the agent jar and the fake games
+into `agent/test/out-smoke/`, launches each game with `-javaagent`, listens on a free loopback port and checks the datagrams:
+header `MCRADAR 4`, non-decreasing `T` stamps, Alice local + Bob/Carol, Carol's sneaking hitbox (1.50), camera FOV in the fake 63-77 sweep and
+the right view mode, exactly the three real items (the item frame is filtered; the sword's `sharpness@5` is parsed), five items for `RealisticGame`.
+It stops a case as soon as everything is satisfied (about 2 s) or fails after `--timeout` (45 s). Needs a JDK 8+ and Python 3.8+.
