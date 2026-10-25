@@ -1,0 +1,147 @@
+# CI for external-esp. Jobs:
+#   core-linux  platform-independent core (Smoother, Wire, Camera math, config...) - native tests on every push
+#   agent       Java agent build + Java-side tests + agent smoke test on JDK 17 / 21 / 25
+#   windows     MinGW-w64 build of mcesp.exe (no -static: -static-libgcc -static-libstdc++ + libwinpthread-1.dll),
+#               the same native tests built with MinGW, a start-up check of the exe, and the exe/jar/DLL as an artifact
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-linux:
+    name: core tests (Linux, g++)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain versions
+        run: |
+          g++ --version | head -1
+          cmake --version | head -1
+      - name: Configure
+        run: cmake -S tests -B build/tests -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build/tests -j "$(nproc)"
+      - name: Test
+        run: ctest --test-dir build/tests --output-on-failure
+
+  agent:
+    name: agent (JDK ${{ matrix.java }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [17, 21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Toolchain versions
+        run: |
+          java -version
+          javac -version
+      - name: Build agent jar (Java 8 bytecode)
+        run: sh agent/build.sh
+      - name: Java unit tests
+        run: sh agent/test/run-java-tests.sh
+      - name: Agent smoke test (real jar in the fake games)
+        run: python3 agent/test/agent_smoke.py
+      - name: Upload agent jar
+        if: matrix.java == 21
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp-agent-jar
+          path: agent/esp-agent.jar
+          if-no-files-found: error
+
+  windows:
+    name: mcesp.exe (Windows, MinGW-w64)
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Build agent jar
+        shell: cmd
+        run: call agent\build.bat
+      - name: Set up MinGW-w64 (MSYS2 UCRT64, current GCC)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Toolchain versions
+        shell: msys2 {0}
+        run: |
+          {
+            echo "g++:   $(g++ --version | head -1)"
+            echo "cmake: $(cmake --version | head -1)"
+            echo "ninja: $(ninja --version)"
+            echo "java:  $(java -version 2>&1 | head -1)"
+            echo "runner: $RUNNER_NAME / $ImageOS $ImageVersion"
+          } | tee toolchain.txt
+          {
+            echo '### Toolchain'
+            echo '```'
+            cat toolchain.txt
+            echo '```'
+            echo 'The project is developed with GCC 15.2 (CLion bundled MinGW); compare the g++ line above.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Configure mcesp
+        shell: msys2 {0}
+        run: cmake -S . -B build/win -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build mcesp
+        shell: msys2 {0}
+        run: cmake --build build/win
+      - name: Configure native tests
+        shell: msys2 {0}
+        run: cmake -S tests -B build/tests-win -G Ninja -DCMAKE_BUILD_TYPE=Debug
+      - name: Build native tests
+        shell: msys2 {0}
+        run: cmake --build build/tests-win
+      - name: Run native tests
+        shell: msys2 {0}
+        run: ctest --test-dir build/tests-win --output-on-failure
+      - name: Collect exe + jar + DLL
+        shell: msys2 {0}
+        run: |
+          set -e
+          mkdir -p dist
+          cp build/win/mcesp.exe dist/
+          cp agent/esp-agent.jar dist/
+          cp "$(dirname "$(command -v g++)")/libwinpthread-1.dll" dist/
+          cp toolchain.txt dist/
+          ls -l dist
+          # no -static, but libgcc/libstdc++ must be linked in; only libwinpthread may remain as a MinGW DLL
+          objdump -p dist/mcesp.exe | grep 'DLL Name' | sort -u | tee dist-imports.txt
+          if grep -qiE 'libstdc\+\+|libgcc_s' dist-imports.txt; then echo '::error::libstdc++/libgcc DLL is still imported (-static-libgcc -static-libstdc++ lost?)'; exit 1; fi
+          grep -qi 'libwinpthread-1.dll' dist-imports.txt || { echo '::error::expected libwinpthread-1.dll to be imported'; exit 1; }
+      - name: Start-up check (plain Windows PATH, nothing from MSYS2)
+        shell: cmd
+        run: |
+          set PATH=%SystemRoot%\System32;%SystemRoot%
+          cd dist
+          mcesp.exe --help
+          if errorlevel 1 exit /b 1
+      - name: Upload exe, jar and DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcesp-windows-x64
+          path: dist/
+          if-no-files-found: error

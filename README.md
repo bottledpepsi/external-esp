@@ -29,6 +29,11 @@ Linker libs: `d2d1 dwrite` (Direct2D/DirectWrite) · `dwmapi` (DwmFlush = VSync)
 `winhttp` (skin downloads) · `windowscodecs ole32 uuid` (PNG decoding via WIC). **Do not pass `-mwindows`** - the console subsystem is intentional (logs also go to `esp_log.txt`).
 Do not use `-static`: it fails on CLion 2026's bundled GCC 15 (`undefined reference to __intrinsic_setjmpex`); the exe needs `libwinpthread-1.dll` next to it (copied automatically).
 
+## Continuous integration
+`.github/workflows/ci.yml` runs on every push and pull request: the core tests on Linux, the agent on JDK 17/21/25 (build, Java tests, smoke test against the
+fake games) and a Windows MinGW-w64 build with the native tests. The Windows job prints its `g++` version in the step summary (it uses MSYS2's current
+UCRT64 GCC, which may differ from CLion's bundled GCC 15.2) and uploads `mcesp.exe`, `esp-agent.jar` and `libwinpthread-1.dll` as the `mcesp-windows-x64` artifact.
+
 ## Run
 ```
 mcesp                      # normal: finds Minecraft, attaches the agent, draws the ESP
