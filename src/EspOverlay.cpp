@@ -313,6 +313,16 @@ int EspOverlay::Run()
     LOG_INFO("Renderer: %s", gfx_.IsGpu()
                                  ? "GPU (D3D11 flip swap chain + DirectComposition + Direct2D device context)"
                                  : "legacy (DIB + UpdateLayeredWindow)");
+    if (!opt_.recordPath.empty())
+    {
+        std::string err;
+        if (!recorder_.Start(opt_.recordPath, &err))
+        {
+            LOG_ERROR("--record: %s", err.c_str());
+            return 1;
+        }
+        udp_.SetTap(&recorder_);
+    }
     if (!opt_.demo && !udp_.Start()) LOG_ERROR("Agent data will not be received (UDP listener failed).");
     SkinCache::Start(); // friend avatars (background downloads)
     timeBeginPeriod(1); // 1 ms sleep granularity for the frame limiter
@@ -363,6 +373,8 @@ int EspOverlay::Run()
     }
     timeEndPeriod(1);
     SkinCache::Stop();
+    udp_.Stop(); // the producer first, then the recorder (it drains and closes the file)
+    recorder_.Stop();
     LOG_INFO("Overlay stopped.");
     return 0;
 }
@@ -484,6 +496,9 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
                                                     : "  |  cam: exact, third person")
                                              : "  |  cam: reconstructed";
     if (!opt_.demo && !snap.status.empty() && !stale) status += "  |  " + snap.status;
+    if (recorder_.Active())
+        status += "  |  REC " + std::to_string(recorder_.Recorded()) +
+            (recorder_.Dropped() ? " (" + std::to_string(recorder_.Dropped()) + " dropped)" : std::string());
     gfx_.Text(status, 10, 26, Font::UiSmall, Col{0.62f, 0.67f, 0.80f, 0.9f}, true);
     if (!opt_.demo && !stale && snap.localValid && !haveCam)
         gfx_.Text("camera unavailable: the agent could not find the look-vector method (see esp_layout.json)", 10, 42,

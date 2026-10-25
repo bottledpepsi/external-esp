@@ -39,6 +39,7 @@ UCRT64 GCC, which may differ from CLion's bundled GCC 15.2) and uploads `mcesp.e
 mcesp                      # normal: finds Minecraft, attaches the agent, draws the ESP
 mcesp --demo               # synthetic players, no Minecraft needed (try the UI / friends / profiles)
 mcesp --list               # list java processes (two clients on one PC?)  then:  mcesp --pid 12345
+mcesp --record s.esprec     # also save the raw agent datagrams + arrival times (docs/esprec.md) for replay / tests / bug reports
 mcesp --screen             # overlay the whole monitor instead of tracking the game window
 mcesp --no-inject          # don't auto-attach; start the game with -javaagent:esp-agent.jar=port=47615
 mcesp --java "C:\...\jdk-21\bin\java.exe" --open-config --port 47616 --jar C:\path\esp-agent.jar

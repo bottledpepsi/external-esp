@@ -36,6 +36,20 @@ file   = header record*
 `t_ns` is the **arrival** time at the socket (what the Smoother's fallback clock uses), not the agent's `T` stamp (that one
 is inside the payload and is replayed untouched).
 
+## Recording a session
+
+```
+mcesp --record session.esprec
+```
+
+Every datagram the UDP thread receives is copied into a preallocated 8 MiB ring buffer and written by a separate thread
+(`src/Recorder.*`): the UDP thread does no allocation, takes no lock and does no file I/O, and if the disk stalls for so long that the
+ring fills up, datagrams are **dropped and counted** (shown in the HUD as `REC n (m dropped)` and in the log) rather than slowing the
+overlay down. This includes datagrams that the live socket loop would have discarded (newest wins) and datagrams that do not parse
+(they are the interesting ones in a bug report). `t_ns` is taken per datagram at `recvfrom` time, a few microseconds earlier than the
+arrival stamp the live smoother gets after it has drained the socket. The writer flushes every 250 ms, so a crash or kill loses at
+most that much. `--record` cannot be combined with `--demo`.
+
 ## Compatibility rules
 
 A reader for format version 1 must:

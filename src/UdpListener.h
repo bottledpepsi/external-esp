@@ -8,6 +8,7 @@
 // The parse/stamp/publish part lives in StreamIngest (no socket, no Windows API) so a replayed recording and the tests use
 // exactly the same code; this class is only the socket and its thread.
 #pragma once
+#include "Recorder.h"
 #include "StreamIngest.h"
 #include "Types.h"
 #include <atomic>
@@ -38,6 +39,9 @@ public:
     Clock::time_point LastPacketTime() const { return ingest_.LastPacketTime(); } // time_point{} if nothing yet
     uint64_t PacketCount() const { return ingest_.PacketCount(); }
     StreamIngest& Ingest() { return ingest_; }
+    // Tee every raw datagram (also the ones the newest-wins drain below discards, and invalid ones) into a recorder.
+    // Call before Start(); the recorder must outlive the listener.
+    void SetTap(Recorder* r) { tap_ = r; }
 
 private:
     void Loop(std::stop_token st);
@@ -47,5 +51,6 @@ private:
     bool wsa_ = false;
     std::atomic<bool> running_{false};
     StreamIngest ingest_;
+    Recorder* tap_ = nullptr;
     std::jthread thread_;
 };

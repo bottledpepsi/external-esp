@@ -9,6 +9,7 @@
 #include "EspConfig.h"
 #include "EspRenderer.h"
 #include "Gfx.h"
+#include "Recorder.h"
 #include "Smoother.h"
 #include "UdpListener.h"
 #include <chrono>
@@ -47,6 +48,7 @@ private:
     Gfx gfx_;
     EspRenderer renderer_;
     ConfigUi ui_;
+    Recorder recorder_; // declared BEFORE udp_: the listener (a producer thread) must be destroyed first
     UdpListener udp_;
     AgentInjector injector_;
     AgentSupervisor sup_;
