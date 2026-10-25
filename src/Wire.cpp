@@ -132,16 +132,18 @@ namespace wire
     }
 } // namespace wire
 
-bool ParseDatagram(const char* data, size_t len, WorldSnapshot& out)
+ParseResult ParseDatagramEx(const char* data, size_t len, WorldSnapshot& out)
 {
     const string_view all(data ? data : "", data ? len : 0);
     size_t pos = all.find('\n');
     string_view first = all.substr(0, pos);
     if (!first.empty() && first.back() == '\r') first.remove_suffix(1);
     const int version = HeaderVersion(first);
-    if (version < 1 || version > 4) return false; // not ours (or a newer protocol than this parser knows)
+    if (version == 0) return {ParseStatus::NotOurs, 0};
+    if (version < wire::kMinVersion || version > wire::kMaxVersion) return {ParseStatus::UnsupportedVersion, version};
 
     WorldSnapshot snap;
+    snap.protocolVersion = version;
     snap.status = "agent connected";
     if (version >= 4) snap.hasItems = false; // until an F line says the item list follows
     auto ignore = [&] { if (snap.ignoredLines < 0xFFFFFFFFu) ++snap.ignoredLines; };
@@ -265,5 +267,5 @@ bool ParseDatagram(const char* data, size_t len, WorldSnapshot& out)
         }
     }
     out = std::move(snap);
-    return true;
+    return {ParseStatus::Ok, version};
 }

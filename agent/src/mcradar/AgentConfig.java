@@ -9,6 +9,11 @@ final class AgentConfig {
     int hz = 20;               // send rate (1..240); the overlay passes hz=120 by default
     String exportDir = System.getProperty("java.io.tmpdir");
     String username;           // override for the local player's name (normally auto-detected)
+    /**
+     * The newest wire protocol the overlay says it can read (option wire=N). An overlay that does not pass it (an older build, or a
+     * hand-written -javaagent line) is treated as speaking v4. The agent sends min(this, Snapshot.WIRE_VERSION).
+     */
+    int wire = 4;
 
     static AgentConfig parse(String args) {
         AgentConfig c = new AgentConfig();
@@ -20,8 +25,14 @@ final class AgentConfig {
         }
         try { if (kv.containsKey("port")) c.port = Integer.parseInt(kv.get("port")); } catch (NumberFormatException ignored) { }
         try { if (kv.containsKey("hz")) c.hz = Math.max(1, Math.min(240, Integer.parseInt(kv.get("hz")))); } catch (NumberFormatException ignored) { }
+        try { if (kv.containsKey("wire")) c.wire = Integer.parseInt(kv.get("wire")); } catch (NumberFormatException ignored) { }
         if (kv.containsKey("export") && !kv.get("export").isEmpty()) c.exportDir = kv.get("export");
         if (kv.containsKey("user") && !kv.get("user").isEmpty()) c.username = kv.get("user");
         return c;
+    }
+
+    /** The protocol version to put on the wire: the newest one both sides know. Never below the oldest this encoder can write. */
+    int negotiatedWire() {
+        return Math.max(Snapshot.WIRE_MIN, Math.min(wire, Snapshot.WIRE_VERSION));
     }
 }

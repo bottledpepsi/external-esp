@@ -1,4 +1,5 @@
 #include "AgentInjector.h"
+#include "Wire.h"
 #include "Logger.h"
 #include <chrono>
 #include <fstream>
@@ -76,8 +77,10 @@ int AgentInjector::RunHelper(const fs::path& java, DWORD pid, std::stop_token st
     // Agent options: UDP port, send rate, and where to write esp_layout.json / esp_agent.log (next to the exe).
     std::wstring exportDir = cfg_.jarPath.parent_path().wstring();
     for (auto& c : exportDir) if (c == L'\\') c = L'/'; // avoids backslash-before-quote issues
+    // wire=N: the newest wire protocol this overlay can read; the agent never sends a newer one (an agent without this option, or an older
+    // overlay that does not pass it, means v4).
     const std::wstring opts = L"port=" + std::to_wstring(cfg_.port) + L";hz=" + std::to_wstring(cfg_.agentHz) +
-        L";export=" + exportDir;
+        L";wire=" + std::to_wstring(wire::kMaxVersion) + L";export=" + exportDir;
 
     std::wstring cmd = Q(java.wstring());
     if (modern) cmd += L" --add-modules jdk.attach";

@@ -41,6 +41,8 @@ final class Snapshot {
     final List<Rec> players = new ArrayList<Rec>();
     final List<Item> items = new ArrayList<Item>();
 
+    static final int WIRE_VERSION = 4;      // the newest protocol this encoder writes (header "MCRADAR 4")
+    static final int WIRE_MIN = 4;          // the oldest it can still write
     static final int MAX_BYTES = 56000;     // stay well under the 64 KB UDP datagram limit
 
     /**
@@ -59,7 +61,7 @@ final class Snapshot {
      */
     byte[] encode() {
         StringBuilder sb = new StringBuilder(512);
-        sb.append("MCRADAR 4\n");
+        sb.append("MCRADAR ").append(WIRE_VERSION).append('\n');
         if (hasSampleTime) sb.append("T ").append(sampleNs).append('\n');
         sb.append("S ").append(status.replace('\n', ' ')).append('\n');
         if (camera != null) {

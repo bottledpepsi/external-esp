@@ -516,6 +516,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         gfx_.Text(line, 10, 8, Font::Ui, Col{0.80f, 0.85f, 1.f, 0.95f}, true);
     }
     std::string status = sup_.Status();
+    if (const std::string prob = Src().ProtocolProblem(now); !prob.empty() && !replayMode_) status = prob;
     if (replayMode_)
     {
         char rp[160];

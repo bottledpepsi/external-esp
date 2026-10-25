@@ -51,9 +51,9 @@ bool ReplayPlayer::Load(const std::filesystem::path& file, std::string* error)
 void ReplayPlayer::Publish(StreamIngest& ingest, const Rec& r, Clock::time_point arrival)
 {
     auto snap = std::make_shared<WorldSnapshot>();
-    if (!ParseDatagram(r.payload.data(), r.payload.size(), *snap))
+    if (const ParseResult pr = ParseDatagramEx(r.payload.data(), r.payload.size(), *snap); pr.status != ParseStatus::Ok)
     {
-        ingest.NoteRejected();
+        ingest.NoteRejected(pr);
         return;
     }
     if (snap->hasSampleTime)

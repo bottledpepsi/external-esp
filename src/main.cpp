@@ -35,7 +35,7 @@ namespace
             "  --port N     UDP port for the agent stream (default 47615)\n"
             "  --java PATH  java.exe of a JDK to run the attach helper (default: the game's own JRE, JAVA_HOME, PATH)\n"
             "  --jar PATH   agent jar (default: esp-agent.jar next to the exe)\n"
-            "  --no-inject  do not attach automatically (start the game with -javaagent:esp-agent.jar=port=47615)\n"
+            "  --no-inject  do not attach automatically (start the game with -javaagent:esp-agent.jar=port=47615;hz=120;wire=4)\n"
             "  --open-config  open the config window right away\n"
             "  --screen     cover the whole primary monitor instead of tracking the game window\n"
             "  --hz N       agent snapshot rate, 1-240 (default 120; more = smoother boxes, a little more CPU in the game)\n"

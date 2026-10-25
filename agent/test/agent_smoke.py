@@ -171,7 +171,7 @@ def run_case(case, java_home, jar, timeout):
     cmd = [java]
     if java_major(java) >= 23:
         cmd.append("--sun-misc-unsafe-memory-access=allow")        # JDK 23+ warns about Unsafe memory access otherwise (README, Known limits)
-    cmd += ["-javaagent:%s=port=%d;hz=60;export=%s;user=Alice" % (jar, port, export.replace("\\", "/")),
+    cmd += ["-javaagent:%s=port=%d;hz=60;wire=4;export=%s;user=Alice" % (jar, port, export.replace("\\", "/")),
             "-cp", os.path.join(OUT, cp), main] + gargs
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     dgs, t0, last_check = [], time.time(), 0
@@ -191,9 +191,16 @@ def run_case(case, java_home, jar, timeout):
         proc.kill()
         proc.wait()
         sock.close()
+        try:
+            with open(os.path.join(export, "esp_agent.log"), "r", encoding="utf-8", errors="replace") as lf:
+                agent_log = lf.read()
+        except OSError:
+            agent_log = ""
         shutil.rmtree(export, ignore_errors=True)
     problems = []
     check(dgs, problems)
+    if "overlay reads up to v4, agent writes up to v4 -> sending v4" not in agent_log:
+        problems.append("agent log has no wire-version negotiation line (esp_agent.log: %r)" % agent_log[:200])
     return dgs, problems, time.time() - t0
 
 

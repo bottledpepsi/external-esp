@@ -18,6 +18,21 @@ I <x> <y> <z> <w|-> <h|-> <count> <key> <ench|-> <tags|->            v3+: a drop
 `-` means "unknown". Columns are separated by spaces or tabs, lines by `\n` (a trailing `\r` is ignored), unknown tags and lines shorter
 than two characters are skipped. Versions 1 (yaw only), 2 (+ pitch, health) and 3 are still parsed.
 
+## Version handshake
+
+Both programs are built from the same source and should be rebuilt together, but a mismatch (old jar next to a new exe, or the other way round)
+must not fail silently:
+
+* **Overlay -> agent**: the overlay starts the agent with `wire=N` in its option string, N = the newest protocol it can read (`wire::kMaxVersion`).
+  The agent writes `min(N, Snapshot.WIRE_VERSION)`. An overlay that passes no `wire=` (an older build, or a hand-written `-javaagent` line) counts as v4, so a
+  newer agent stays readable by an older overlay. The agent logs the negotiation to `esp_agent.log`
+  (`Wire protocol: overlay reads up to v4, agent writes up to v4 -> sending v4`), with a warning when the sides disagree.
+* **Agent -> overlay**: the header says which version follows. `ParseDatagramEx` reports `Ok`, `NotOurs` (not `MCRADAR <n>`: some other program, or garbage) or
+  `UnsupportedVersion` (n outside 1..`kMaxVersion`). When an agent of an unreadable version is heard and nothing readable has come in for 3 s, the HUD status line
+  says *"agent speaks wire protocol v6, this overlay reads v1-v4: rebuild mcesp.exe and esp-agent.jar together"* (and the log warns once per version). A readable but
+  old agent (v1-v3: no `T` stamps) is flagged too: *"agent speaks the old wire protocol v3 (this overlay: v4): rebuild esp-agent.jar ..."*.
+* `mcesp --no-inject` users pass the same option by hand: `-javaagent:esp-agent.jar=port=47615;hz=120;wire=4`.
+
 ## The parser treats the datagram as untrusted input
 
 Any process on the machine can send a datagram to the port, and a bug in the agent can send nonsense, so `ParseDatagram` validates everything
@@ -25,7 +40,7 @@ Any process on the machine can send a datagram to the port, and a bug in the age
 
 | What | Rule |
 |---|---|
-| Header | exactly `MCRADAR <1-3 digits>` then end of line or a space. `MCRADAR 10` and `MCRADAR 4junk` are not ours (they used to be read as v1 and v4). A version this parser does not know (> 4) is rejected |
+| Header | exactly `MCRADAR <1-3 digits>` then end of line or a space. `MCRADAR 4junk` is not ours (and `MCRADAR 10` is no longer read as v1: it is an unsupported version). A version outside 1..4 is rejected as `UnsupportedVersion` |
 | Numbers | plain decimals only (`-`, digits, `.`, `e`/`E`): no `nan`, `inf`, hex floats, `+`, no 1e999. Must be finite |
 | Coordinates | `abs(v) <= 1e8` (the world border is 3e7). A line with a bad coordinate is dropped |
 | Angles | `abs(v) <= 1e6` degrees; otherwise the angle is "unknown" |

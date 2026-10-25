@@ -18,6 +18,10 @@
 
 namespace wire
 {
+    // ---- protocol versions this parser understands ----
+    inline constexpr int kMinVersion = 1;
+    inline constexpr int kMaxVersion = 4; // what the overlay tells the agent it can read (agent option wire=N); v4 = T and F lines
+
     // ---- limits (docs/wire.md) ----
     inline constexpr size_t kMaxPlayers = 256; // P lines kept per datagram
     inline constexpr size_t kMaxItems = 1024; // I lines kept per datagram
@@ -40,4 +44,19 @@ namespace wire
     std::string CleanText(const std::string& s, size_t maxBytes);
 } // namespace wire
 
-bool ParseDatagram(const char* data, size_t len, WorldSnapshot& out);
+enum class ParseStatus
+{
+    Ok,
+    NotOurs, // does not start with "MCRADAR <n>" (some other program talking to the port, or garbage)
+    UnsupportedVersion, // "MCRADAR <n>" with n outside kMinVersion..kMaxVersion: an agent from a different build
+};
+
+struct ParseResult
+{
+    ParseStatus status = ParseStatus::NotOurs;
+    int version = 0; // the n of the header when there was one (also for UnsupportedVersion), else 0
+};
+
+// The same as ParseDatagram, but says WHY a datagram was refused, so the overlay can tell the user "agent speaks v6, rebuild".
+ParseResult ParseDatagramEx(const char* data, size_t len, WorldSnapshot& out);
+inline bool ParseDatagram(const char* data, size_t len, WorldSnapshot& out) { return ParseDatagramEx(data, len, out).status == ParseStatus::Ok; }

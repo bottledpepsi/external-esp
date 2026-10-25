@@ -81,8 +81,9 @@ void UdpListener::Loop(std::stop_token st)
             if (n <= 0) break;
             if (tap_) tap_->Record(buf.data(), static_cast<size_t>(n), Clock::now()); // hot path: no allocation, no lock, no I/O
             auto snap = std::make_shared<WorldSnapshot>();
-            if (ParseDatagram(buf.data(), static_cast<size_t>(n), *snap)) back = std::move(snap);
-            else ingest_.NoteRejected();
+            const ParseResult pr = ParseDatagramEx(buf.data(), static_cast<size_t>(n), *snap);
+            if (pr.status == ParseStatus::Ok) back = std::move(snap);
+            else ingest_.NoteRejected(pr);
         }
         if (!back) continue;
         ingest_.Publish(std::move(back), Clock::now()); // seq + arrival time + pointer swap
