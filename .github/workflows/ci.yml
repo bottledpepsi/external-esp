@@ -1,5 +1,6 @@
 # CI for external-esp. Jobs:
 #   core-linux  platform-independent core (Smoother, Wire, Camera math, config...) - native tests on every push
+#   sanitizers  the core tests under ASan+UBSan (+float-cast-overflow) and under TSan
 #   agent       Java agent build + Java-side tests + agent smoke test on JDK 17 / 21 / 25
 #   windows     MinGW-w64 build of mcesp.exe (no -static: -static-libgcc -static-libstdc++ + libwinpthread-1.dll),
 #               the same native tests built with MinGW, a start-up check of the exe, and the exe/jar/DLL as an artifact
@@ -33,6 +34,32 @@ jobs:
         run: cmake --build build/tests -j "$(nproc)"
       - name: Test
         run: ctest --test-dir build/tests --output-on-failure
+
+  sanitizers:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ASan + UBSan
+            sanitize: address,undefined
+          - name: TSan
+            sanitize: thread
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lower ASLR entropy (the sanitizers' shadow memory fails to map with the runner's default on kernel 6.x)
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Configure
+        run: cmake -S tests -B build/san -DCMAKE_BUILD_TYPE=Debug -DESP_SANITIZE=${{ matrix.sanitize }}
+      - name: Build
+        run: cmake --build build/san -j "$(nproc)"
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_stack_use_after_return=1:strict_string_checks=1:detect_leaks=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+        run: ctest --test-dir build/san --output-on-failure
 
   agent:
     name: agent (JDK ${{ matrix.java }})

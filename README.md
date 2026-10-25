@@ -34,6 +34,10 @@ Do not use `-static`: it fails on CLion 2026's bundled GCC 15 (`undefined refere
 fake games) and a Windows MinGW-w64 build with the native tests. The Windows job prints its `g++` version in the step summary (it uses MSYS2's current
 UCRT64 GCC, which may differ from CLion's bundled GCC 15.2) and uploads `mcesp.exe`, `esp-agent.jar` and `libwinpthread-1.dll` as the `mcesp-windows-x64` artifact.
 
+### Sanitizers
+`cmake -S tests -B build/san -DESP_SANITIZE=address,undefined && cmake --build build/san -j && ctest --test-dir build/san --output-on-failure` runs the core tests under
+ASan + UBSan (including `float-cast-overflow`, which `-fsanitize=undefined` does not enable); `-DESP_SANITIZE=thread` runs them under TSan. CI does both.
+
 ## Run
 ```
 mcesp                      # normal: finds Minecraft, attaches the agent, draws the ESP

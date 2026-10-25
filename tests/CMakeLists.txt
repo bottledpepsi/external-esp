@@ -12,6 +12,28 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Sanitizers (GCC/Clang):  -DESP_SANITIZE=address,undefined   or   -DESP_SANITIZE=thread
+#   address,undefined also enables float-cast-overflow (NOT part of -fsanitize=undefined, and it is what found the nan -> int cast in the
+#   wire parser) and aborts on the first finding. thread cannot be combined with address.
+set(ESP_SANITIZE "" CACHE STRING "Sanitizers to build the tests with: address,undefined | thread | empty for none")
+if(ESP_SANITIZE)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    message(FATAL_ERROR "ESP_SANITIZE needs GCC or Clang")
+  endif()
+  if(ESP_SANITIZE MATCHES "thread" AND ESP_SANITIZE MATCHES "address")
+    message(FATAL_ERROR "ESP_SANITIZE: thread cannot be combined with address")
+  endif()
+  set(_san "${ESP_SANITIZE}")
+  if(_san MATCHES "undefined")
+    string(APPEND _san ",float-cast-overflow")
+  endif()
+  add_compile_options(-fsanitize=${_san} -fno-sanitize-recover=all -fno-omit-frame-pointer -O1 -g)
+  add_link_options(-fsanitize=${_san})
+  # more rounds for the fuzzer, the one test where extra work finds extra bugs
+  set(ESP_FUZZ_ITERS_ENV "ESP_FUZZ_ITERS=200000")
+  message(STATUS "Sanitizers: ${_san}")
+endif()
+
 set(ESP_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 find_package(Threads REQUIRED)
 
@@ -47,6 +69,9 @@ esp_add_test(replay_test replay_test.cpp)
 esp_add_test(wire_validation_test wire_validation_test.cpp)
 esp_add_test(wire_fuzz_test wire_fuzz_test.cpp)
 target_compile_definitions(wire_fuzz_test PRIVATE ESP_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+if(ESP_FUZZ_ITERS_ENV)
+  set_tests_properties(wire_fuzz_test PROPERTIES ENVIRONMENT "${ESP_FUZZ_ITERS_ENV}")
+endif()
 
 # ---- golden tests: replay a recording through parser + smoother + camera on a fake clock and compare the pixel jitter ----
 add_library(esp_golden STATIC golden.cpp)
