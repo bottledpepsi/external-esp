@@ -334,6 +334,7 @@ int EspOverlay::Run()
         udp_.SetTap(&recorder_);
     }
     replayMode_ = !opt_.replayPath.empty();
+    nextLinkLog_ = Clock::now() + std::chrono::seconds(10); // no log line about the link in the first seconds: the counts mean nothing yet
     if (replayMode_)
     {
         std::string err;
@@ -345,6 +346,7 @@ int EspOverlay::Run()
         }
         replayPlayer_.SetSpeed(opt_.replaySpeed > 0 ? opt_.replaySpeed : 1.0);
         replayPlayer_.SetLoop(opt_.replayLoop);
+        replayIngest_.SetSeqCheck(false); // a looping recording restarts its datagram numbers
         replayDriver_.Start();
     }
     else if (!opt_.demo)
@@ -403,6 +405,8 @@ int EspOverlay::Run()
     timeEndPeriod(1);
     SkinCache::Stop();
     replayDriver_.Stop();
+    if (!replayMode_)
+        if (const std::string link = Src().LinkSummary(); !link.empty()) LOG_INFO("Session end - %s", link.c_str());
     udp_.Stop(); // the producer first, then the recorder (it drains and closes the file)
     recorder_.Stop();
     LOG_INFO("Overlay stopped.");
@@ -522,6 +526,17 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     }
     std::string status = sup_.Status();
     if (const std::string prob = Src().ProtocolProblem(now); !prob.empty() && !replayMode_) status = prob;
+    if (!replayMode_)
+        if (const std::string link = Src().LinkSummary(); !link.empty())
+        {
+            status += "  |  " + link;
+            if (now >= nextLinkLog_ && link != lastLinkLog_)
+            {
+                LOG_WARN("%s", link.c_str());
+                lastLinkLog_ = link;
+                nextLinkLog_ = now + std::chrono::seconds(10);
+            }
+        }
     if (replayMode_)
     {
         char rp[160];

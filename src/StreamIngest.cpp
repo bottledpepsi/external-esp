@@ -18,8 +18,55 @@ bool StreamIngest::OnDatagram(const char* data, size_t len, Clock::time_point ar
         NoteAuthFailure(a, snap->protocolVersion);
         return false;
     }
+    if (!NoteSequence(*snap)) return false;
     Publish(std::move(snap), arrived);
     return true;
+}
+
+bool StreamIngest::NoteSequence(const WorldSnapshot& snap)
+{
+    if (!seqCheck_ || !snap.hasWireSeq) return true;
+    ++numbered_;
+    const uint32_t s = snap.wireSeq;
+    if (!seqHave_ || snap.wireSession != seqSession_)
+    {
+        if (seqHave_) LOG_INFO("Agent restarted (session %08x -> %08x): datagram numbering starts over.", static_cast<unsigned>(seqSession_), static_cast<unsigned>(snap.wireSession));
+        seqHave_ = true;
+        seqSession_ = snap.wireSession;
+        seqLast_ = s;
+        ++sessions_;
+        return true;
+    }
+    const uint32_t ahead = s - seqLast_; // modulo 2^32: 1 = the next one, small = a gap, huge = behind us
+    if (ahead == 0)
+    {
+        ++duplicates_;
+        return false;
+    }
+    if (ahead < 0x80000000u)
+    {
+        if (ahead > 1) lost_ += ahead - 1;
+        seqLast_ = s;
+        return true;
+    }
+    ++reordered_; // arrived late: it was counted as lost when its successor came, take that back
+    for (uint64_t l = lost_.load(); l > 0 && !lost_.compare_exchange_weak(l, l - 1);) {}
+    return false;
+}
+
+StreamIngest::LinkStats StreamIngest::Link() const
+{
+    return LinkStats{numbered_.load(), lost_.load(), reordered_.load(), duplicates_.load(), sessions_.load()};
+}
+
+std::string StreamIngest::LinkSummary() const
+{
+    const LinkStats l = Link();
+    if (l.lost == 0 && l.reordered == 0 && l.duplicates == 0) return {};
+    char b[160];
+    std::snprintf(b, sizeof b, "UDP: %llu lost, %llu reordered, %llu duplicate of %llu", static_cast<unsigned long long>(l.lost), static_cast<unsigned long long>(l.reordered),
+                  static_cast<unsigned long long>(l.duplicates), static_cast<unsigned long long>(l.numbered));
+    return b;
 }
 
 StreamIngest::Auth StreamIngest::Authenticate(const WorldSnapshot& snap) const

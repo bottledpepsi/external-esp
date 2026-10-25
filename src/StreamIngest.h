@@ -53,6 +53,27 @@ public:
     void NoteAuthFailure(Auth why, int version); // counts it; remembers why for the HUD message
     uint64_t AuthFailures() const { return authFailures_.load(); }
 
+    // ---- datagram numbering (wire v5 Q line) ----
+    // The agent numbers its datagrams within a session. NoteSequence() is called for EVERY authenticated datagram - also the ones the live
+    // socket loop will not publish because a newer one is already waiting - so gaps mean real loss. Returns false for a datagram that
+    // must be dropped: a duplicate, or one that arrives after a newer one (publishing it would move the world back in time).
+    // A different session id means the agent restarted: the counters of the old session stay, numbering starts over.
+    // Datagrams without a Q line (v1-v4) are always accepted. Replay turns the check off (a looping recording restarts its numbers).
+    bool NoteSequence(const WorldSnapshot& snap);
+    void SetSeqCheck(bool on) { seqCheck_ = on; }
+
+    struct LinkStats
+    {
+        uint64_t numbered = 0; // datagrams that carried a number
+        uint64_t lost = 0; // numbers that never arrived (corrected when a late one shows up)
+        uint64_t reordered = 0; // arrived after a newer one: dropped
+        uint64_t duplicates = 0; // the same number twice: dropped
+        uint64_t sessions = 0; // agent (re)starts seen
+    };
+
+    LinkStats Link() const;
+    std::string LinkSummary() const; // "" while nothing is wrong, else e.g. "UDP: 3 lost, 1 reordered of 12000"
+
     // A datagram that did not parse. `why` says whether it was a stranger or an agent of another protocol version.
     void NoteRejected(const ParseResult& why = {});
     void NoteRejected(ParseStatus status, int version) { NoteRejected(ParseResult{status, version}); }
@@ -73,6 +94,10 @@ public:
 
 private:
     NowFn now_;
+    bool seqCheck_ = true;
+    uint32_t seqSession_ = 0, seqLast_ = 0; // producer thread only
+    bool seqHave_ = false;
+    std::atomic<uint64_t> numbered_{0}, lost_{0}, reordered_{0}, duplicates_{0}, sessions_{0};
     bool requireToken_ = false;
     std::string token_;
     std::atomic<uint64_t> authFailures_{0};

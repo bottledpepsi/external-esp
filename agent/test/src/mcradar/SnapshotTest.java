@@ -37,9 +37,9 @@ public final class SnapshotTest {
                 "minecraft:sharpness@5,minecraft:unbreaking@3", "{Enchantments:[{id:\"minecraft:sharpness\"}]}"));
         full.items.add(new Snapshot.Item(98, 64, -52, Float.NaN, Float.NaN, 37, "minecraft:cobblestone", null, null));
         write(dir, "full_v4.dgram", full);
-        full.wire = 5; full.token = "0123456789abcdef0123456789abcdef";
+        full.wire = 5; full.token = "0123456789abcdef0123456789abcdef"; full.session = 0xABCDEF01; full.seq = 7;
         write(dir, "full_v5.dgram", full);
-        full.wire = 4; full.token = null;
+        full.wire = 4; full.token = null; full.session = 0; full.seq = 0;
 
         Snapshot bare = new Snapshot();
         bare.itemsFresh = false;
@@ -106,6 +106,18 @@ public final class SnapshotTest {
             Snapshot k4 = new Snapshot();
             k4.wire = 4; k4.token = "0123456789abcdef0123456789abcdef";
             check(!enc(k4).contains("K "), "v4 never carries a K line");
+            Snapshot q = new Snapshot();
+            q.wire = 5; q.token = "0123456789abcdef0123456789abcdef"; q.session = 0xABCDEF01; q.seq = 7;
+            q.sampleNs = 42L; q.hasSampleTime = true;
+            String[] ql = enc(q).split("\n");
+            check(ql[1].startsWith("K ") && ql[2].equals("Q abcdef01 7") && ql[3].equals("T 42"), "v5: Q follows K, precedes T: " + ql[2]);
+            q.session = 1; q.seq = 0xFFFFFFFFL + 5;
+            check(enc(q).contains("\nQ 00000001 4\n"), "the datagram number wraps at 2^32 and the session id is 8 hex digits: " + enc(q).split("\n")[2]);
+            q.seq = 0;
+            check(!enc(q).contains("\nQ "), "seq 0 = not numbered, no Q line");
+            Snapshot q4 = new Snapshot();
+            q4.wire = 4; q4.session = 5; q4.seq = 3;
+            check(!enc(q4).contains("\nQ "), "v4 never carries a Q line");
             Snapshot k5 = new Snapshot();
             k5.wire = 5;
             check(enc(k5).startsWith("MCRADAR 5\nS ") && !enc(k5).contains("K "), "v5 without a token has no K line");

@@ -49,6 +49,9 @@ final class Snapshot {
     int wire = 4;
     /** Session token written as the K line when wire >= 5 (null = none). */
     String token;
+    /** Wire v5 Q line: this agent run's random id and the running datagram number (1, 2, ...; 0 = not numbered, no Q line). */
+    int session;
+    long seq;
      // stay well under the 64 KB UDP datagram limit
 
     /**
@@ -69,6 +72,7 @@ final class Snapshot {
         StringBuilder sb = new StringBuilder(512);
         sb.append("MCRADAR ").append(wire).append('\n');
         if (wire >= 5 && token != null && !token.isEmpty()) sb.append("K ").append(token).append('\n');   // session token: the overlay drops datagrams without it
+        if (wire >= 5 && seq > 0) sb.append("Q ").append(String.format(Locale.ROOT, "%08x", session)).append(' ').append(seq & 0xFFFFFFFFL).append('\n');   // loss / reorder accounting
         if (hasSampleTime) sb.append("T ").append(sampleNs).append('\n');
         sb.append("S ").append(status.replace('\n', ' ')).append('\n');
         if (camera != null) {

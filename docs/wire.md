@@ -7,6 +7,7 @@ outputs that the C++ tests parse (see `agent/test/README.md`).
 ```
 MCRADAR 5                                                            header: protocol version (1-5 accepted)
 K <token>                                                            v5: the session token (see below), second line
+Q <session> <seq>                                                    v5: agent run id (8 hex) and datagram number, for loss accounting
 T <nanoTime>                                                         v4: instant the agent read the game state (agent clock, ns)
 S <status text>                                                      status line shown in the HUD
 C <x> <y> <z> <yaw> <pitch> <fov|-> <mode>                           v3+: the game camera; mode 1 first / 2 third-back / 3 third-front
@@ -51,6 +52,24 @@ are being ignored"*. Replay is exempt (a recording was authenticated when it was
 so any process running as the same user can read it. It stops accidents and other programs, not malware that already runs as you; nothing can, because that
 malware could equally attach its own agent to the game.
 
+## Datagram numbers (v5)
+
+Without numbers, a lost, duplicated or reordered datagram is invisible: the overlay only sees "newer data". The agent therefore writes `Q <session> <seq>`
+(right after `K`): `session` is a random 32-bit id of this agent run (8 hex digits), `seq` counts every datagram it sent in that run (1, 2, 3, ...; wraps at 2^32; counted even
+if the send failed, so a gap means a datagram that never arrived). `StreamIngest::NoteSequence` looks at **every** datagram the socket delivers - also those the live
+loop will not publish because a newer one is already waiting - and counts:
+
+| Counter | Meaning | What happens to the datagram |
+|---|---|---|
+| lost | numbers that never arrived (a late arrival takes its loss back) | - |
+| reordered | arrived after a newer one | dropped (publishing it would move the world back in time) |
+| duplicates | the same number again | dropped |
+| sessions | a different session id = the agent restarted | accepted; numbering starts over (so a restart is never mistaken for reordering) |
+
+The HUD status line shows `UDP: 18 lost, 0 reordered, 5 duplicate of 305` once something is wrong, and the log repeats it at most every 10 s (and at the end of the
+session). Loopback UDP almost never loses anything unless the receiver is too slow; a steady loss count points at an overloaded overlay thread. Datagrams without a `Q`
+line (v1-v4) are not numbered and always accepted. Replay does not check numbers (a looping recording restarts them).
+
 ## The parser treats the datagram as untrusted input
 
 Any process on the machine can send a datagram to the port, and a bug in the agent can send nonsense, so `ParseDatagram` validates everything
@@ -58,6 +77,7 @@ Any process on the machine can send a datagram to the port, and a bug in the age
 
 | What | Rule |
 |---|---|
+| Number (`Q`) | only in v5: `<1-8 hex digits> <0..4294967295>`, otherwise the line is dropped |
 | Token (`K`) | only in v5; 1-64 letters/digits, otherwise the line is dropped (and the datagram has no token) |
 | Header | exactly `MCRADAR <1-3 digits>` then end of line or a space. `MCRADAR 4junk` is not ours (and `MCRADAR 10` is no longer read as v1: it is an unsupported version). A version outside 1..4 is rejected as `UnsupportedVersion` |
 | Numbers | plain decimals only (`-`, digits, `.`, `e`/`E`): no `nan`, `inf`, hex floats, `+`, no 1e999. Must be finite |

@@ -84,7 +84,7 @@ void UdpListener::Loop(std::stop_token st)
             const ParseResult pr = ParseDatagramEx(buf.data(), static_cast<size_t>(n), *snap);
             if (pr.status != ParseStatus::Ok) ingest_.NoteRejected(pr);
             else if (const auto a = ingest_.Authenticate(*snap); a != StreamIngest::Auth::Ok) ingest_.NoteAuthFailure(a, snap->protocolVersion);
-            else back = std::move(snap);
+            else if (ingest_.NoteSequence(*snap)) back = std::move(snap); // counts loss over ALL datagrams, drops duplicates / late ones
         }
         if (!back) continue;
         ingest_.Publish(std::move(back), Clock::now()); // seq + arrival time + pointer swap

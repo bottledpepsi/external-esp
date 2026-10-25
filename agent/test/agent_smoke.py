@@ -146,6 +146,26 @@ def check_v5(dgs, problems):
             problems.append("player %s missing" % n)
     if not any(l.startswith("T ") for d in dgs for l in lines_of(d)):
         problems.append("no T line in the v5 datagrams")
+    # numbering: 'Q <session> <seq>' right after K, one session, seq 1, 2, 3, ... (loopback may rarely lose one, never reorder)
+    qs = []
+    for d in dgs:
+        ls = lines_of(d)
+        if len(ls) > 2 and ls[2].startswith("Q "):
+            _, sess, seq = ls[2].split(" ")
+            qs.append((sess, int(seq)))
+    if len(qs) != len(dgs):
+        problems.append("%d of %d datagrams have a Q line in third position" % (len(qs), len(dgs)))
+    elif qs:
+        if len({q[0] for q in qs}) != 1 or len(qs[0][0]) != 8:
+            problems.append("session id is not one constant 8-hex-digit value: %s" % sorted({q[0] for q in qs})[:3])
+        seqs = [q[1] for q in qs]
+        if any(b <= a for a, b in zip(seqs, seqs[1:])):
+            problems.append("datagram numbers are not strictly increasing")
+        consecutive = sum(1 for a, b in zip(seqs, seqs[1:]) if b == a + 1)
+        if consecutive < 0.98 * (len(seqs) - 1):
+            problems.append("only %d of %d datagram numbers are consecutive" % (consecutive, len(seqs) - 1))
+        if seqs[0] > 3:
+            problems.append("numbering does not start at the beginning (first seen: %d)" % seqs[0])
 
 
 def check_realistic(dgs, problems):

@@ -188,6 +188,27 @@ ParseResult ParseDatagramEx(const char* data, size_t len, WorldSnapshot& out)
             else ignore();
             continue;
         }
+        if (tag == 'Q' && version >= 5)
+        {
+            Tokens t{body};
+            string_view a, b;
+            long long seq = 0;
+            uint32_t session = 0;
+            bool ok = t.Next(a) && t.Next(b) && a.size() >= 1 && a.size() <= 8 && Integer(b, seq) && seq >= 0 && seq <= 0xFFFFFFFFll;
+            if (ok)
+            {
+                const auto r = std::from_chars(a.data(), a.data() + a.size(), session, 16);
+                ok = r.ec == std::errc() && r.ptr == a.data() + a.size();
+            }
+            if (ok)
+            {
+                snap.hasWireSeq = true;
+                snap.wireSession = session;
+                snap.wireSeq = static_cast<uint32_t>(seq);
+            }
+            else ignore();
+            continue;
+        }
         if (tag == 'F' && version >= 4)
         {
             snap.hasItems = true;

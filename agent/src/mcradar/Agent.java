@@ -53,6 +53,9 @@ public final class Agent {
                 final long periodNs = 1000000000L / cfg.hz;
                 long nextDiscover = 0, backoff = 1500;
                 long next = System.nanoTime();
+                // wire v5: a random id for this agent run and a running datagram number (counted whether or not the send works, so a gap = a datagram that never arrived)
+                final int session = new java.util.Random(System.nanoTime() ^ (long) System.identityHashCode(probe) * 0x9E3779B97F4A7C15L).nextInt();
+                long seqCounter = 0;
 
                 while (true) {
                     long t0 = System.currentTimeMillis();
@@ -76,6 +79,8 @@ public final class Agent {
                     snap.hasSampleTime = true;
                     snap.wire = cfg.negotiatedWire();
                     snap.token = cfg.token;
+                    snap.session = session;
+                    snap.seq = ++seqCounter;
                     byte[] data = snap.encode();
                     try { sock.send(new DatagramPacket(data, data.length, lo, cfg.port)); } catch (Throwable ignored) { }
 

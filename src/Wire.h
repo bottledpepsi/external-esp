@@ -2,6 +2,7 @@
 //
 //   MCRADAR 4                                                           (v4 = v3 + the T and F lines below)
 //   K <token>                                                           v5: the session token the overlay gave the agent (see Token.h)
+//   Q <session> <seq>                                                   v5: agent session (8 hex) and datagram number, for loss / reorder accounting
 //   T <nanoTime>                                                        v4: instant the agent read the game state (agent clock, ns)
 //   S <status text>
 //   C <x> <y> <z> <yaw> <pitch> <fov|-> <mode>                          the game camera (mode 1 first / 2 third-back / 3 third-front)

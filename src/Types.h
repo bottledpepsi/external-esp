@@ -70,6 +70,9 @@ struct WorldSnapshot
     bool hasItems = true;
     // Number of lines with a known tag that were dropped by the parser (bad number, out of range, over the per-datagram limits).
     uint32_t ignoredLines = 0;
+    // wire v5 Q line: the agent session this datagram belongs to and its running datagram number (1, 2, 3, ...; wraps at 2^32)
+    bool hasWireSeq = false;
+    uint32_t wireSession = 0, wireSeq = 0;
     std::string token; // wire v5: the K line (empty when absent); checked by StreamIngest, never used after that
     int protocolVersion = 0; // the "MCRADAR <n>" the datagram announced (0 for the demo)
 };
