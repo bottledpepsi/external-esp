@@ -80,9 +80,14 @@ Base URLs can be overridden with `ESP_MOJANG_API`, `ESP_CRAFATAR`, `ESP_SESSION_
 Tabs: GENERAL · PLAYERS (+friends) · TRACERS · ITEMS · MINIMAP · PROFILES · HOTKEYS. Left-click cycles a preset, right-click goes back, the title bar drags, the wheel scrolls.
 
 ## Tests performed (and what was NOT)
-* Native unit tests (`tests/run-tests.sh`, needs cmake; it builds `tests/CMakeLists.txt` and runs ctest): config/JSON (incl. C# files), friends, profiles, wire v1-v3 (camera, hitbox, uuid, items with percent-decoded tags), item text, projection at 4 yaws/pitch/FOV edge, smoother (players + camera). All pass.
+* Native tests (`tests/run-tests.sh`, needs cmake; builds `tests/CMakeLists.txt` and runs ctest; CI runs them on Linux, under ASan+UBSan and TSan, and built with MinGW on Windows):
+  config/JSON (incl. C# files), friends, profiles, item text, projection at 4 yaws/pitch/FOV edge, smoother (players + camera); the wire parser (Java-encoder corpus, 216 hostile
+  datagrams, a seeded fuzzer, every validation rule, version handshake, token, datagram numbers); the `.esprec` format, recorder (lock-free ring), replay (fake clock); golden
+  pixel-jitter tests on a synthetic recording; logger (rotation, injection), diagnostics (redaction), clipboard; and a concurrency stress test of every thread hand-off.
+* Java side (`agent/test/run-java-tests.sh`, JDK 17/21/25): the wire encoder, option parsing and version negotiation, the logger. `agent/test/agent_smoke.py` loads the real jar into the fake games and checks
+  what comes out on UDP.
 * Agent vs a fake game with Minecraft-like structure (obfuscated names; Vec3 and plain-double layouts; decoys): players/local/yaw/pitch/health/hitbox/uuid; **camera + private `getFov` method found by reflection with FOV sweeping 63-77**; first- and third-person (distance 4.00, mode 2);
-  items in NBT style (both `id`/`lvl` orders) and component style, item frame filtered; JDK 17 and 21.
+  items in NBT style (both `id`/`lvl` orders) and component style, item frame filtered; JDK 17, 21 and 25.
 * Full chain under **Wine + Xvfb**: agent → UDP → overlay with `cam: exact`, items with enchantment lines and tag text; config UI driven with synthetic input; skins against a local mock of Mojang/Crafatar/session servers
   (Crafatar path and the session-texture fallback incl. hat compositing).
 * **Not tested:** a real Minecraft install, real-Windows behavior (click-through/focus, `DwmFlush` pacing, Attach on Windows), the live Mojang/Crafatar services, and discovery against real Minecraft classes. Treat the first run as a test; read `esp_log.txt`, `esp_agent.log`, `esp_layout.json`.
