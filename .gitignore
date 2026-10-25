@@ -5,3 +5,4 @@
 /agent/esp-agent.jar
 /build/
 /build-*/
+/agent/test/out/

@@ -28,3 +28,8 @@ java -javaagent:../esp-agent.jar="port=47615;export=/tmp/exp;user=Alice" -cp /tm
 java ... RealisticGame nokey      # ItemStack without a key method: id resolved through the holder
 java ... RealisticGame hidden     # layout the search cannot see: expects 0 items and an esp_items_debug.txt
 ```
+
+## Unit tests (no game, no JUnit)
+`sh agent/test/run-java-tests.sh` compiles the agent and `test/src/mcradar/SnapshotTest.java` (package `mcradar`, so it can see
+the package-private encoder) and runs it. It checks the wire layout, locale independence (decimal comma, non-ASCII digits),
+percent encoding, NaN/Infinity -> `-`, name/status sanitising and the datagram size cap. Needs any JDK 8+.
