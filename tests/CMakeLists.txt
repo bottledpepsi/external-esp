@@ -18,7 +18,7 @@ find_package(Threads REQUIRED)
 # The part of src/ that has no Windows dependency (Paths.h falls back to the current directory off Windows).
 add_library(esp_core STATIC
   ${ESP_SRC}/Json.cpp ${ESP_SRC}/Presets.cpp ${ESP_SRC}/EspConfig.cpp ${ESP_SRC}/FriendList.cpp
-  ${ESP_SRC}/ProfileManager.cpp ${ESP_SRC}/Wire.cpp ${ESP_SRC}/Logger.cpp)
+  ${ESP_SRC}/ProfileManager.cpp ${ESP_SRC}/Wire.cpp ${ESP_SRC}/Logger.cpp ${ESP_SRC}/EspRec.cpp)
 target_include_directories(esp_core PUBLIC ${ESP_SRC})
 target_link_libraries(esp_core PUBLIC Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -39,3 +39,4 @@ function(esp_add_test name)
 endfunction()
 
 esp_add_test(unit_tests unit_tests.cpp)
+esp_add_test(esprec_test esprec_test.cpp)
