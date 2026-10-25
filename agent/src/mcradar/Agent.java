@@ -26,7 +26,8 @@ public final class Agent {
         Log.init(cfg.exportDir);
         Log.info("Starting (Java " + System.getProperty("java.version") + ", port " + cfg.port + ", export " + cfg.exportDir + ")");
         int wire = cfg.negotiatedWire();
-        Log.info("Wire protocol: overlay reads up to v" + cfg.wire + ", agent writes up to v" + Snapshot.WIRE_VERSION + " -> sending v" + wire);
+        Log.info("Wire protocol: overlay reads up to v" + cfg.wire + ", agent writes up to v" + Snapshot.WIRE_VERSION + " -> sending v" + wire
+                + (wire >= 5 ? (cfg.token != null ? ", session token set" : ", NO session token (an overlay that checks tokens will drop everything)") : ""));
         if (cfg.wire < Snapshot.WIRE_MIN)
             Log.info("WARNING: the overlay asked for wire v" + cfg.wire + " but this agent cannot write anything older than v" + Snapshot.WIRE_MIN
                     + "; sending v" + wire + " anyway. Rebuild mcesp.exe and esp-agent.jar together.");
@@ -73,6 +74,8 @@ public final class Agent {
                     }
                     snap.sampleNs = tSample;
                     snap.hasSampleTime = true;
+                    snap.wire = cfg.negotiatedWire();
+                    snap.token = cfg.token;
                     byte[] data = snap.encode();
                     try { sock.send(new DatagramPacket(data, data.length, lo, cfg.port)); } catch (Throwable ignored) { }
 

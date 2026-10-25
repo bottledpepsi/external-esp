@@ -41,9 +41,15 @@ final class Snapshot {
     final List<Rec> players = new ArrayList<Rec>();
     final List<Item> items = new ArrayList<Item>();
 
-    static final int WIRE_VERSION = 4;      // the newest protocol this encoder writes (header "MCRADAR 4")
+    static final int WIRE_VERSION = 5;      // the newest protocol this encoder writes (v5 = v4 + the K session-token line)
     static final int WIRE_MIN = 4;          // the oldest it can still write
-    static final int MAX_BYTES = 56000;     // stay well under the 64 KB UDP datagram limit
+    static final int MAX_BYTES = 56000;
+
+    /** Protocol version written in the header (the agent sets the negotiated one; the default is v4 so that tests and older callers are unchanged). */
+    int wire = 4;
+    /** Session token written as the K line when wire >= 5 (null = none). */
+    String token;
+     // stay well under the 64 KB UDP datagram limit
 
     /**
      * Wire format v4 (UTF-8), one UDP datagram per snapshot. Free text is percent-encoded (no spaces).
@@ -61,7 +67,8 @@ final class Snapshot {
      */
     byte[] encode() {
         StringBuilder sb = new StringBuilder(512);
-        sb.append("MCRADAR ").append(WIRE_VERSION).append('\n');
+        sb.append("MCRADAR ").append(wire).append('\n');
+        if (wire >= 5 && token != null && !token.isEmpty()) sb.append("K ").append(token).append('\n');   // session token: the overlay drops datagrams without it
         if (hasSampleTime) sb.append("T ").append(sampleNs).append('\n');
         sb.append("S ").append(status.replace('\n', ' ')).append('\n');
         if (camera != null) {

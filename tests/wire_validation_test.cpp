@@ -24,7 +24,7 @@ int main()
         CHECK(Parse("MCRADAR 4\n", s) && Parse("MCRADAR 4", s) && Parse("MCRADAR 4\r\n", s) && Parse("MCRADAR 1\nL A 1 2 3 4\n", s) && Parse("MCRADAR 3\n", s));
         CHECK(Parse("MCRADAR 4 extra text\n", s));                    // trailing words are ignored (room for later headers)
         CHECK(!Parse("MCRADAR 10\n", s) && !Parse("MCRADAR 40\n", s) && !Parse("MCRADAR 4junk\n", s) && !Parse("MCRADAR 41\n", s));   // used to parse as v1 / v4
-        CHECK(!Parse("MCRADAR 5\n", s) && !Parse("MCRADAR 0\n", s) && !Parse("MCRADAR \n", s) && !Parse("MCRADAR\n", s) && !Parse("mcradar 4\n", s) && !Parse(" MCRADAR 4\n", s));
+        CHECK(Parse("MCRADAR 5\n", s) && !Parse("MCRADAR 6\n", s) && !Parse("MCRADAR 0\n", s) && !Parse("MCRADAR \n", s) && !Parse("MCRADAR\n", s) && !Parse("mcradar 4\n", s) && !Parse(" MCRADAR 4\n", s));
         CHECK(!Parse("MCRADAR 1000\n", s) && !Parse("MCRADAR -4\n", s) && !Parse("", s) && !Parse("\n", s));
     }
 

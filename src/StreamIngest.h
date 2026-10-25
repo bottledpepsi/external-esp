@@ -38,6 +38,21 @@ public:
     // Assigns seq (1, 2, 3, ...) and `arrived`.
     void Publish(std::shared_ptr<WorldSnapshot> snap, Clock::time_point arrived);
 
+    // ---- session token (wire v5, Token.h) ----
+    // With require = true every datagram must carry `token` in its K line; others are dropped (counted, never published). The default
+    // (require = false) accepts everything, which is what replay and the tests want. Call before the producer thread starts.
+    enum class Auth { Ok, NoToken, BadToken };
+    void SetAuth(bool require, std::string token)
+    {
+        requireToken_ = require;
+        token_ = std::move(token);
+    }
+
+    bool AuthRequired() const { return requireToken_; }
+    Auth Authenticate(const WorldSnapshot& snap) const; // Ok when not required
+    void NoteAuthFailure(Auth why, int version); // counts it; remembers why for the HUD message
+    uint64_t AuthFailures() const { return authFailures_.load(); }
+
     // A datagram that did not parse. `why` says whether it was a stranger or an agent of another protocol version.
     void NoteRejected(const ParseResult& why = {});
     void NoteRejected(ParseStatus status, int version) { NoteRejected(ParseResult{status, version}); }
@@ -58,10 +73,19 @@ public:
 
 private:
     NowFn now_;
+    bool requireToken_ = false;
+    std::string token_;
+    std::atomic<uint64_t> authFailures_{0};
+    std::atomic<int> authWhy_{0}, authVersion_{0}; // Auth value (1 NoToken / 2 BadToken) and the protocol version of the last failure
+    std::atomic<int64_t> authNs_{0};
     uint64_t seq_ = 0; // producer thread only
     std::atomic<bool> have_{false};
     std::atomic<int64_t> lastNs_{0};
     std::atomic<uint64_t> count_{0}, rejected_{0};
+    // which warnings were already logged: bit v of unsupportedLogged_ = "unsupported version v", bit (why*8+min(v,7)) of authLogged_ = one line
+    // per (reason, version) however the failures interleave, so a hostile or mixed stream cannot flood the log
+    std::atomic<uint64_t> unsupportedLogged_{0};
+    std::atomic<uint32_t> authLogged_{0};
     std::atomic<int> unsupportedVersion_{0}, acceptedVersion_{0};
     std::atomic<int64_t> unsupportedNs_{0}, acceptedNs_{0};
     mutable std::mutex mtx_;

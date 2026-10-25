@@ -82,8 +82,9 @@ void UdpListener::Loop(std::stop_token st)
             if (tap_) tap_->Record(buf.data(), static_cast<size_t>(n), Clock::now()); // hot path: no allocation, no lock, no I/O
             auto snap = std::make_shared<WorldSnapshot>();
             const ParseResult pr = ParseDatagramEx(buf.data(), static_cast<size_t>(n), *snap);
-            if (pr.status == ParseStatus::Ok) back = std::move(snap);
-            else ingest_.NoteRejected(pr);
+            if (pr.status != ParseStatus::Ok) ingest_.NoteRejected(pr);
+            else if (const auto a = ingest_.Authenticate(*snap); a != StreamIngest::Auth::Ok) ingest_.NoteAuthFailure(a, snap->protocolVersion);
+            else back = std::move(snap);
         }
         if (!back) continue;
         ingest_.Publish(std::move(back), Clock::now()); // seq + arrival time + pointer swap

@@ -97,6 +97,6 @@ xxd -l 64 session.esprec        # magic, version, first record header
 
 ## Privacy
 
-Datagrams contain player names, UUIDs, coordinates and item data from the game. From wire v5 they also contain the session
-token (see the wire documentation). A recording is a record of the session: do not post one publicly without looking at it, and prefer
+Datagrams contain player names, UUIDs, coordinates and item data from the game. From wire v5 they also contain the **session token** (`K` line, see `docs/wire.md`); it is only valid for the overlay session that
+recorded it, so a recording cannot be used to feed a later session. A recording is a record of the session: do not post one publicly without looking at it, and prefer
 `--diagnostics`'s redacted output for bug reports.

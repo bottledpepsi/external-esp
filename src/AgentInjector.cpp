@@ -80,7 +80,8 @@ int AgentInjector::RunHelper(const fs::path& java, DWORD pid, std::stop_token st
     // wire=N: the newest wire protocol this overlay can read; the agent never sends a newer one (an agent without this option, or an older
     // overlay that does not pass it, means v4).
     const std::wstring opts = L"port=" + std::to_wstring(cfg_.port) + L";hz=" + std::to_wstring(cfg_.agentHz) +
-        L";wire=" + std::to_wstring(wire::kMaxVersion) + L";export=" + exportDir;
+        L";wire=" + std::to_wstring(wire::kMaxVersion) + (cfg_.token.empty() ? L"" : L";token=" + std::wstring(cfg_.token.begin(), cfg_.token.end())) +
+        L";export=" + exportDir;
 
     std::wstring cmd = Q(java.wstring());
     if (modern) cmd += L" --add-modules jdk.attach";

@@ -177,6 +177,17 @@ ParseResult ParseDatagramEx(const char* data, size_t len, WorldSnapshot& out)
             else ignore();
             continue;
         }
+        if (tag == 'K' && version >= 5)
+        {
+            Tokens t{body};
+            string_view tok;
+            const std::string v = t.Next(tok) ? std::string(tok) : std::string();
+            bool ok = !v.empty() && v.size() <= wire::kMaxTokenBytes;
+            for (char c : v) ok = ok && ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
+            if (ok) snap.token = v;
+            else ignore();
+            continue;
+        }
         if (tag == 'F' && version >= 4)
         {
             snap.hasItems = true;

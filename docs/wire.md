@@ -5,7 +5,8 @@ is `agent/src/mcradar/Snapshot.java` (`encode`), the consumer is `src/Wire.cpp` 
 outputs that the C++ tests parse (see `agent/test/README.md`).
 
 ```
-MCRADAR 4                                                            header: protocol version (1-4 accepted)
+MCRADAR 5                                                            header: protocol version (1-5 accepted)
+K <token>                                                            v5: the session token (see below), second line
 T <nanoTime>                                                         v4: instant the agent read the game state (agent clock, ns)
 S <status text>                                                      status line shown in the HUD
 C <x> <y> <z> <yaw> <pitch> <fov|-> <mode>                           v3+: the game camera; mode 1 first / 2 third-back / 3 third-front
@@ -16,7 +17,7 @@ I <x> <y> <z> <w|-> <h|-> <count> <key> <ench|-> <tags|->            v3+: a drop
 ```
 
 `-` means "unknown". Columns are separated by spaces or tabs, lines by `\n` (a trailing `\r` is ignored), unknown tags and lines shorter
-than two characters are skipped. Versions 1 (yaw only), 2 (+ pitch, health) and 3 are still parsed.
+than two characters are skipped. Versions 1 (yaw only), 2 (+ pitch, health), 3 and 4 (+ `T`, `F`) are still parsed; v5 adds the `K` line.
 
 ## Version handshake
 
@@ -33,6 +34,23 @@ must not fail silently:
   old agent (v1-v3: no `T` stamps) is flagged too: *"agent speaks the old wire protocol v3 (this overlay: v4): rebuild esp-agent.jar ..."*.
 * `mcesp --no-inject` users pass the same option by hand: `-javaagent:esp-agent.jar=port=47615;hz=120;wire=4`.
 
+## Session token (v5)
+
+Anything on the machine can send a UDP datagram to `127.0.0.1:47615`. To keep other programs (and an agent left over from an earlier overlay session) from feeding
+the overlay fake players, the overlay generates **128 random bits at start-up** (`BCryptGenRandom`; if the OS generator fails it refuses to start), hands them to
+the agent it attaches (`token=<32 hex>` in the agent options, together with `wire=5`) and **drops every datagram that does not carry them**: a `K <token>` line,
+compared in constant time. Dropped datagrams are counted (`StreamIngest::AuthFailures`), one warning per (reason, version) is logged however the failures interleave, and
+the HUD says *"agent sends no session token (wire v4): rebuild esp-agent.jar together with mcesp.exe, or run mcesp --no-auth"* or *"datagrams with a wrong session token
+are being ignored"*. Replay is exempt (a recording was authenticated when it was made; the token is stored in it, see `docs/esprec.md`).
+
+* `mcesp --token T` uses a fixed token (16-64 letters/digits) and `mcesp --no-auth` turns the check off (logged as a warning). With `--no-inject` the exact
+  `-javaagent:esp-agent.jar=port=...;wire=5;token=...` line is printed at start-up.
+* A v4 agent has no token, so a token-checking overlay refuses it - rebuild the jar (an older exe still works with this jar: without `wire=` the agent speaks v4).
+
+**What it does not protect against.** The token is visible in the command line of the short-lived attach helper process and in the target JVM's agent options,
+so any process running as the same user can read it. It stops accidents and other programs, not malware that already runs as you; nothing can, because that
+malware could equally attach its own agent to the game.
+
 ## The parser treats the datagram as untrusted input
 
 Any process on the machine can send a datagram to the port, and a bug in the agent can send nonsense, so `ParseDatagram` validates everything
@@ -40,6 +58,7 @@ Any process on the machine can send a datagram to the port, and a bug in the age
 
 | What | Rule |
 |---|---|
+| Token (`K`) | only in v5; 1-64 letters/digits, otherwise the line is dropped (and the datagram has no token) |
 | Header | exactly `MCRADAR <1-3 digits>` then end of line or a space. `MCRADAR 4junk` is not ours (and `MCRADAR 10` is no longer read as v1: it is an unsupported version). A version outside 1..4 is rejected as `UnsupportedVersion` |
 | Numbers | plain decimals only (`-`, digits, `.`, `e`/`E`): no `nan`, `inf`, hex floats, `+`, no 1e999. Must be finite |
 | Coordinates | `abs(v) <= 1e8` (the world border is 3e7). A line with a bad coordinate is dropped |

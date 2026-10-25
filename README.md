@@ -23,10 +23,10 @@ Requirements: **JDK 8+** (builds the agent; also what runs the attach step) and 
 |---|---|
 | One step | `build-all.bat` → `dist\mcesp.exe` + `dist\esp-agent.jar` (+ `libwinpthread-1.dll`); finds CLion's/MSYS2's g++ itself |
 | CLion / CMake | open the folder; first run `agent\build.bat`; build target `mcesp` (jar + DLL are copied next to the exe) |
-| Manual | `agent\build.bat`, then `g++ -std=c++20 -O2 src/*.cpp -o mcesp.exe -ld2d1 -ldwrite -ldwmapi -lwinmm -lgdi32 -luser32 -lws2_32 -lwinhttp -lwindowscodecs -lole32 -luuid -static-libgcc -static-libstdc++`, then put `esp-agent.jar` and `libwinpthread-1.dll` next to it |
+| Manual | `agent\build.bat`, then `g++ -std=c++20 -O2 src/*.cpp -o mcesp.exe -ld2d1 -ldwrite -ldwmapi -lwinmm -lgdi32 -luser32 -lws2_32 -lwinhttp -lwindowscodecs -lole32 -luuid -lbcrypt -static-libgcc -static-libstdc++`, then put `esp-agent.jar` and `libwinpthread-1.dll` next to it |
 
 Linker libs: `d2d1 dwrite` (Direct2D/DirectWrite) · `dwmapi` (DwmFlush = VSync) · `winmm` (1 ms timer) · `gdi32 user32` · `ws2_32` (UDP) ·
-`winhttp` (skin downloads) · `windowscodecs ole32 uuid` (PNG decoding via WIC). **Do not pass `-mwindows`** - the console subsystem is intentional (logs also go to `esp_log.txt`).
+`winhttp` (skin downloads) · `windowscodecs ole32 uuid` (PNG decoding via WIC) · `bcrypt` (the per-session token). **Do not pass `-mwindows`** - the console subsystem is intentional (logs also go to `esp_log.txt`).
 Do not use `-static`: it fails on CLion 2026's bundled GCC 15 (`undefined reference to __intrinsic_setjmpex`); the exe needs `libwinpthread-1.dll` next to it (copied automatically).
 
 ## Continuous integration
@@ -46,7 +46,7 @@ mcesp --list               # list java processes (two clients on one PC?)  then:
 mcesp --record s.esprec     # also save the raw agent datagrams + arrival times (docs/esprec.md) for replay / tests / bug reports
 mcesp --replay s.esprec    # play a recording back (no Minecraft needed): F6 pause, F7 step, F8/F9 speed; --replay-speed X, --replay-loop
 mcesp --screen             # overlay the whole monitor instead of tracking the game window
-mcesp --no-inject          # don't auto-attach; start the game with -javaagent:esp-agent.jar=port=47615;hz=120;wire=4
+mcesp --no-inject          # don't auto-attach; prints the exact -javaagent line (with this session's token) to start the game with; --token T fixes the token, --no-auth turns the check off
 mcesp --java "C:\...\jdk-21\bin\java.exe" --open-config --port 47616 --jar C:\path\esp-agent.jar
 ```
 Hotkeys (rebindable): **Insert** config · **Delete** toggle ESP · **hold End 3 s** exit. They act only while the game or overlay has focus.

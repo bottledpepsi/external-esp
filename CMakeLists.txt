@@ -12,11 +12,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(mcesp
   src/main.cpp src/Logger.cpp src/Json.cpp src/Presets.cpp src/EspConfig.cpp
   src/FriendList.cpp src/ProfileManager.cpp src/Wire.cpp src/SkinCache.cpp
-  src/ProcessManager.cpp src/AgentInjector.cpp src/AgentSupervisor.cpp src/StreamIngest.cpp src/Recorder.cpp src/EspRec.cpp src/Replay.cpp src/UdpListener.cpp
+  src/ProcessManager.cpp src/AgentInjector.cpp src/AgentSupervisor.cpp src/StreamIngest.cpp src/Token.cpp src/Recorder.cpp src/EspRec.cpp src/Replay.cpp src/UdpListener.cpp
   src/Gfx.cpp src/EspRenderer.cpp src/ConfigUi.cpp src/EspOverlay.cpp)
 
 # Console subsystem on purpose (logs are visible in the terminal): do NOT add -mwindows.
-target_link_libraries(mcesp PRIVATE d2d1 dwrite dwmapi winmm gdi32 user32 ws2_32 winhttp windowscodecs ole32 uuid)
+target_link_libraries(mcesp PRIVATE d2d1 dwrite dwmapi winmm gdi32 user32 ws2_32 winhttp windowscodecs ole32 uuid bcrypt)
 
 # Default OFF: a fully static link (-static) fails on newer MinGW-w64 toolchains such as CLion 2026's bundled
 # GCC 15 (undefined __intrinsic_setjmpex / __ms_vsnprintf from libpthread.a / libmsvcrt.a). The default links

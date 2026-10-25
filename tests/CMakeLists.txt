@@ -41,9 +41,12 @@ find_package(Threads REQUIRED)
 add_library(esp_core STATIC
   ${ESP_SRC}/Json.cpp ${ESP_SRC}/Presets.cpp ${ESP_SRC}/EspConfig.cpp ${ESP_SRC}/FriendList.cpp
   ${ESP_SRC}/ProfileManager.cpp ${ESP_SRC}/Wire.cpp ${ESP_SRC}/Logger.cpp ${ESP_SRC}/EspRec.cpp
-  ${ESP_SRC}/StreamIngest.cpp ${ESP_SRC}/Recorder.cpp ${ESP_SRC}/Replay.cpp)
+  ${ESP_SRC}/StreamIngest.cpp ${ESP_SRC}/Recorder.cpp ${ESP_SRC}/Replay.cpp ${ESP_SRC}/Token.cpp)
 target_include_directories(esp_core PUBLIC ${ESP_SRC})
 target_link_libraries(esp_core PUBLIC Threads::Threads)
+if(WIN32)
+  target_link_libraries(esp_core PUBLIC bcrypt) # Token.cpp: BCryptGenRandom
+endif()
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(esp_core PUBLIC -Wall -Wextra -O1 -g)
 endif()
@@ -68,6 +71,8 @@ esp_add_test(recorder_test recorder_test.cpp)
 esp_add_test(replay_test replay_test.cpp)
 esp_add_test(wire_validation_test wire_validation_test.cpp)
 esp_add_test(wire_version_test wire_version_test.cpp)
+esp_add_test(token_test token_test.cpp)
+target_compile_definitions(token_test PRIVATE ESP_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 esp_add_test(wire_fuzz_test wire_fuzz_test.cpp)
 target_compile_definitions(wire_fuzz_test PRIVATE ESP_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 if(ESP_FUZZ_ITERS_ENV)

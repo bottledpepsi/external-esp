@@ -37,6 +37,9 @@ public final class SnapshotTest {
                 "minecraft:sharpness@5,minecraft:unbreaking@3", "{Enchantments:[{id:\"minecraft:sharpness\"}]}"));
         full.items.add(new Snapshot.Item(98, 64, -52, Float.NaN, Float.NaN, 37, "minecraft:cobblestone", null, null));
         write(dir, "full_v4.dgram", full);
+        full.wire = 5; full.token = "0123456789abcdef0123456789abcdef";
+        write(dir, "full_v5.dgram", full);
+        full.wire = 4; full.token = null;
 
         Snapshot bare = new Snapshot();
         bare.itemsFresh = false;
@@ -92,6 +95,21 @@ public final class SnapshotTest {
         check(lines[8].equals("I 98.000 64.000 -52.000 - - 37 minecraft:cobblestone - -"), "unknown size / ench / tags are '-': " + lines[8]);
         check(lines[9].isEmpty() && lines.length == 10, "datagram ends with exactly one newline");
         check(lines[4].split(" ").length == 11, "L has 11 columns");
+
+        // ---- v5: the session token is the second line, only at wire >= 5 and only when there is one ----
+        {
+            Snapshot k = new Snapshot();
+            k.wire = 5; k.token = "0123456789abcdef0123456789abcdef";
+            k.sampleNs = 42L; k.hasSampleTime = true;
+            String[] kl = enc(k).split("\n");
+            check(kl[0].equals("MCRADAR 5") && kl[1].equals("K 0123456789abcdef0123456789abcdef") && kl[2].equals("T 42"), "v5: header, K, then T: " + kl[0] + "|" + kl[1]);
+            Snapshot k4 = new Snapshot();
+            k4.wire = 4; k4.token = "0123456789abcdef0123456789abcdef";
+            check(!enc(k4).contains("K "), "v4 never carries a K line");
+            Snapshot k5 = new Snapshot();
+            k5.wire = 5;
+            check(enc(k5).startsWith("MCRADAR 5\nS ") && !enc(k5).contains("K "), "v5 without a token has no K line");
+        }
 
         // ---- optional parts ----
         Snapshot none = new Snapshot();

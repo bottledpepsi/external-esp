@@ -14,6 +14,8 @@ final class AgentConfig {
      * hand-written -javaagent line) is treated as speaking v4. The agent sends min(this, Snapshot.WIRE_VERSION).
      */
     int wire = 4;
+    /** Session token the overlay generated (option token=...): sent in every v5 datagram. Null = none (then only v4 can be spoken). */
+    String token;
 
     static AgentConfig parse(String args) {
         AgentConfig c = new AgentConfig();
@@ -26,6 +28,8 @@ final class AgentConfig {
         try { if (kv.containsKey("port")) c.port = Integer.parseInt(kv.get("port")); } catch (NumberFormatException ignored) { }
         try { if (kv.containsKey("hz")) c.hz = Math.max(1, Math.min(240, Integer.parseInt(kv.get("hz")))); } catch (NumberFormatException ignored) { }
         try { if (kv.containsKey("wire")) c.wire = Integer.parseInt(kv.get("wire")); } catch (NumberFormatException ignored) { }
+        String tok = kv.get("token");
+        if (tok != null && tok.matches("[0-9A-Za-z]{16,64}")) c.token = tok;
         if (kv.containsKey("export") && !kv.get("export").isEmpty()) c.exportDir = kv.get("export");
         if (kv.containsKey("user") && !kv.get("user").isEmpty()) c.username = kv.get("user");
         return c;

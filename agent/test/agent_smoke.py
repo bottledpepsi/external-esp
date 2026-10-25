@@ -3,7 +3,7 @@
 
     python3 agent/test/agent_smoke.py [--java-home DIR] [--timeout SECONDS] [case ...]
 
-Cases (default: all): fake, fake-old, fake-third, realistic.
+Cases (default: all): fake, fake-old, fake-third, realistic, fake-v5 (wire=5 with a session token).
 What it proves: the agent finds players / camera / FOV / items in games with Minecraft-like structure and that what goes on
 the wire matches the format documented in Snapshot.java. What it does NOT prove: anything about real Minecraft, real Windows,
 or obfuscated real-game class layouts.
@@ -129,6 +129,25 @@ def check_fake(dgs, problems, third=False, old=False):
         problems.append("sword enchantments not parsed: %s" % sword[0])
 
 
+TOKEN = "0123456789abcdef0123456789abcdef"
+
+
+def check_v5(dgs, problems):
+    """wire v5: every datagram starts 'MCRADAR 5' + 'K <token>', the rest is the v4 content"""
+    if not dgs:
+        problems.append("no datagram received")
+        return
+    bad = [d for d in dgs if not d.startswith(("MCRADAR 5\nK %s\n" % TOKEN).encode())]
+    if bad:
+        problems.append("%d of %d datagrams do not start with 'MCRADAR 5' + 'K <token>' (first bad: %r)" % (len(bad), len(dgs), bad[0][:60]))
+    pl, _ = players(dgs)
+    for n in ("Alice", "Bob", "Carol"):
+        if n not in pl:
+            problems.append("player %s missing" % n)
+    if not any(l.startswith("T ") for d in dgs for l in lines_of(d)):
+        problems.append("no T line in the v5 datagrams")
+
+
 def check_realistic(dgs, problems):
     if not common(dgs, problems):
         return
@@ -150,7 +169,12 @@ CASES = {
     "fake-old": ("fake", "FakeGame", ["--username", "Alice", "old"], lambda d, p: check_fake(d, p, old=True)),
     "fake-third": ("fake", "FakeGame", ["--username", "Alice", "wiggle", "third"], lambda d, p: check_fake(d, p, third=True)),
     "realistic": ("real", "RealisticGame", [], lambda d, p: check_realistic(d, p)),
+    "fake-v5": ("fake", "FakeGame", ["--username", "Alice", "wiggle"], lambda d, p: check_v5(d, p)),
 }
+
+# extra agent options and the negotiation line expected in esp_agent.log, per case (default: wire=4, no token)
+EXTRA_OPTS = {"fake-v5": "wire=5;token=" + TOKEN}
+NEGOTIATION = {"fake-v5": "overlay reads up to v5, agent writes up to v5 -> sending v5, session token set"}
 
 
 def done(case, dgs):
@@ -171,7 +195,7 @@ def run_case(case, java_home, jar, timeout):
     cmd = [java]
     if java_major(java) >= 23:
         cmd.append("--sun-misc-unsafe-memory-access=allow")        # JDK 23+ warns about Unsafe memory access otherwise (README, Known limits)
-    cmd += ["-javaagent:%s=port=%d;hz=60;wire=4;export=%s;user=Alice" % (jar, port, export.replace("\\", "/")),
+    cmd += ["-javaagent:%s=port=%d;hz=60;%s;export=%s;user=Alice" % (jar, port, EXTRA_OPTS.get(case, "wire=4"), export.replace("\\", "/")),
             "-cp", os.path.join(OUT, cp), main] + gargs
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     dgs, t0, last_check = [], time.time(), 0
@@ -199,8 +223,9 @@ def run_case(case, java_home, jar, timeout):
         shutil.rmtree(export, ignore_errors=True)
     problems = []
     check(dgs, problems)
-    if "overlay reads up to v4, agent writes up to v4 -> sending v4" not in agent_log:
-        problems.append("agent log has no wire-version negotiation line (esp_agent.log: %r)" % agent_log[:200])
+    want = NEGOTIATION.get(case, "overlay reads up to v4, agent writes up to v5 -> sending v4")
+    if want not in agent_log:
+        problems.append("agent log has no wire-version negotiation line %r (esp_agent.log: %r)" % (want, agent_log[:300]))
     return dgs, problems, time.time() - t0
 
 

@@ -21,8 +21,8 @@ int main()
     // ---- status codes ----
     {
         CHECK(Ex("MCRADAR 4\n").status == ParseStatus::Ok && Ex("MCRADAR 4\n").version == 4);
-        for (int v = 1; v <= 4; ++v) CHECK(Ex("MCRADAR " + std::to_string(v) + "\nL A 1 2 3\n").status == ParseStatus::Ok && Ex("MCRADAR " + std::to_string(v) + "\n").version == v);
-        CHECK(Ex("MCRADAR 5\n").status == ParseStatus::UnsupportedVersion && Ex("MCRADAR 5\n").version == 5);
+        for (int v = 1; v <= 5; ++v) CHECK(Ex("MCRADAR " + std::to_string(v) + "\nL A 1 2 3\n").status == ParseStatus::Ok && Ex("MCRADAR " + std::to_string(v) + "\n").version == v);
+        CHECK(Ex("MCRADAR 5\n").status == ParseStatus::Ok && Ex("MCRADAR 6\n").status == ParseStatus::UnsupportedVersion && Ex("MCRADAR 6\n").version == 6);
         CHECK(Ex("MCRADAR 10\n").status == ParseStatus::UnsupportedVersion && Ex("MCRADAR 10\n").version == 10);
         CHECK(Ex("MCRADAR 999\n").status == ParseStatus::UnsupportedVersion && Ex("MCRADAR 999\n").version == 999);
         CHECK(Ex("hello").status == ParseStatus::NotOurs && Ex("").status == ParseStatus::NotOurs && Ex("MCRADAR 4junk\n").status == ParseStatus::NotOurs);
@@ -34,8 +34,8 @@ int main()
         keep.status = "kept";
         CHECK(ParseDatagramEx("MCRADAR 7\nS new\n", 16, keep).status == ParseStatus::UnsupportedVersion && keep.status == "kept");
         // the old bool API still works
-        CHECK(ParseDatagram("MCRADAR 4\n", 10, s) && !ParseDatagram("MCRADAR 5\n", 10, s));
-        CHECK(wire::kMinVersion == 1 && wire::kMaxVersion == 4);
+        CHECK(ParseDatagram("MCRADAR 4\n", 10, s) && !ParseDatagram("MCRADAR 6\n", 10, s));
+        CHECK(wire::kMinVersion == 1 && wire::kMaxVersion == 5);
     }
 
     // ---- ingest: what the HUD is told ----
@@ -64,7 +64,7 @@ int main()
         t += seconds(2);
         in.OnDatagram("MCRADAR 6\nS ok\n", 15);
         const std::string msg = in.ProtocolProblem(t);
-        CHECK(msg.find("v6") != std::string::npos && msg.find("v1-v4") != std::string::npos && msg.find("rebuild") != std::string::npos);
+        CHECK(msg.find("v6") != std::string::npos && msg.find("v1-v5") != std::string::npos && msg.find("rebuild") != std::string::npos);
         // ... and goes away again when the agent is replaced by a readable one
         in.OnDatagram("MCRADAR 4\nS ok\n", 15);
         CHECK(in.ProtocolProblem(t).empty());
@@ -80,8 +80,8 @@ int main()
         // nothing readable ever: the very first unsupported datagram is reported at once
         Clock::time_point t = Clock::time_point(seconds(50));
         StreamIngest in([&] { return t; });
-        in.OnDatagram("MCRADAR 5\nS x\n", 14);
-        CHECK(in.ProtocolProblem(t).find("v5") != std::string::npos && in.PacketCount() == 0);
+        in.OnDatagram("MCRADAR 8\nS x\n", 14);
+        CHECK(in.ProtocolProblem(t).find("v8") != std::string::npos && in.PacketCount() == 0);
     }
     {
         // an old agent (v3) is readable but flagged

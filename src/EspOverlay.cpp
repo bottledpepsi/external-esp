@@ -25,7 +25,7 @@ EspOverlay::EspOverlay(const AppOptions& opt)
     : opt_(opt),
       ui_(settings_),
       udp_(opt.port),
-      injector_(InjectorConfig{opt.jarPath, opt.javaPath, opt.port, opt.agentHz}),
+      injector_(InjectorConfig{opt.jarPath, opt.javaPath, opt.port, opt.agentHz, opt.token}),
       sup_(opt_, udp_, injector_)
 {
 }
@@ -347,7 +347,12 @@ int EspOverlay::Run()
         replayPlayer_.SetLoop(opt_.replayLoop);
         replayDriver_.Start();
     }
-    else if (!opt_.demo && !udp_.Start()) LOG_ERROR("Agent data will not be received (UDP listener failed).");
+    else if (!opt_.demo)
+    {
+        udp_.Ingest().SetAuth(opt_.requireAuth, opt_.token);
+        if (!opt_.requireAuth) LOG_WARN("Session token check is OFF (--no-auth): any program that can reach 127.0.0.1:%d can feed this overlay.", static_cast<int>(opt_.port));
+        if (!udp_.Start()) LOG_ERROR("Agent data will not be received (UDP listener failed).");
+    }
     SkinCache::Start(); // friend avatars (background downloads)
     timeBeginPeriod(1); // 1 ms sleep granularity for the frame limiter
     LOG_INFO("Overlay running. Insert = config, Delete = toggle, hold End = exit. %s", opt_.demo ? "(DEMO)" : "");

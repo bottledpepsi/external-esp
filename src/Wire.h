@@ -1,6 +1,7 @@
 // Wire.h - parser for the agent's UDP datagrams (the format is documented in docs/wire.md and agent/src/mcradar/Snapshot.java).
 //
 //   MCRADAR 4                                                           (v4 = v3 + the T and F lines below)
+//   K <token>                                                           v5: the session token the overlay gave the agent (see Token.h)
 //   T <nanoTime>                                                        v4: instant the agent read the game state (agent clock, ns)
 //   S <status text>
 //   C <x> <y> <z> <yaw> <pitch> <fov|-> <mode>                          the game camera (mode 1 first / 2 third-back / 3 third-front)
@@ -20,7 +21,8 @@ namespace wire
 {
     // ---- protocol versions this parser understands ----
     inline constexpr int kMinVersion = 1;
-    inline constexpr int kMaxVersion = 4; // what the overlay tells the agent it can read (agent option wire=N); v4 = T and F lines
+    inline constexpr int kTimestampVersion = 4; // first version with the T sample stamp: older agents work, but the smoothing is degraded
+    inline constexpr int kMaxVersion = 5; // what the overlay tells the agent it can read (agent option wire=N); v4 = T and F lines, v5 = + K (session token)
 
     // ---- limits (docs/wire.md) ----
     inline constexpr size_t kMaxPlayers = 256; // P lines kept per datagram
@@ -32,6 +34,7 @@ namespace wire
     inline constexpr size_t kMaxKeyBytes = 128;
     inline constexpr size_t kMaxEnchantTextBytes = 1024;
     inline constexpr size_t kMaxTagsBytes = 4096;
+    inline constexpr size_t kMaxTokenBytes = 64;
     inline constexpr double kMaxCoord = 1.0e8; // |x|, |y|, |z|: the world border is 3e7
     inline constexpr double kMaxAngle = 1.0e6; // degrees (yaw is unwrapped and can accumulate)
     inline constexpr double kMaxHealth = 1.0e5;
