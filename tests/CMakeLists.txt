@@ -44,6 +44,7 @@ esp_add_test(esprec_test esprec_test.cpp)
 esp_add_test(ingest_test ingest_test.cpp)
 esp_add_test(recorder_test recorder_test.cpp)
 esp_add_test(replay_test replay_test.cpp)
+esp_add_test(wire_validation_test wire_validation_test.cpp)
 esp_add_test(wire_fuzz_test wire_fuzz_test.cpp)
 target_compile_definitions(wire_fuzz_test PRIVATE ESP_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 

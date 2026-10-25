@@ -1,9 +1,11 @@
 // Wire parser: (1) the REAL Java encoder's output parses to exactly what it encoded (cross-language contract, tests/data/wire/*.dgram),
 // (2) a corpus of hostile / malformed datagrams, (3) a seeded mutation fuzzer. The parser must never crash, throw or hang on any input; with
 // ASan/UBSan (see the sanitizer jobs) "never crash" includes memory errors and undefined behaviour. This file asserts only what must hold
-// for ANY input; the stricter value rules (finite numbers, limits) are in wire_validation_test.cpp.
+// for ANY input - including that every snapshot that comes back satisfies wire_invariants.h (finite, in range, capped, valid UTF-8);
+// the exact value rules are in wire_validation_test.cpp.
 //   ESP_FUZZ_ITERS=N   number of mutation iterations (default 60000)
 #include "Wire.h"
+#include "wire_invariants.h"
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -28,6 +30,7 @@ static std::string ReadFile(const std::string& name)
 }
 
 static double g_worstMs = 0;
+static size_t g_violations = 0;
 static bool Parse(const std::string& d, WorldSnapshot& out)
 {
     const auto a = std::chrono::steady_clock::now();
@@ -36,6 +39,11 @@ static bool Parse(const std::string& d, WorldSnapshot& out)
     catch (...) { std::printf("FAIL: ParseDatagram threw on a %zu-byte datagram\n", d.size()); ++fails; }
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - a).count();
     if (ms > g_worstMs) g_worstMs = ms;
+    if (ok)
+    {
+        const std::string v = wire_inv::Violation(out);   // every snapshot that comes out is finite, in range, capped and valid UTF-8
+        if (!v.empty() && ++g_violations <= 5) std::printf("FAIL: invariant violated (%s) for a %zu-byte datagram\n", v.c_str(), d.size());
+    }
     return ok;
 }
 
@@ -194,6 +202,8 @@ int main()
         if (Parse(d, s)) ++accepted;
     }
     std::printf("fuzz: %zu mutated datagrams (%zu accepted), slowest single parse %.2f ms\n", iters, accepted, g_worstMs);
+    std::printf("invariant violations: %zu\n", g_violations);
+    CHECK(g_violations == 0);
     CHECK(g_worstMs < 250.0);                                              // no input makes the parser take a quarter of a second
 
     std::printf(fails ? "\n%d FAILURES\n" : "\nALL OK\n", fails);

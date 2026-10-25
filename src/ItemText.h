@@ -76,7 +76,8 @@ inline std::vector<Enchant> ParseEnchants(const std::string& s)
         {
             Enchant e;
             e.id = item.substr(0, at);
-            e.level = std::atoi(item.c_str() + at + 1);
+            const long lv = std::strtol(item.c_str() + at + 1, nullptr, 10); // not atoi: it is undefined when the number overflows
+            e.level = lv > 1000000 ? 1000000 : (lv < -1000000 ? -1000000 : static_cast<int>(lv));
             if (!e.id.empty()) out.push_back(e);
         }
         if (comma == std::string::npos) break;

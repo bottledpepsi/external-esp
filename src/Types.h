@@ -68,4 +68,6 @@ struct WorldSnapshot
     int64_t sampleNs = 0;
     // Wire v4: false = this datagram carries no item list (items are sent at ~10 Hz); keep the previous one.
     bool hasItems = true;
+    // Number of lines with a known tag that were dropped by the parser (bad number, out of range, over the per-datagram limits).
+    uint32_t ignoredLines = 0;
 };
