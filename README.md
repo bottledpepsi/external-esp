@@ -43,6 +43,7 @@ ASan + UBSan (including `float-cast-overflow`, which `-fsanitize=undefined` does
 mcesp                      # normal: finds Minecraft, attaches the agent, draws the ESP
 mcesp --demo               # synthetic players, no Minecraft needed (try the UI / friends / profiles)
 mcesp --list               # list java processes (two clients on one PC?)  then:  mcesp --pid 12345
+mcesp --diagnostics r.txt    # write a REDACTED report (versions, settings, log tails) to attach to a bug report (docs/diagnostics.md)
 mcesp --verbose              # also log DEBUG lines (esp_log.txt is capped at 1 MiB, one backup esp_log.1.txt)
 mcesp --record s.esprec     # also save the raw agent datagrams + arrival times (docs/esprec.md) for replay / tests / bug reports
 mcesp --replay s.esprec    # play a recording back (no Minecraft needed): F6 pause, F7 step, F8/F9 speed; --replay-speed X, --replay-loop

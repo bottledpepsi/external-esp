@@ -12,8 +12,20 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(mcesp
   src/main.cpp src/Logger.cpp src/Json.cpp src/Presets.cpp src/EspConfig.cpp
   src/FriendList.cpp src/ProfileManager.cpp src/Wire.cpp src/SkinCache.cpp
-  src/ProcessManager.cpp src/AgentInjector.cpp src/AgentSupervisor.cpp src/StreamIngest.cpp src/Token.cpp src/Recorder.cpp src/EspRec.cpp src/Replay.cpp src/UdpListener.cpp
+  src/ProcessManager.cpp src/AgentInjector.cpp src/AgentSupervisor.cpp src/StreamIngest.cpp src/Token.cpp src/Diagnostics.cpp src/DiagnosticsApp.cpp src/SysInfo.cpp src/Recorder.cpp src/EspRec.cpp src/Replay.cpp src/UdpListener.cpp
   src/Gfx.cpp src/EspRenderer.cpp src/ConfigUi.cpp src/EspOverlay.cpp)
+
+# Build id for the diagnostics report: `git describe` at configure time ("dev" when there is no git or no commit).
+find_package(Git QUIET)
+set(ESP_VERSION "dev")
+if(GIT_FOUND)
+  execute_process(COMMAND ${GIT_EXECUTABLE} describe --always --dirty --tags WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                  OUTPUT_VARIABLE _esp_ver OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE _esp_rc)
+  if(_esp_rc EQUAL 0 AND _esp_ver)
+    set(ESP_VERSION "${_esp_ver}")
+  endif()
+endif()
+target_compile_definitions(mcesp PRIVATE ESP_VERSION="${ESP_VERSION}")
 
 # Console subsystem on purpose (logs are visible in the terminal): do NOT add -mwindows.
 target_link_libraries(mcesp PRIVATE d2d1 dwrite dwmapi winmm gdi32 user32 ws2_32 winhttp windowscodecs ole32 uuid bcrypt)

@@ -13,7 +13,9 @@
 #include "EspOverlay.h"
 #include "FriendList.h"
 #include "Logger.h"
+#include "DiagnosticsApp.h"
 #include "Paths.h"
+#include "Version.h"
 #include "Token.h"
 #include "Wire.h"
 #include "ProcessManager.h"
@@ -21,7 +23,9 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <cstdlib>
+#include <fstream>
 #include <string>
 
 namespace
@@ -30,7 +34,7 @@ namespace
     {
         std::puts(
             "external-esp (C++)\n"
-            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]] [--token T | --no-auth] [--verbose]\n"
+            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]] [--token T | --no-auth] [--verbose] [--diagnostics [FILE]]\n"
             "\n"
             "  --demo       synthetic players (test the overlay/config UI without Minecraft)\n"
             "  --pid N      attach to this java(w).exe PID (two Minecraft clients on one PC)\n"
@@ -45,6 +49,7 @@ namespace
             "  --record F   also save the raw agent datagrams + arrival times to F (.esprec) for --replay / tests / bug reports\n"
             "  --replay F   play back an .esprec recording over the whole screen instead of attaching to Minecraft\n"
             "               (F6 pause/resume, F7 step while paused, F8 slower, F9 faster); --replay-speed X, --replay-loop\n"
+            "  --diagnostics [F]  print (or write to F) a REDACTED report for bug reports: versions, settings, log tails; then exit\n"
             "  --verbose    also log DEBUG lines (the log is esp_log.txt, capped at 1 MiB + one backup esp_log.1.txt)\n"
             "  --token T    use this session token instead of a random one (16-64 letters/digits; for --no-inject: pass the same to the agent)\n"
             "  --no-auth    accept datagrams without / with any session token (not recommended)\n"
@@ -60,7 +65,8 @@ int main(int argc, char** argv)
 
     AppOptions opt;
     opt.jarPath = AppDir() / "esp-agent.jar";
-    bool list = false;
+    bool list = false, diagnostics = false;
+    std::string diagnosticsFile;
     for (int i = 1; i < argc; ++i)
     {
         const std::string a = argv[i];
@@ -73,6 +79,11 @@ int main(int argc, char** argv)
         {
             elog::SetLevel(elog::Level::Debug);
             opt.verbose = true;
+        }
+        else if (a == "--diagnostics")
+        {
+            diagnostics = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-') diagnosticsFile = argv[++i];
         }
         else if (a == "--demo") opt.demo = true;
         else if (a == "--no-inject") opt.autoInject = false;
@@ -98,6 +109,27 @@ int main(int argc, char** argv)
         }
     }
 
+    if (diagnostics)
+    {
+        diag::AppContext ctx;
+        ctx.version = kEspVersion;
+        ctx.agentLog = opt.jarPath.parent_path() / "esp_agent.log";
+        ctx.settings = "port = " + std::to_string(opt.port) + "\nagent hz = " + std::to_string(opt.agentHz) + "\ntoken check = " + (opt.requireAuth ? "on" : "off") + "\n";
+        const std::string report = diag::Collect(ctx);
+        if (diagnosticsFile.empty()) std::fputs(report.c_str(), stdout);
+        else
+        {
+            std::ofstream f(diagnosticsFile, std::ios::binary | std::ios::trunc);
+            f << report;
+            if (!f)
+            {
+                std::fprintf(stderr, "cannot write %s\n", diagnosticsFile.c_str());
+                return 1;
+            }
+            std::printf("wrote %s (redacted - read it before posting)\n", diagnosticsFile.c_str());
+        }
+        return 0;
+    }
     if (list)
     {
         const auto procs = ProcessManager::Scan();
