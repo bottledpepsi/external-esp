@@ -140,6 +140,16 @@ void ConfigUi::TabGeneral()
     if (!cameraInfo_.empty()) InfoRow(cameraInfo_);
     InfoRow("With the game camera found, its exact pose and FOV are used (sprint, underwater, third person).");
     InfoRow("The FOV setting is only a fallback.");
+    if (diagnostics_)
+    {
+        y_ += 6;
+        Section("SUPPORT");
+        y_ += 4;
+        if (Button("Copy diagnostics", px_ + kPad, 140)) diagnosticsNote_ = diagnostics_();
+        y_ += 24;
+        InfoRow(diagnosticsNote_.empty() ? "Copies a redacted report for a bug report; read it before posting." : diagnosticsNote_,
+                !diagnosticsNote_.empty() && diagnosticsNote_.rfind("Could not", 0) == 0);
+    }
 }
 
 void ConfigUi::TabPlayers()

@@ -12,7 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(mcesp
   src/main.cpp src/Logger.cpp src/Json.cpp src/Presets.cpp src/EspConfig.cpp
   src/FriendList.cpp src/ProfileManager.cpp src/Wire.cpp src/SkinCache.cpp
-  src/ProcessManager.cpp src/AgentInjector.cpp src/AgentSupervisor.cpp src/StreamIngest.cpp src/Token.cpp src/Diagnostics.cpp src/DiagnosticsApp.cpp src/SysInfo.cpp src/Recorder.cpp src/EspRec.cpp src/Replay.cpp src/UdpListener.cpp
+  src/ProcessManager.cpp src/AgentInjector.cpp src/AgentSupervisor.cpp src/StreamIngest.cpp src/Token.cpp src/Diagnostics.cpp src/DiagnosticsApp.cpp src/SysInfo.cpp src/Clipboard.cpp src/Recorder.cpp src/EspRec.cpp src/Replay.cpp src/UdpListener.cpp
   src/Gfx.cpp src/EspRenderer.cpp src/ConfigUi.cpp src/EspOverlay.cpp)
 
 # Build id for the diagnostics report: `git describe` at configure time ("dev" when there is no git or no commit).

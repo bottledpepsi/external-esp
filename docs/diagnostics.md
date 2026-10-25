@@ -1,7 +1,7 @@
 # Diagnostics report
 
-`mcesp --diagnostics [FILE]` prints (or writes to FILE) a text report you can paste into a bug report, then exits; the config window will offer the same text as a
-"Copy diagnostics" button. Code: `src/Diagnostics.*` (redaction and layout, no Windows dependency), `src/DiagnosticsApp.*` (gathering), `src/SysInfo.*`.
+`mcesp --diagnostics [FILE]` prints (or writes to FILE) a text report you can paste into a bug report, then exits; the config window (Insert, GENERAL tab, SUPPORT) has the same text behind a **Copy diagnostics** button: it puts the redacted report on the clipboard (UTF-16, CRLF line ends)
+and says "Copied N KB". The in-app report also knows the live state: the HUD status line, stream counters, renderer, and the names in the current snapshot. Code: `src/Diagnostics.*` (redaction and layout, no Windows dependency), `src/DiagnosticsApp.*` (gathering), `src/SysInfo.*`.
 
 ## What is in it
 generated time, build id (`git describe` at CMake configure time, `unknown` for a hand-built exe), compiler, Windows version, logical CPU count, renderer (GPU/legacy), the

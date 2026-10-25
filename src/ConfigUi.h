@@ -8,6 +8,7 @@
 #pragma once
 #include "EspConfig.h"
 #include "Gfx.h"
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,8 @@ public:
 
     void Draw(Gfx& g, const UiInput& in, int winW, int winH);
     void SetCameraInfo(const std::string& s) { cameraInfo_ = s; }
+    // "Copy diagnostics" (GENERAL tab): the handler builds the report, puts it on the clipboard and returns the one-line result to show.
+    void SetDiagnosticsHandler(std::function<std::string()> h) { diagnostics_ = std::move(h); }
     // shown in GENERAL (exact / reconstructed, FOV, perspective)
     bool CapturingKeys() const { return rebindActive_ || friendFocus_ || profileFocus_; }
 
@@ -74,6 +77,8 @@ private:
     bool dragging_ = false;
     float dragOffX_ = 0, dragOffY_ = 0;
 
+    std::function<std::string()> diagnostics_;
+    std::string diagnosticsNote_;
     std::string cameraInfo_;
     std::string friendInput_, profileInput_;
     bool friendFocus_ = false, profileFocus_ = false;

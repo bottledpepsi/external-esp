@@ -61,6 +61,8 @@ private:
     Clock::time_point nextLinkLog_{}, nextDebugLog_{};
     StreamIngest& Src() { return replayMode_ ? replayIngest_ : udp_.Ingest(); }
     void HandleReplayKeys();
+    std::string CopyDiagnostics(); // the config window's "Copy diagnostics" button
+    std::string lastStatus_; // the HUD status line of the last frame
     AgentInjector injector_;
     AgentSupervisor sup_;
     Smoother smoother_;

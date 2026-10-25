@@ -1,4 +1,7 @@
 #include "EspOverlay.h"
+#include "Clipboard.h"
+#include "DiagnosticsApp.h"
+#include "Version.h"
 #include "FriendList.h"
 #include "Logger.h"
 #include "Presets.h"
@@ -209,6 +212,40 @@ bool EspOverlay::KeyEdge(int vk)
 }
 
 // --replay only: F6 pause/resume, F7 step one datagram (while paused), F8 half speed, F9 double speed.
+std::string EspOverlay::CopyDiagnostics()
+{
+    diag::AppContext ctx;
+    ctx.version = kEspVersion;
+    ctx.agentLog = opt_.jarPath.parent_path() / "esp_agent.log";
+    ctx.token = opt_.token;
+    ctx.renderer = gfx_.IsGpu() ? "GPU (D3D11 flip swap chain + DirectComposition + Direct2D device context)" : "legacy (DIB + UpdateLayeredWindow)";
+    ctx.hudStatus = lastStatus_;
+    char b[512];
+    std::snprintf(b, sizeof b, "port = %d\nagent hz = %d\ntoken check = %s\nmode = %s\nmotion smoothing = %s\nvsync = %s\nfps cap index = %d\nverbose = %s\n", static_cast<int>(opt_.port),
+                  opt_.agentHz, opt_.requireAuth ? "on" : "OFF", replayMode_ ? "replay" : (opt_.demo ? "demo" : "agent"), settings_.smoothing ? "on" : "off",
+                  settings_.vsync ? "on" : "off", settings_.fpsCap, opt_.verbose ? "on" : "off");
+    ctx.settings = b;
+    {
+        const auto link = Src().Link();
+        char sb[400], seen[32], bad[32];
+        if (Src().AcceptedVersion() != 0) std::snprintf(seen, sizeof seen, "v%d", Src().AcceptedVersion()); else std::snprintf(seen, sizeof seen, "none");
+        if (Src().UnsupportedVersionSeen() != 0) std::snprintf(bad, sizeof bad, "v%d", Src().UnsupportedVersionSeen()); else std::snprintf(bad, sizeof bad, "none");
+        std::snprintf(sb, sizeof sb, "published %llu, rejected %llu (auth %llu), numbered %llu, lost %llu, reordered %llu, duplicate %llu\nagent protocol seen: %s (unsupported seen: %s)",
+                      static_cast<unsigned long long>(Src().PacketCount()), static_cast<unsigned long long>(Src().RejectedCount()), static_cast<unsigned long long>(Src().AuthFailures()),
+                      static_cast<unsigned long long>(link.numbered), static_cast<unsigned long long>(link.lost), static_cast<unsigned long long>(link.reordered),
+                      static_cast<unsigned long long>(link.duplicates), seen, bad);
+        ctx.streamStats = sb;
+    }
+    if (snap_.localValid) ctx.localName = snap_.local.name;
+    for (const auto& p : snap_.players) ctx.playerNames.push_back(p.name);
+    const std::string report = diag::Collect(ctx);
+    if (!clipboard::SetText(report)) return "Could not open the clipboard (another program holds it?). Try again, or run: mcesp --diagnostics report.txt";
+    LOG_INFO("Diagnostics report copied to the clipboard (%llu bytes).", static_cast<unsigned long long>(report.size()));
+    char note[96];
+    std::snprintf(note, sizeof note, "Copied %llu KB to the clipboard (redacted).", static_cast<unsigned long long>((report.size() + 1023) / 1024));
+    return note;
+}
+
 void EspOverlay::HandleReplayKeys()
 {
     if (KeyEdge(VK_F6)) replayDriver_.TogglePause();
@@ -334,6 +371,7 @@ int EspOverlay::Run()
         udp_.SetTap(&recorder_);
     }
     replayMode_ = !opt_.replayPath.empty();
+    ui_.SetDiagnosticsHandler([this] { return CopyDiagnostics(); });
     nextLinkLog_ = Clock::now() + std::chrono::seconds(10); // no log line about the link in the first seconds: the counts mean nothing yet
     if (replayMode_)
     {
@@ -563,6 +601,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     if (recorder_.Active())
         status += "  |  REC " + std::to_string(recorder_.Recorded()) +
             (recorder_.Dropped() ? " (" + std::to_string(recorder_.Dropped()) + " dropped)" : std::string());
+    lastStatus_ = status;
     gfx_.Text(status, 10, 26, Font::UiSmall, Col{0.62f, 0.67f, 0.80f, 0.9f}, true);
     if (!opt_.demo && !stale && snap.localValid && !haveCam)
         gfx_.Text("camera unavailable: the agent could not find the look-vector method (see esp_layout.json)", 10, 42,
