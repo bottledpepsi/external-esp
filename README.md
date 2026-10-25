@@ -36,7 +36,7 @@ UCRT64 GCC, which may differ from CLion's bundled GCC 15.2) and uploads `mcesp.e
 
 ### Sanitizers
 `cmake -S tests -B build/san -DESP_SANITIZE=address,undefined && cmake --build build/san -j && ctest --test-dir build/san --output-on-failure` runs the core tests under
-ASan + UBSan (including `float-cast-overflow`, which `-fsanitize=undefined` does not enable); `-DESP_SANITIZE=thread` runs them under TSan. CI does both.
+ASan + UBSan (including `float-cast-overflow`, which `-fsanitize=undefined` does not enable); `-DESP_SANITIZE=thread` runs them under TSan. CI does both. `stress_test` runs every thread hand-off at once (UDP thread, render thread, HUD reader, recorder ring + writer, replay driver with a thread toggling pause/step/speed); each sanitizer build also contains a `selfcheck_*` test with a deliberate bug that the sanitizer must stop, so a silently inactive sanitizer fails the build.
 
 ## Run
 ```
