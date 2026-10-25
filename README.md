@@ -40,6 +40,7 @@ mcesp                      # normal: finds Minecraft, attaches the agent, draws 
 mcesp --demo               # synthetic players, no Minecraft needed (try the UI / friends / profiles)
 mcesp --list               # list java processes (two clients on one PC?)  then:  mcesp --pid 12345
 mcesp --record s.esprec     # also save the raw agent datagrams + arrival times (docs/esprec.md) for replay / tests / bug reports
+mcesp --replay s.esprec    # play a recording back (no Minecraft needed): F6 pause, F7 step, F8/F9 speed; --replay-speed X, --replay-loop
 mcesp --screen             # overlay the whole monitor instead of tracking the game window
 mcesp --no-inject          # don't auto-attach; start the game with -javaagent:esp-agent.jar=port=47615
 mcesp --java "C:\...\jdk-21\bin\java.exe" --open-config --port 47616 --jar C:\path\esp-agent.jar

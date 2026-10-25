@@ -50,6 +50,23 @@ overlay down. This includes datagrams that the live socket loop would have disca
 arrival stamp the live smoother gets after it has drained the socket. The writer flushes every 250 ms, so a crash or kill loses at
 most that much. `--record` cannot be combined with `--demo`.
 
+## Replaying a recording
+
+```
+mcesp --replay session.esprec [--replay-speed 0.5] [--replay-loop]
+```
+
+The overlay covers the whole monitor (like `--screen`), does not look for Minecraft and does not inject the agent. Keys while it runs:
+**F6** pause/resume, **F7** step one datagram while paused, **F8** half speed, **F9** double speed (speed is limited to 0.05x-20x).
+The HUD shows `REPLAY n/total  speed  [PAUSED]`.
+
+What is replayed, in `src/Replay.*`: every datagram in order, parsed by the same `ParseDatagram` and published by the same
+`StreamIngest::Publish` as live data, at its recorded arrival time divided by the speed. Two deliberate differences from live:
+datagrams are published one by one (a replay never skips the ones the live "newest wins" socket drain would have skipped), and the
+agent's `T` sample stamp is rewritten so that `arrival - T` keeps the recorded transport jitter at 1x and stays consistent at other
+speeds and across loops (the smoother derives its clock offset from exactly that difference). A recording that was cut off plays up to its
+last complete record. `--replay` cannot be combined with `--demo` or `--record`.
+
 ## Compatibility rules
 
 A reader for format version 1 must:

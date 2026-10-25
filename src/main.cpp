@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstdlib>
 #include <string>
 
 namespace
@@ -27,7 +28,7 @@ namespace
     {
         std::puts(
             "external-esp (C++)\n"
-            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--list] [--record FILE]\n"
+            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]]\n"
             "\n"
             "  --demo       synthetic players (test the overlay/config UI without Minecraft)\n"
             "  --pid N      attach to this java(w).exe PID (two Minecraft clients on one PC)\n"
@@ -40,6 +41,8 @@ namespace
             "  --hz N       agent snapshot rate, 1-240 (default 120; more = smoother boxes, a little more CPU in the game)\n"
             "  --gdi        use the legacy CPU renderer (layered window) instead of the GPU swap chain\n"
             "  --record F   also save the raw agent datagrams + arrival times to F (.esprec) for --replay / tests / bug reports\n"
+            "  --replay F   play back an .esprec recording over the whole screen instead of attaching to Minecraft\n"
+            "               (F6 pause/resume, F7 step while paused, F8 slower, F9 faster); --replay-speed X, --replay-loop\n"
             "  --list       list running Minecraft/java processes and exit\n"
             "\nKeys: Insert config | Delete toggle | hold End exit");
     }
@@ -69,6 +72,9 @@ int main(int argc, char** argv)
         else if (a == "--gdi") opt.legacyGfx = true;
         else if (a == "--hz" && i + 1 < argc) opt.agentHz = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 240L));
         else if (a == "--record" && i + 1 < argc) opt.recordPath = argv[++i];
+        else if (a == "--replay" && i + 1 < argc) opt.replayPath = argv[++i];
+        else if (a == "--replay-speed" && i + 1 < argc) opt.replaySpeed = std::atof(argv[++i]);
+        else if (a == "--replay-loop") opt.replayLoop = true;
         else if (a == "--pid" && i + 1 < argc) opt.pid = static_cast<DWORD>(std::strtoul(argv[++i], nullptr, 10));
         else if (a == "--port" && i + 1 < argc) opt.port = static_cast<uint16_t>(std::strtoul(argv[++i], nullptr, 10));
         else if (a == "--java" && i + 1 < argc) opt.javaPath = argv[++i];
@@ -94,6 +100,16 @@ int main(int argc, char** argv)
     {
         std::puts("--record needs the real agent stream; --demo has no datagrams to record.");
         return 1;
+    }
+    if (!opt.replayPath.empty())
+    {
+        if (opt.demo || !opt.recordPath.empty())
+        {
+            std::puts("--replay cannot be combined with --demo or --record.");
+            return 1;
+        }
+        opt.screenOverlay = true; // no game window to follow: cover the whole monitor like --screen
+        opt.autoInject = false; // and never touch a running Minecraft
     }
     FriendList::Load();
     ProfileManager::Refresh();

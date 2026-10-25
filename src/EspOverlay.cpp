@@ -208,6 +208,15 @@ bool EspOverlay::KeyEdge(int vk)
     return edge;
 }
 
+// --replay only: F6 pause/resume, F7 step one datagram (while paused), F8 half speed, F9 double speed.
+void EspOverlay::HandleReplayKeys()
+{
+    if (KeyEdge(VK_F6)) replayDriver_.TogglePause();
+    if (KeyEdge(VK_F7)) replayDriver_.RequestStep();
+    if (KeyEdge(VK_F8)) replayDriver_.SetSpeed(replayDriver_.Speed() * 0.5);
+    if (KeyEdge(VK_F9)) replayDriver_.SetSpeed(replayDriver_.Speed() * 2.0);
+}
+
 void EspOverlay::HandleHotkeys(bool focused)
 {
     if (!focused || ui_.CapturingKeys())
@@ -219,6 +228,7 @@ void EspOverlay::HandleHotkeys(bool focused)
         KeyEdge(settings_.vkConfig);
         return;
     }
+    if (replayMode_) HandleReplayKeys();
     if (KeyEdge(settings_.vkToggle))
     {
         visible_ = !visible_;
@@ -323,7 +333,21 @@ int EspOverlay::Run()
         }
         udp_.SetTap(&recorder_);
     }
-    if (!opt_.demo && !udp_.Start()) LOG_ERROR("Agent data will not be received (UDP listener failed).");
+    replayMode_ = !opt_.replayPath.empty();
+    if (replayMode_)
+    {
+        std::string err;
+        if (!replayPlayer_.Load(opt_.replayPath, &err))
+        {
+            LOG_ERROR("--replay: %s", err.c_str());
+            std::fprintf(stderr, "--replay: %s\n", err.c_str());
+            return 1;
+        }
+        replayPlayer_.SetSpeed(opt_.replaySpeed > 0 ? opt_.replaySpeed : 1.0);
+        replayPlayer_.SetLoop(opt_.replayLoop);
+        replayDriver_.Start();
+    }
+    else if (!opt_.demo && !udp_.Start()) LOG_ERROR("Agent data will not be received (UDP listener failed).");
     SkinCache::Start(); // friend avatars (background downloads)
     timeBeginPeriod(1); // 1 ms sleep granularity for the frame limiter
     LOG_INFO("Overlay running. Insert = config, Delete = toggle, hold End = exit. %s", opt_.demo ? "(DEMO)" : "");
@@ -340,7 +364,7 @@ int EspOverlay::Run()
         }
         if (quit_) break;
 
-        sup_.Tick();
+        if (!replayMode_) sup_.Tick();
 
         RECT r{};
         const bool haveGame = GameGeometry(r);
@@ -373,6 +397,7 @@ int EspOverlay::Run()
     }
     timeEndPeriod(1);
     SkinCache::Stop();
+    replayDriver_.Stop();
     udp_.Stop(); // the producer first, then the recorder (it drains and closes the file)
     recorder_.Stop();
     LOG_INFO("Overlay stopped.");
@@ -401,7 +426,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
             smoother_.Push(d);
         }
     }
-    else if (auto sp = udp_.Latest(); sp && sp->seq != lastSeq_)
+    else if (auto sp = Src().Latest(); sp && sp->seq != lastSeq_)
     {
         lastSeq_ = sp->seq;
         smoother_.Push(*sp);
@@ -409,8 +434,9 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     WorldSnapshot& snap = snap_;
     if (smoother_.HasData()) smoother_.PredictInto(now, settings_.smoothing, snap);
     else snap = WorldSnapshot{};
-    const bool stale = !opt_.demo && (udp_.LastPacketTime() == Clock::time_point{} || now - udp_.LastPacketTime() >
-        1500ms);
+    // a replay that is paused or has finished is not "stale": the data is simply not moving on purpose
+    const bool stale = !opt_.demo && !(replayMode_ && (replayDriver_.Paused() || replayDriver_.Finished())) &&
+        (Src().LastPacketTime() == Clock::time_point{} || now - Src().LastPacketTime() > 1500ms);
 
     // ---- 2. camera ----
     // Preferred: the game's own camera as read by the agent - exact position (first or third person), exact
@@ -490,6 +516,14 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         gfx_.Text(line, 10, 8, Font::Ui, Col{0.80f, 0.85f, 1.f, 0.95f}, true);
     }
     std::string status = sup_.Status();
+    if (replayMode_)
+    {
+        char rp[160];
+        std::snprintf(rp, sizeof rp, "REPLAY %llu/%llu  %.2gx%s", static_cast<unsigned long long>(replayDriver_.Position()),
+                      static_cast<unsigned long long>(replayPlayer_.Count()), replayDriver_.Speed(),
+                      replayDriver_.Paused() ? "  PAUSED (F7 step)" : (replayDriver_.Finished() ? "  END" : ""));
+        status = rp;
+    }
     if (haveCam && !opt_.demo) status += exactCam
                                              ? (snap.camera.mode == 1
                                                     ? "  |  cam: exact"

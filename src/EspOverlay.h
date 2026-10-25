@@ -10,6 +10,7 @@
 #include "EspRenderer.h"
 #include "Gfx.h"
 #include "Recorder.h"
+#include "Replay.h"
 #include "Smoother.h"
 #include "UdpListener.h"
 #include <chrono>
@@ -50,6 +51,14 @@ private:
     ConfigUi ui_;
     Recorder recorder_; // declared BEFORE udp_: the listener (a producer thread) must be destroyed first
     UdpListener udp_;
+    // --replay: the recording is published into replayIngest_ by replayDriver_ (a producer thread, so the ingest is declared first
+    // and outlives it); the renderer reads whichever source is active through Src().
+    StreamIngest replayIngest_;
+    ReplayPlayer replayPlayer_;
+    ReplayDriver replayDriver_{replayPlayer_, replayIngest_};
+    bool replayMode_ = false;
+    StreamIngest& Src() { return replayMode_ ? replayIngest_ : udp_.Ingest(); }
+    void HandleReplayKeys();
     AgentInjector injector_;
     AgentSupervisor sup_;
     Smoother smoother_;

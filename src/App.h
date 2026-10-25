@@ -16,6 +16,9 @@ struct AppOptions
     int agentHz = 120; // snapshot rate requested from the agent (1..240); higher = less extrapolation = smoother boxes
     bool screenOverlay = false; // cover the whole primary monitor instead of tracking the game window
     bool openConfig = false; // open the config window as soon as the overlay is visible
+    std::filesystem::path replayPath; // --replay FILE: play an .esprec recording instead of listening to the agent
+    double replaySpeed = 1.0;         // --replay-speed X
+    bool replayLoop = false;          // --replay-loop
     std::filesystem::path recordPath; // --record FILE: tee the raw agent datagrams into an .esprec file (docs/esprec.md)
     bool legacyGfx = false; // --gdi: force the old DIB + UpdateLayeredWindow renderer (default: GPU swap chain)
 };
