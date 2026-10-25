@@ -101,7 +101,7 @@ int main()
     {
         Recorder rec(4096);
         CHECK(rec.Start("wrap.esprec", t0));
-        const int N = 3000;
+        const int N = 600;                                                   // ~120 wrap-arounds of the 4 KiB ring; the writer drains one slice per wake-up
         for (int i = 0; i < N; ++i)
         {
             const std::string p = Payload(i, 100 + (i * 131) % 1500);
@@ -145,23 +145,36 @@ int main()
         g_allocs = 0;
         const int N = 20000;
         double totalNs = 0, worstNs = 0;
-        g_count = true;
+        bool writerStalled = false;
         for (int i = 0; i < N; ++i)
         {
+            // Backpressure instead of a timing guess: the writer thread wakes at the OS timer's granularity (about 1 ms on Linux, up to ~15 ms on a stock
+            // Windows), so a fixed sleep cannot promise it has caught up. Wait (outside the measured calls) while more than half of the 8 MiB ring is queued.
+            if ((i & 63) == 63)
+            {
+                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+                while (rec.QueuedBytes() > (4u << 20) && !writerStalled)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    writerStalled = std::chrono::steady_clock::now() > deadline;
+                }
+            }
+            g_count = true;
             const auto a = std::chrono::steady_clock::now();
             rec.Record(p.data(), p.size(), t0 + microseconds(i * 8));
             const double ns = std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - a).count();
+            g_count = false;
             totalNs += ns;
             worstNs = std::max(worstNs, ns);
-            if ((i & 63) == 63) std::this_thread::sleep_for(microseconds(300));      // let the writer keep up, like a 120 Hz stream would
         }
-        g_count = false;
+        CHECK(!writerStalled);
         CHECK(g_allocs == 0);
-        CHECK(rec.Dropped() == 0);
+        CHECK(rec.Dropped() == 0);                                           // the ring never filled: we only ever queue while less than half of it is in use
         std::printf("Record(): %ld allocations in %d calls; mean %.0f ns, worst %.0f ns per call (700-byte datagrams; includes ~40 ns of timer overhead)\n",
                     g_allocs, N, totalNs / N, worstNs);
         CHECK(totalNs / N < 50000.0);                                        // gross-regression guard only (50 us), not a benchmark
         rec.Stop();
+        CHECK(rec.Recorded() == static_cast<uint64_t>(N) && rec.QueuedBytes() == 0);
     }
 
     // ---- 6. bad path: Start fails with a message and the recorder stays inactive ----

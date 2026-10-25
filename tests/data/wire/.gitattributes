@@ -1,0 +1,3 @@
+# The wire corpus is plain text: keep its bytes exactly (no EOL conversion) and let git show and apply it as an ordinary text diff.
+# (The root .gitattributes says "binary", which includes -diff; "diff" here overrides that for this folder.)
+*.dgram -text diff

@@ -53,9 +53,10 @@ int main()
         const std::string v4 = "MCRADAR 4\nQ abcdef01 7\n";
         WorldSnapshot w4;
         CHECK(ParseDatagram(v4.data(), v4.size(), w4) && !w4.hasWireSeq);              // Q means nothing before v5
-        std::ifstream f(std::string(ESP_TEST_DATA_DIR) + "/wire/full_v5.dgram", std::ios::binary);
+        std::ifstream f(std::string(ESP_TEST_DATA_DIR) + "/wire/v5_full.dgram", std::ios::binary);
         const std::string j((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
         WorldSnapshot js;
+        if (j.empty()) std::printf("tests/data/wire/v5_full.dgram is missing or empty: the corpus is made by `sh agent/test/run-java-tests.sh --update-corpus`; check the file arrived intact (git am, not patch(1))\n");
         CHECK(!j.empty() && ParseDatagram(j.data(), j.size(), js) && js.hasWireSeq && js.wireSession == 0xABCDEF01u && js.wireSeq == 7);   // from the real Java encoder
     }
 

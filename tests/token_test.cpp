@@ -65,9 +65,10 @@ int main()
         CHECK(ParseDatagram(weird.data(), weird.size(), w1) && w1.token.empty() && w1.ignoredLines == 1);
         CHECK(ParseDatagram(longTok.data(), longTok.size(), w2) && w2.token.empty() && w2.ignoredLines == 1);
         // the real Java encoder's v5 datagram
-        std::ifstream f(std::string(ESP_TEST_DATA_DIR) + "/wire/full_v5.dgram", std::ios::binary);
+        std::ifstream f(std::string(ESP_TEST_DATA_DIR) + "/wire/v5_full.dgram", std::ios::binary);
         const std::string j((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
         WorldSnapshot js;
+        if (j.empty()) std::printf("tests/data/wire/v5_full.dgram is missing or empty: the corpus is made by `sh agent/test/run-java-tests.sh --update-corpus`; check the file arrived intact (git am, not patch(1))\n");
         CHECK(!j.empty() && ParseDatagram(j.data(), j.size(), js) && js.token == kTok && js.protocolVersion == 5 && js.hasSampleTime && js.items.size() == 2 && js.local.name == "Alice");
     }
 

@@ -42,6 +42,13 @@ public:
     bool Active() const { return active_.load(std::memory_order_acquire); }
     uint64_t Recorded() const { return recorded_.load(std::memory_order_relaxed); } // datagrams queued
     uint64_t Dropped() const { return dropped_.load(std::memory_order_relaxed); } // datagrams that did not fit
+    // Bytes queued in the ring and not yet written to the file (any thread). Lets a caller that produces faster than a disk can write wait instead of dropping.
+    uint64_t QueuedBytes() const
+    {
+        const uint64_t t = tail_.load(std::memory_order_acquire); // tail first: head can only be ahead of it
+        return head_.load(std::memory_order_acquire) - t;
+    }
+
     bool Failed() const { return failed_.load(); } // a write to the file failed (disk full...)
     const std::filesystem::path& Path() const { return path_; }
 

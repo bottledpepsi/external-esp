@@ -38,7 +38,7 @@ public final class SnapshotTest {
         full.items.add(new Snapshot.Item(98, 64, -52, Float.NaN, Float.NaN, 37, "minecraft:cobblestone", null, null));
         write(dir, "full_v4.dgram", full);
         full.wire = 5; full.token = "0123456789abcdef0123456789abcdef"; full.session = 0xABCDEF01; full.seq = 7;
-        write(dir, "full_v5.dgram", full);
+        write(dir, "v5_full.dgram", full);
         full.wire = 4; full.token = null; full.session = 0; full.seq = 0;
 
         Snapshot bare = new Snapshot();

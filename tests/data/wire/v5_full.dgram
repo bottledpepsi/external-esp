@@ -1,0 +1,11 @@
+MCRADAR 5
+K 0123456789abcdef0123456789abcdef
+Q abcdef01 7
+T 123456789012345
+S agent ok: 1 other player(s)
+C 97.9276 65.6200 -45.4497 -175.83 18.91 68.02 2
+L Alice 100.000 64.000 -50.000 12.50 -3.25 17.50 0.60 1.80 069a79f4-44e9-4726-a5be-fca90e38aaf5
+P Bob 90.500 70.000 -60.250 12.50 -3.25 17.50 0.60 1.80 069a79f4-44e9-4726-a5be-fca90e38aaf5
+F 1
+I 103.000 64.000 -47.000 0.25 0.25 1 minecraft:diamond_sword minecraft:sharpness@5,minecraft:unbreaking@3 %7BEnchantments:%5B%7Bid:%22minecraft:sharpness%22%7D%5D%7D
+I 98.000 64.000 -52.000 - - 37 minecraft:cobblestone - -
