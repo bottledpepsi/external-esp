@@ -30,7 +30,7 @@ namespace
     {
         std::puts(
             "external-esp (C++)\n"
-            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]] [--token T | --no-auth]\n"
+            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]] [--token T | --no-auth] [--verbose]\n"
             "\n"
             "  --demo       synthetic players (test the overlay/config UI without Minecraft)\n"
             "  --pid N      attach to this java(w).exe PID (two Minecraft clients on one PC)\n"
@@ -45,6 +45,7 @@ namespace
             "  --record F   also save the raw agent datagrams + arrival times to F (.esprec) for --replay / tests / bug reports\n"
             "  --replay F   play back an .esprec recording over the whole screen instead of attaching to Minecraft\n"
             "               (F6 pause/resume, F7 step while paused, F8 slower, F9 faster); --replay-speed X, --replay-loop\n"
+            "  --verbose    also log DEBUG lines (the log is esp_log.txt, capped at 1 MiB + one backup esp_log.1.txt)\n"
             "  --token T    use this session token instead of a random one (16-64 letters/digits; for --no-inject: pass the same to the agent)\n"
             "  --no-auth    accept datagrams without / with any session token (not recommended)\n"
             "  --list       list running Minecraft/java processes and exit\n"
@@ -68,6 +69,7 @@ int main(int argc, char** argv)
             PrintUsage();
             return 0;
         }
+        else if (a == "--verbose" || a == "-v") elog::SetLevel(elog::Level::Debug);
         else if (a == "--demo") opt.demo = true;
         else if (a == "--no-inject") opt.autoInject = false;
         else if (a == "--list") list = true;

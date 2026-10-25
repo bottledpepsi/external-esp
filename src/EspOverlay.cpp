@@ -526,6 +526,15 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     }
     std::string status = sup_.Status();
     if (const std::string prob = Src().ProtocolProblem(now); !prob.empty() && !replayMode_) status = prob;
+    if (elog::Enabled(elog::Level::Debug) && now >= nextDebugLog_)
+    {
+        nextDebugLog_ = now + std::chrono::seconds(5);
+        const auto link = Src().Link();
+        LOG_DEBUG("stream: %llu snapshots published, %llu datagrams rejected (%llu auth), numbered %llu / lost %llu / late %llu / dup %llu",
+                  static_cast<unsigned long long>(Src().PacketCount()), static_cast<unsigned long long>(Src().RejectedCount()), static_cast<unsigned long long>(Src().AuthFailures()),
+                  static_cast<unsigned long long>(link.numbered), static_cast<unsigned long long>(link.lost), static_cast<unsigned long long>(link.reordered),
+                  static_cast<unsigned long long>(link.duplicates));
+    }
     if (!replayMode_)
         if (const std::string link = Src().LinkSummary(); !link.empty())
         {

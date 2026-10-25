@@ -58,7 +58,7 @@ private:
     ReplayDriver replayDriver_{replayPlayer_, replayIngest_};
     bool replayMode_ = false;
     std::string lastLinkLog_; // last "UDP: n lost ..." line written to the log (it is repeated at most every 10 s and only when it changed)
-    Clock::time_point nextLinkLog_{};
+    Clock::time_point nextLinkLog_{}, nextDebugLog_{};
     StreamIngest& Src() { return replayMode_ ? replayIngest_ : udp_.Ingest(); }
     void HandleReplayKeys();
     AgentInjector injector_;
