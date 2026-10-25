@@ -15,6 +15,8 @@
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL line %d: %s\n", __LINE__, #c); ++fails; } } while (0)
 static bool near(double a, double b, double e = 1e-3) { return std::fabs(a - b) <= e; }
+// equal as angles (the smoother returns an unwrapped yaw, e.g. 181 for -179)
+static bool angNear(double a, double b, double e = 1e-2) { double d = std::fmod(a - b, 360.0); if (d > 180) d -= 360; if (d < -180) d += 360; return std::fabs(d) <= e; }
 
 int main() {
     // --- JSON from the ORIGINAL C# tool (PascalCase, 2.0 floats, extra unknown key) loads
@@ -97,17 +99,23 @@ int main() {
     // up vector sanity (unit, perpendicular)
     CHECK(near(Camera::Dot(c.u, c.f), 0) && near(Camera::Dot(c.u, c.r), 0) && near(Camera::Dot(c.u, c.u), 1));
 
-    // --- Smoother: constant velocity 10 m/s sampled at 20 Hz -> 50 ms ahead = +0.5 m ; yaw wrap 179 -> -179 continues past 180
+    // --- Smoother, entity positions: tick interpolation (matches how the game draws entities) ---------------------
+    // Positions are tick-rate values. A new sample `b` 50 ms after `a` starts a glide a -> b that lasts one tick
+    // (50 ms) and then HOLDS at b: it never extrapolates past the newest position. (Before the jitter rewrite this
+    // test expected velocity extrapolation: +1.0 m at 50 ms and +1.5 m at 500 ms. That alternated between 0 and 3x
+    // the true speed for tick-stepped data, which is the "boxes vibrate around a moving player" bug.)
+    // Yaw wraps: 179 -> -179 glides through 180, not back through 0.
     Smoother sm; WorldSnapshot a, b; auto t0 = Smoother::Clock::now();
     PlayerState p; p.name = "Bob"; p.yawValid = true; p.pos = {0, 0, 0}; p.yawDeg = 179;
     a.players = {p}; a.localValid = true; a.local = p; a.arrived = t0; a.seq = 1;
     p.pos.x = 0.5; p.yawDeg = -179; b.players = {p}; b.localValid = true; b.local = p; b.arrived = t0 + std::chrono::milliseconds(50); b.seq = 2;
     sm.Push(a); sm.Push(b);
-    auto pr = sm.Predict(b.arrived + std::chrono::milliseconds(50), true);
-    CHECK(near(pr.players[0].pos.x, 1.0, 1e-3)); CHECK(near(pr.players[0].yawDeg, -177, 1e-2));
-    CHECK(near(sm.Predict(b.arrived + std::chrono::milliseconds(500), true).players[0].pos.x, 1.5, 1e-3));   // capped at 100 ms of look-ahead
-    CHECK(near(sm.Predict(b.arrived + std::chrono::milliseconds(50), false).players[0].pos.x, 0.5, 1e-9));   // disabled
-
+    auto pm = sm.Predict(b.arrived + std::chrono::milliseconds(25), true);                 // half way through the tick
+    CHECK(near(pm.players[0].pos.x, 0.25, 1e-3)); CHECK(angNear(pm.players[0].yawDeg, 180));
+    auto pr = sm.Predict(b.arrived + std::chrono::milliseconds(50), true);                 // glide finished
+    CHECK(near(pr.players[0].pos.x, 0.5, 1e-3)); CHECK(angNear(pr.players[0].yawDeg, -179));
+    CHECK(near(sm.Predict(b.arrived + std::chrono::milliseconds(500), true).players[0].pos.x, 0.5, 1e-3));   // holds, no overshoot
+    CHECK(near(sm.Predict(b.arrived + std::chrono::milliseconds(25), false).players[0].pos.x, 0.5, 1e-9));   // disabled: latest raw sample
 
     // --- Wire v3: camera, hitbox, uuid, items (percent-encoded tags) -----------------------------------
     {
