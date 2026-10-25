@@ -63,7 +63,6 @@ void UdpListener::Loop(std::stop_token st)
 {
     const SOCKET s = static_cast<SOCKET>(sock_);
     std::vector<char> buf(65536);
-    uint64_t seq = 0;
     u_long nonblock = 1;
     ioctlsocket(s, FIONBIO, &nonblock); // select() says "readable", then we drain without blocking
     while (!st.stop_requested())
@@ -82,25 +81,9 @@ void UdpListener::Loop(std::stop_token st)
             if (n <= 0) break;
             auto snap = std::make_shared<WorldSnapshot>();
             if (ParseDatagram(buf.data(), static_cast<size_t>(n), *snap)) back = std::move(snap);
+            else ingest_.NoteRejected();
         }
         if (!back) continue;
-        back->seq = ++seq;
-        back->arrived = Clock::now();
-        lastNs_ = back->arrived.time_since_epoch().count();
-        ++count_;
-        std::lock_guard<std::mutex> lk(mtx_); // pointer swap only
-        latest_ = std::move(back);
+        ingest_.Publish(std::move(back), Clock::now()); // seq + arrival time + pointer swap
     }
-}
-
-std::shared_ptr<const WorldSnapshot> UdpListener::Latest() const
-{
-    std::lock_guard<std::mutex> lk(mtx_);
-    return latest_;
-}
-
-UdpListener::Clock::time_point UdpListener::LastPacketTime() const
-{
-    const int64_t ns = lastNs_.load();
-    return ns == 0 ? Clock::time_point{} : Clock::time_point(Clock::duration(ns));
 }

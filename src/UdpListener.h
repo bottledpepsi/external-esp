@@ -5,7 +5,10 @@
 // that is held only for the pointer copy (nanoseconds, never during I/O or parsing). The render
 // thread grabs the current pointer ("front buffer") and reads it without any lock; the worker can
 // publish the next snapshot at any time without touching what the renderer holds.
+// The parse/stamp/publish part lives in StreamIngest (no socket, no Windows API) so a replayed recording and the tests use
+// exactly the same code; this class is only the socket and its thread.
 #pragma once
+#include "StreamIngest.h"
 #include "Types.h"
 #include <atomic>
 #include <chrono>
@@ -31,9 +34,10 @@ public:
     void Stop();
     bool Ok() const { return running_.load(); }
 
-    std::shared_ptr<const WorldSnapshot> Latest() const; // never blocks on I/O
-    Clock::time_point LastPacketTime() const; // time_point{} if nothing yet
-    uint64_t PacketCount() const { return count_.load(); }
+    std::shared_ptr<const WorldSnapshot> Latest() const { return ingest_.Latest(); } // never blocks on I/O
+    Clock::time_point LastPacketTime() const { return ingest_.LastPacketTime(); } // time_point{} if nothing yet
+    uint64_t PacketCount() const { return ingest_.PacketCount(); }
+    StreamIngest& Ingest() { return ingest_; }
 
 private:
     void Loop(std::stop_token st);
@@ -42,9 +46,6 @@ private:
     uintptr_t sock_ = ~uintptr_t{0};
     bool wsa_ = false;
     std::atomic<bool> running_{false};
-    std::atomic<uint64_t> count_{0};
-    std::atomic<int64_t> lastNs_{0};
-    mutable std::mutex mtx_;
-    std::shared_ptr<const WorldSnapshot> latest_;
+    StreamIngest ingest_;
     std::jthread thread_;
 };
