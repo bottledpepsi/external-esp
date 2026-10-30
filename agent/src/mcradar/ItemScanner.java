@@ -177,13 +177,16 @@ final class ItemScanner {
                     cand.count = count;
                     cand.key = keyMethodOf(c, v);
                     if (cand.key != null || resolveId(v, cand) != null) sm = cand;
-                    else if (hasNullRef(v)) return null;          // maybe ItemStack.EMPTY (item == null): inconclusive, decide on another instance
+                    else if (hasNullRef(v)) { inconclusiveEmpty = true; return null; }   // maybe ItemStack.EMPTY (item == null): inconclusive, decide on another instance
                 }
             }
         } catch (Throwable ignored) { }
         stackModels.put(c, sm == null ? (Object) new Neg(System.currentTimeMillis()) : sm);
         return sm;
     }
+
+    /** Set by stackModel() when it returned null only because `v` may be an empty stack (null item): not yet a verdict on the class. */
+    private boolean inconclusiveEmpty;
 
     /** True if some reference field of `v` (other than Strings) is null. */
     private boolean hasNullRef(Object v) {
@@ -246,8 +249,14 @@ final class ItemScanner {
                 if (seen.put(v, Boolean.TRUE) != null) continue;
                 PNode child = new PNode(v, n, via.get(i), n.hops + 1);
                 if (!Probe.isContainer(v)) {
+                    inconclusiveEmpty = false;
                     if (stackModel(v) != null) {
                         if (nonEmptyStack(v)) return stepsOf(child);
+                        if (emptyHit == null) emptyHit = stepsOf(child);
+                        continue;
+                    }
+                    if (inconclusiveEmpty) {            // shaped like a stack but empty with no item to read an id from (not synced yet): the CLASS stays undecided
+                        inconclusiveEmpty = false;
                         if (emptyHit == null) emptyHit = stepsOf(child);
                         continue;
                     }

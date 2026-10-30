@@ -11,6 +11,8 @@ import java.util.Set;
  * Hazards the scanners must survive, each driven through a fake game rebuilt from a synthetic fixture:
  *   NaN      the look vector, or the camera's yaw, is NaN (a half-initialised player, a chunk race): nothing throws, nothing NaN reaches the wire,
  *            and the camera scanner does not learn from it
+ *   EMPTY    an item entity whose stack is still empty (not synced: ItemStack.EMPTY has count 0 and no item) must not condemn its entity class; once the
+ *            stack is filled the item appears within a few polls, not after the 10 s negative cache expires
  *   held yaw looking straight up/down (pitch +-90) the look vector has no horizontal part: the last yaw is held for the player record, and the camera
  *            scanner must NOT learn from that held (stale) yaw - the camera's real yaw keeps moving
  */
@@ -24,10 +26,13 @@ public final class DiscoveryRegressionTest {
         return p;
     }
 
+    /** Items ride on the snapshot of a poll tick only (F 1): the most recent such list, whichever tick of a batch it came in. */
+    private static List<Snapshot.Item> lastFresh;
+
     /** Runs `ticks` ticks at ~330 Hz of simulated time `t0`..; returns the last snapshot. */
     private static Snapshot run(FixtureGame g, Probe p, int ticks, double[] t) throws Exception {
         Snapshot s = null;
-        for (int i = 0; i < ticks; i++) { t[0] += 0.006; g.tick(t[0]); s = p.read(); p.pollItemsIfDue(); Thread.sleep(2); }
+        for (int i = 0; i < ticks; i++) { t[0] += 0.006; g.tick(t[0]); s = p.read(); p.pollItemsIfDue(); if (s.itemsFresh) lastFresh = s.items; Thread.sleep(2); }
         return s;
     }
 
@@ -86,6 +91,28 @@ public final class DiscoveryRegressionTest {
             run(g, fresh, 700, t2);
             check(fresh.camera().decided, "held yaw: the camera is decided within 700 normal ticks - the held values were not learned from");
 
+            // ---------------- empty stack first: with an id method on the stack (it throws on the empty one) and without (the id comes from the item reference, null when empty)
+            for (String variant : new String[] {"key", "nokey"}) {
+                Set<String> vs = new HashSet<String>();
+                if (variant.equals("nokey")) vs.add("nokey");
+                g = FixtureGame.load(new File(fx, "synthetic-realistic"), vs);
+                p = start(g, "empty-" + variant);
+                t = new double[] {0};
+                for (int i = 0; i < g.stackCount(); i++) g.emptyStack(i);
+                run(g, p, 300, t);                                       // several polls on nothing but empty stacks
+                for (int i = 0; i < g.stackCount(); i++) g.fillStack(i, i % 3 == 0 ? "diamond_sword" : i % 3 == 1 ? "cobblestone" : "golden_apple", 1 + i);
+                List<Snapshot.Item> got = null;
+                lastFresh = null;
+                long end = System.currentTimeMillis() + 3000;
+                while (System.currentTimeMillis() < end && (got == null || got.size() < g.stackCount())) {
+                    run(g, p, 20, t);
+                    got = lastFresh;
+                }
+                check(got != null && got.size() >= g.stackCount(), "empty stack first (" + variant + "): once synced all " + g.stackCount() + " items appear within 3 s (a condemned class waits for the 10 s negative cache), got " + (got == null ? 0 : got.size()));
+                Set<String> ids = new HashSet<String>();
+                if (got != null) for (Snapshot.Item it : got) ids.add(it.key);
+                check(ids.contains("minecraft:diamond_sword") && ids.contains("minecraft:cobblestone"), "ids resolved after the fill (" + variant + "): " + ids);
+            }
         } finally { System.setErr(err); }
         System.out.println(fails == 0 ? "ALL OK (" + checks + " checks)" : fails + " FAILURES of " + checks);
         System.exit(fails == 0 ? 0 : 1);
