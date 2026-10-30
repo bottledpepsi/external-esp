@@ -11,6 +11,7 @@
 #include "AgentInjector.h"
 #include "App.h"
 #include "DpiInfo.h"
+#include "PacingTestApp.h"
 #include "SelfTestApp.h"
 #include "EspOverlay.h"
 #include "FriendList.h"
@@ -51,6 +52,7 @@ namespace
             "  --pacing-report [S]  the agent writes esp_pacing.txt (achieved tick intervals) after S seconds (default 20); see docs/pacing.md\n"
             "  --title T    pick the Minecraft client whose window title contains T (several clients, or a custom client whose title is not \"Minecraft...\")\n"
             "  --exe E      ... whose program name contains E (javaw.exe, java.exe); combines with --title; --pid N names the process directly (docs/launchers.md)\n"
+            "  --pacing-test [S]  measure Sleep(1), the high-resolution timer and the overlay's frame pacing on this Windows (S s per case, default 2) -> esp_pacing_overlay.txt\n"
             "  --selftest [S]  attach, watch S seconds (default 20: look around, drop an item), print what works and exit with a code (docs/selftest.md)\n"
             "  --adapter X  GPU for the overlay: its number or part of its name (default: automatic; the log lists every adapter and says why one was chosen)\n"
             "  --simulate-device-loss[=persistent]  test aid: F10 injects a GPU device loss (persistent: recovery fails too, so the GDI fallback must follow)\n"
@@ -76,6 +78,7 @@ int main(int argc, char** argv)
     AppOptions opt;
     opt.jarPath = AppDir() / "esp-agent.jar";
     bool list = false, diagnostics = false;
+    int pacingTest = 0; // --pacing-test [S]
     std::string diagnosticsFile;
     for (int i = 1; i < argc; ++i)
     {
@@ -121,6 +124,11 @@ int main(int argc, char** argv)
             opt.selftestSeconds = 20;
             if (i + 1 < argc && argv[i + 1][0] != '-') opt.selftestSeconds = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 600L));
         }
+        else if (a == "--pacing-test")
+        {
+            pacingTest = 2;
+            if (i + 1 < argc && argv[i + 1][0] != '-') pacingTest = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 60L));
+        }
         else if (a == "--dump-structure") opt.dumpStructure = true;
         else if (a == "--adapter" && i + 1 < argc) opt.adapter = argv[++i];
         else if (a == "--simulate-device-loss") opt.simulateLoss = 1;
@@ -165,6 +173,7 @@ int main(int argc, char** argv)
         }
         return 0;
     }
+    if (pacingTest > 0) return RunPacingTest(opt, pacingTest);
     if (opt.selftestSeconds > 0) return RunSelfTest(opt);
     if (list)
     {

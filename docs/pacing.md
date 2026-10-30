@@ -37,7 +37,13 @@ why the agent uses `Thread.sleep` and why `PacingBench` includes `park` for comp
 2. **In the game** (what really matters): `mcesp --pacing-report 20` (or the agent option `pacing=20`) -> after 20 s the agent writes `esp_pacing.txt` next to
    the jar: the same statistics for the real tick loop at the configured rate, plus the pacer in use. Run it while playing normally, once with the default and
    once with `--agent-pacer hybrid`.
-3. Send both files (they contain no names or paths).
+3. **The overlay itself**: `mcesp --pacing-test [S]` -> `esp_pacing_overlay.txt`: the timer resolution Windows reports (`NtQueryTimerResolution`) before and after
+   `timeBeginPeriod(1)`, how long `Sleep(1)` really takes with each, how a high-resolution waitable timer (Windows 10 1803+) compares, and the overlay's own frame
+   pacing (`Sleep(1)` + yield-spin) at 60 / 120 / 240 Hz. The overlay's pacing is **not changed** by this; the file is what decides whether it should be.
+4. Send the files (they contain no names or paths).
+
+Seen so far: the three tools were run only on Linux and under Wine (the latter prints an emulated "Windows 10 build"); those numbers describe Linux and Wine, not Windows, and are
+deliberately not quoted here.
 
 ## Reading the result
 * `late(>1.5x)` under about 2% and `p99` under 1.5 periods: nothing to fix; leave the default.
