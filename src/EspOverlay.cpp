@@ -410,6 +410,7 @@ int EspOverlay::Run()
         if (quit_) break;
 
         if (!replayMode_) sup_.Tick();
+        CheckSession();
 
         RECT r{};
         const bool haveGame = GameGeometry(r);
@@ -452,6 +453,24 @@ int EspOverlay::Run()
 }
 
 // ------------------------------------------------------------------------------------------------ frame
+
+// Every loop iteration, drawn frame or not: a different game (closed, restarted, another client) or a restarted agent means nothing from before may be
+// drawn or extrapolated, and a hidden overlay must not keep the old world either.
+void EspOverlay::CheckSession()
+{
+    if (opt_.demo || replayMode_) return;
+    if (sup_.Generation() != lastGeneration_) { lastGeneration_ = sup_.Generation(); ResetSession("the Minecraft process changed"); }
+    const uint64_t sessions = Src().Link().sessions;
+    if (sessions != lastSessions_) { lastSessions_ = sessions; ResetSession("the agent restarted"); }
+}
+
+void EspOverlay::ResetSession(const char* why)
+{
+    LOG_INFO("Session reset (%s): smoothing, snapshot and item state dropped.", why);
+    smoother_ = Smoother{};
+    snap_ = WorldSnapshot{};
+    lastSeq_ = 0;
+}
 
 void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
 {

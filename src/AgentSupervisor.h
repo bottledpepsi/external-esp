@@ -8,6 +8,7 @@
 // the attach helper, is asynchronous inside AgentInjector).
 #pragma once
 #include "AgentInjector.h"
+#include "InjectPolicy.h"
 #include "App.h"
 #include "ProcessManager.h"
 #include "UdpListener.h"
@@ -23,8 +24,13 @@ public:
     bool HasGame() const { return pm_.IsAttached(); }
     HWND GameWindow() const { return pm_.Target().hwnd; }
     const std::string& Status() const { return status_; }
+    // Incremented whenever the target changes: a game was found, or it exited. The overlay drops everything it holds from the old game when this moves.
+    unsigned Generation() const { return generation_; }
 
 private:
+    InjectPolicy policy_;
+    unsigned generation_ = 0;
+    bool outcomeCounted_ = true; // the current injection's result was fed to the policy
     const AppOptions& opt_;
     UdpListener& udp_;
     AgentInjector& inj_;

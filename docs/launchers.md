@@ -37,9 +37,16 @@ JVM arguments; vanilla launcher: Installations -> More options -> JVM arguments)
 here) says a future release will refuse it unless the game starts with `-XX:+EnableDynamicAgentLoading`. If attaching stops working after a Java upgrade,
 add that flag, or use the manual route (an agent given with `-javaagent` at start is not affected).
 
-## Restarting
-Starting `mcesp` while the game already runs a previous session's agent works: the agent takes the new port and session token over (a second load
-reconfigures it). The game can be closed and restarted while `mcesp` runs; it waits for the next client.
+## Start order, restarts, closing
+| what happens | behaviour | verified how |
+|---|---|---|
+| `mcesp` first, game later | "waiting for minecraft", the client is found within about a second of its window appearing, then attached after 2 s of silence | not run on Windows |
+| game first, `mcesp` later | same, the agent is attached to the running game | Linux: real Attach into a fake game |
+| `mcesp` restarted while the game runs | the agent already in the game takes the new port and session token over (a second load reconfigures it) | Linux: unit test + real Attach (`agent_smoke.py reload`) |
+| game closed while `mcesp` runs | "minecraft closed - waiting for it to start again"; everything from that game (smoothing, snapshot, items) is dropped | logic only; the reset itself ran under Wine |
+| game restarted (new PID) | found and attached again; the overlay drops the old state when the agent's session id changes | Wine overlay + a Linux fake game restarted: "Session reset (the agent restarted)" |
+| attach fails | retried after 3, 6, 12, 24, then every 30 s (instead of every 30 s regardless); a new PID is tried at once; the HUD says `(retrying in N s)` | `tests/inject_policy_test.cpp`, fake time |
+| attached but no world joined yet | the agent runs, the HUD says it is waiting for data; the attach is repeated every 30 s (harmless) | policy test |
 
 ## Not covered
 Anything that stops other software from loading an agent into the game, or from drawing over it, is respected, not worked around: this project does not hide

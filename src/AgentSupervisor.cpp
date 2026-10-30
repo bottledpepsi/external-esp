@@ -31,6 +31,8 @@ void AgentSupervisor::Tick()
                 attachedAt_ = now;
                 injectedPid_ = 0;
                 inj_.Reset();
+                policy_.OnTargetGone();
+                ++generation_;
             }
             status_ = pm_.Issue().empty() ? "waiting for minecraft" : pm_.Issue();
         }
@@ -41,6 +43,8 @@ void AgentSupervisor::Tick()
         LOG_WARN("Minecraft process exited.");
         pm_.Detach();
         inj_.Reset();
+        policy_.OnTargetGone();
+        ++generation_;
         status_ = "minecraft closed - waiting for it to start again";
         return;
     }
@@ -49,6 +53,7 @@ void AgentSupervisor::Tick()
     const auto last = udp_.LastPacketTime();
     if (last != Clock::time_point{} && now - last < 1500ms)
     {
+        policy_.OnData();
         status_ = "agent connected";
         return;
     }
@@ -62,15 +67,29 @@ void AgentSupervisor::Tick()
         return;
     }
 
-    if (opt_.autoInject && now - silentSince > 2s && (injectedPid_ != pm_.Target().pid || now - lastInject_ > 30s))
+    if (!outcomeCounted_ && state == AgentInjector::State::Failed) { policy_.OnFailed(now); outcomeCounted_ = true; }
+    if (!outcomeCounted_ && state == AgentInjector::State::Succeeded) { policy_.OnSucceeded(now); outcomeCounted_ = true; }
+    InjectPolicy::Query q;
+    q.now = now;
+    q.pid = pm_.Target().pid;
+    q.silentFor = std::chrono::duration_cast<std::chrono::milliseconds>(now - silentSince);
+    q.autoInject = opt_.autoInject;
+    q.running = state == AgentInjector::State::Running;
+    if (policy_.ShouldStart(q))
     {
-        injectedPid_ = pm_.Target().pid;
+        policy_.OnStarted(q);
+        outcomeCounted_ = false;
+        injectedPid_ = q.pid;
         lastInject_ = now;
         inj_.Start(pm_.Target());
         status_ = "attaching agent...";
         return;
     }
-    if (state == AgentInjector::State::Failed) status_ = "agent attach failed: " + inj_.Message();
+    if (state == AgentInjector::State::Failed)
+    {
+        status_ = "agent attach failed: " + inj_.Message();
+        if (const int in = policy_.RetryInSeconds(now); in > 0 && opt_.autoInject) status_ += " (retrying in " + std::to_string(in) + " s)";
+    }
     else if (state == AgentInjector::State::Succeeded) status_ =
         "agent attached, waiting for data (is a world loaded?)";
     else status_ = opt_.autoInject
