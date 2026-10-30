@@ -158,6 +158,24 @@ bool Gfx::ForceLegacy()
     return CreateRenderTarget();
 }
 
+// ------------------------------------------------------------------------------------------ device loss (public part)
+
+bool Gfx::WantsLegacy() const { return wantLegacy_; }
+bool Gfx::DeviceLost() const { return deviceLost_; }
+
+void Gfx::SimulateLoss(bool persistent)
+{
+    LOG_WARN("--simulate-device-loss: injecting a device loss at the next Present%s.", persistent ? " and failing every recovery (the GDI fallback should follow)" : "");
+    injectLoss_ = true;
+    if (persistent) failInit_ = 1 << 30;
+}
+
+std::string Gfx::LossSummary() const
+{
+    if (rec_.TotalLosses() == 0) return {};
+    return "GPU device lost " + std::to_string(rec_.TotalLosses()) + "x, recovered " + std::to_string(rec_.Recoveries()) + "x" + (wantLegacy_ ? ", gave up -> legacy renderer" : "");
+}
+
 // ------------------------------------------------------------------------------------------ legacy backend
 
 bool Gfx::CreateRenderTarget()
@@ -262,6 +280,11 @@ void Gfx::ReleaseGpu()
 
 bool Gfx::InitGpu()
 {
+    if (failInit_ > 0)
+    {
+        LOG_WARN("InitGpu: failing on purpose (--simulate-device-loss=persistent).");
+        return false;
+    }
     if (!dcompCreate_)
     {
         HMODULE dcomp = LoadLibraryW(L"dcomp.dll");
@@ -344,22 +367,79 @@ bool Gfx::AttachDComp()
     return SUCCEEDED(dcompDev_->Commit());
 }
 
+static const char* HrName(HRESULT hr)
+{
+    switch (static_cast<unsigned long>(hr))
+    {
+    case 0x887A0005UL: return "DXGI_ERROR_DEVICE_REMOVED";
+    case 0x887A0006UL: return "DXGI_ERROR_DEVICE_HUNG";
+    case 0x887A0007UL: return "DXGI_ERROR_DEVICE_RESET";
+    case 0x887A0020UL: return "DXGI_ERROR_DRIVER_INTERNAL_ERROR";
+    case 0x887A0001UL: return "DXGI_ERROR_INVALID_CALL";
+    case 0x88990001UL: return "D2DERR_RECREATE_TARGET";
+    default: return "";
+    }
+}
+
+// The HRESULTs that mean "the device is gone" - plus INVALID_CALL when the device reports a removed reason (a dead device often answers that way).
+bool Gfx::IsLoss(HRESULT hr) const
+{
+    switch (static_cast<unsigned long>(hr))
+    {
+    case 0x887A0005UL: case 0x887A0006UL: case 0x887A0007UL: case 0x887A0020UL: case 0x88990001UL: return true;
+    default: break;
+    }
+    return d3d_ && d3d_->GetDeviceRemovedReason() != S_OK;
+}
+
+void Gfx::NoteLoss(const char* where, HRESULT hr)
+{
+    const HRESULT reason = d3d_ ? d3d_->GetDeviceRemovedReason() : S_OK;
+    if (!rec_.Lost())
+        LOG_WARN("GPU device lost in %s: 0x%08lX %s; removed reason 0x%08lX %s (loss #%d, %d recovered so far).", where, static_cast<unsigned long>(hr), HrName(hr),
+                 static_cast<unsigned long>(reason), HrName(reason), rec_.TotalLosses() + 1, rec_.Recoveries());
+    deviceLost_ = true;
+    rec_.OnLoss(GpuRecovery::Clock::now());
+}
+
 bool Gfx::RecoverGpu()
 {
-    const ULONGLONG now = GetTickCount64();
-    if (now - lastRecover_ < 1000) return false; // do not hammer a device that is still resetting
-    lastRecover_ = now;
-    LOG_WARN("GPU device lost - recreating the renderer.");
+    const auto t0 = GpuRecovery::Clock::now();
+    LOG_WARN("GPU device lost - recreating the renderer (attempt after %d failed).", rec_.ConsecutiveFailures());
     ReleaseGpu();
     w_ = h_ = 0;
-    if (!InitGpu() || !AttachDComp()) return false;
+    const bool ok = InitGpu() && AttachDComp();
+    const auto now = GpuRecovery::Clock::now();
+    if (!ok)
+    {
+        rec_.OnRecoverFailed(now);
+        LOG_WARN("GPU recovery failed after %lld ms (%d in a row).", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(now - t0).count()), rec_.ConsecutiveFailures());
+        return false;
+    }
     deviceLost_ = false;
+    rec_.OnRecovered(now);
+    LOG_INFO("GPU renderer recovered in %lld ms (%d loss(es), %d recovery(ies)).", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(now - t0).count()),
+             rec_.TotalLosses(), rec_.Recoveries());
     return true;
 }
 
 bool Gfx::ResizeGpu(int w, int h)
 {
-    if (deviceLost_ && !RecoverGpu()) return false;
+    if (deviceLost_)
+    {
+        const GpuRecovery::Action act = rec_.Poll(GpuRecovery::Clock::now());
+        if (act == GpuRecovery::Action::GiveUp)
+        {
+            if (!wantLegacy_)
+            {
+                wantLegacy_ = true;
+                LOG_ERROR("GPU device could not be recovered (%d losses, %d failed attempts in a row) - switching to the legacy GDI renderer.", rec_.TotalLosses(), rec_.ConsecutiveFailures());
+            }
+            return false;
+        }
+        if (act != GpuRecovery::Action::TryRecover || !RecoverGpu()) return false;
+    }
+    else rec_.Poll(GpuRecovery::Clock::now());                // a long healthy spell clears the history
     if (w == w_ && h == h_ && swap_ && target_) return true;
 
     dc_->SetTarget(nullptr);
@@ -383,14 +463,14 @@ bool Gfx::ResizeGpu(int w, int h)
         if (FAILED(hr))
         {
             LOG_ERROR("CreateSwapChainForComposition failed (0x%08lX)", static_cast<unsigned long>(hr));
-            deviceLost_ = true;
+            NoteLoss("CreateSwapChainForComposition", hr);
             return false;
         }
         hr = sc1->QueryInterface(__uuidof(IDXGISwapChain2), reinterpret_cast<void**>(swap_.put()));
         if (FAILED(hr))
         {
             LOG_ERROR("IDXGISwapChain2 unavailable (0x%08lX)", static_cast<unsigned long>(hr));
-            deviceLost_ = true;
+            NoteLoss("QueryInterface(IDXGISwapChain2)", hr);
             return false;
         }
         swap_->SetMaximumFrameLatency(1); // one frame in flight: lowest latency, the frames are tiny anyway
@@ -408,7 +488,7 @@ bool Gfx::ResizeGpu(int w, int h)
         if (FAILED(hr))
         {
             LOG_WARN("ResizeBuffers failed (0x%08lX)", static_cast<unsigned long>(hr));
-            deviceLost_ = true;
+            NoteLoss("ResizeBuffers", hr);
             return false;
         }
     }
@@ -417,7 +497,7 @@ bool Gfx::ResizeGpu(int w, int h)
     HRESULT hr = swap_->GetBuffer(0, __uuidof(IDXGISurface), reinterpret_cast<void**>(surf.put()));
     if (FAILED(hr))
     {
-        deviceLost_ = true;
+        NoteLoss("GetBuffer", hr);
         return false;
     }
     D2D1_BITMAP_PROPERTIES1 bp{};
@@ -429,7 +509,7 @@ bool Gfx::ResizeGpu(int w, int h)
     if (FAILED(hr))
     {
         LOG_ERROR("CreateBitmapFromDxgiSurface failed (0x%08lX)", static_cast<unsigned long>(hr));
-        deviceLost_ = true;
+        NoteLoss("CreateBitmapFromDxgiSurface", hr);
         return false;
     }
     dc_->SetTarget(target_.get());
@@ -452,10 +532,16 @@ bool Gfx::PresentGpu(HWND hwnd, int x, int y)
         winW_ = w_;
         winH_ = h_;
     }
-    const HRESULT hr = swap_->Present(vsync_ ? 1 : 0, 0);
-    if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+    if (injectLoss_)
     {
-        deviceLost_ = true;
+        injectLoss_ = false;
+        NoteLoss("Present (simulated)", DXGI_ERROR_DEVICE_REMOVED);
+        return false;
+    }
+    const HRESULT hr = swap_->Present(vsync_ ? 1 : 0, 0);
+    if (FAILED(hr) && IsLoss(hr))
+    {
+        NoteLoss("Present", hr);
         return false;
     }
     return SUCCEEDED(hr);
@@ -537,10 +623,9 @@ bool Gfx::End()
             layerOn_ = false;
         }
         const HRESULT hr = rt_->EndDraw();
-        if (hr == static_cast<HRESULT>(D2DERR_RECREATE_TARGET))
+        if (FAILED(hr) && IsLoss(hr))
         {
-            LOG_WARN("D2D device lost - will recreate.");
-            deviceLost_ = true;
+            NoteLoss("EndDraw", hr);
             return false;
         }
         return SUCCEEDED(hr);

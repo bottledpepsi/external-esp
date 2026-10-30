@@ -26,6 +26,7 @@ struct AppOptions
     std::string agentPacer; // --agent-pacer sleep|hybrid: how the agent waits for its next tick (default: the agent's own default, sleep)
     int pacingSeconds = 0; // --pacing-report [S]: the agent writes esp_pacing.txt after S seconds (docs/pacing.md)
     std::string titleSelector, exeSelector; // --title TEXT / --exe TEXT: pick the java process by window title / image name (case-insensitive substrings)
+    int simulateLoss = 0; // --simulate-device-loss[=persistent]: 1 = F10 injects one device loss, 2 = and every recovery fails too (tests the GDI fallback)
     int selftestSeconds = 0; // --selftest [S]: attach, watch S seconds, print the self-test report, exit with its code (docs/selftest.md)
     bool dumpStructure = false; // --dump-structure: the agent also writes esp_structure.json (docs/fixtures.md)
     bool legacyGfx = false; // --gdi: force the old DIB + UpdateLayeredWindow renderer (default: GPU swap chain)

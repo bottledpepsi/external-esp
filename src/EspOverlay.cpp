@@ -411,6 +411,14 @@ int EspOverlay::Run()
 
         if (!replayMode_) sup_.Tick();
         CheckSession();
+        if (opt_.simulateLoss != 0 && gfx_.IsGpu())
+        {
+            const bool down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+            if (down && !f10Down_) gfx_.SimulateLoss(opt_.simulateLoss == 2);
+            f10Down_ = down;
+        }
+        if (gfx_.IsGpu() && gfx_.WantsLegacy()) SwitchToLegacy();
+        if (quit_) break;
 
         RECT r{};
         const bool haveGame = GameGeometry(r);
@@ -464,6 +472,27 @@ void EspOverlay::CheckSession()
     if (sessions != lastSessions_) { lastSessions_ = sessions; ResetSession("the agent restarted"); }
 }
 
+// The GPU renderer was lost and could not be recovered (GpuRecovery gave up). The window was made for it (no redirection bitmap), so it has to be built
+// again for the legacy layered-window renderer - the same step the start-up fallback takes.
+void EspOverlay::SwitchToLegacy()
+{
+    LOG_WARN("Switching to the legacy renderer while running: %s", gfx_.LossSummary().c_str());
+    const bool wasClickThrough = clickThrough_;
+    suppressQuit_ = true;
+    DestroyWindow(hwnd_);
+    suppressQuit_ = false;
+    hwnd_ = nullptr;
+    shown_ = false;
+    if (!gfx_.ForceLegacy() || !CreateOverlayWindow())
+    {
+        LOG_ERROR("Legacy renderer initialisation failed after the GPU was lost - exiting.");
+        quit_ = true;
+        return;
+    }
+    if (!wasClickThrough) SetClickThrough(false);   // the config window was open
+    LOG_INFO("Renderer: legacy (DIB + UpdateLayeredWindow), after a GPU device loss.");
+}
+
 void EspOverlay::ResetSession(const char* why)
 {
     LOG_INFO("Session reset (%s): smoothing, snapshot and item state dropped.", why);
@@ -475,7 +504,11 @@ void EspOverlay::ResetSession(const char* why)
 void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
 {
     const int w = r.right - r.left, h = r.bottom - r.top;
-    if (!gfx_.Resize(w, h)) return;
+    if (!gfx_.Resize(w, h))
+    {
+        Sleep(8); // a lost device is retried by GpuRecovery on its own schedule; without this the loop spins at 100% CPU while it waits
+        return;
+    }
     gfx_.WaitFrame(); // GPU renderer: pace to the compositor here, before sampling any state for this frame
     const auto now = Clock::now();
     const auto cpuStart = now;

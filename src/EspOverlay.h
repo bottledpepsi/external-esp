@@ -82,6 +82,8 @@ private:
     unsigned lastGeneration_ = 0;   // AgentSupervisor::Generation() when the data on screen was received
     uint64_t lastSessions_ = 0;     // StreamIngest::Link().sessions
     void CheckSession();
+    void SwitchToLegacy();          // device loss that could not be recovered: new window, legacy renderer
+    bool f10Down_ = false;
     void ResetSession(const char* why);
     uint64_t lastSeq_ = 0, demoSeq_ = 0;
     Clock::time_point lastDemoPush_{};

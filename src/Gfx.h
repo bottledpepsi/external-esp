@@ -12,6 +12,7 @@
 //
 // The drawing API below is identical for both, so EspRenderer / ConfigUi do not care which one is active.
 #pragma once
+#include "GpuRecovery.h"
 #include "Platform.h"
 #include "Image.h"
 #include "RaiiHandle.h"
@@ -58,6 +59,12 @@ public:
     // with WS_EX_NOREDIRECTIONBITMAP. Returns false if that fails (caller recreates the window and calls ForceLegacy()).
     bool Attach(HWND hwnd);
     bool ForceLegacy(); // drop the GPU stack, use the DIB / UpdateLayeredWindow path
+    // Device loss (docs/windows-checklist.md): recovery is decided by GpuRecovery. After it gives up WantsLegacy() is true and the owner of the window must
+    // recreate it and call ForceLegacy(). SimulateLoss() is for --simulate-device-loss: one loss at the next Present (persistent: every recovery fails too).
+    bool WantsLegacy() const;
+    bool DeviceLost() const;
+    void SimulateLoss(bool persistent);
+    std::string LossSummary() const; // "" when nothing happened, else e.g. "GPU device lost 2x, recovered 2x"
 
     bool Resize(int w, int h); // (re)create the render surface; false => skip this frame
     int Width() const { return w_; }
@@ -120,6 +127,10 @@ private:
     bool gpu_ = false;
     float opacity_ = 1.f;
     bool vsync_ = true;
+    // device-loss bookkeeping: always present (the public queries are unconditional), only the GPU backend ever changes it
+    GpuRecovery rec_;
+    bool deviceLost_ = false, wantLegacy_ = false, injectLoss_ = false;
+    int failInit_ = 0; // simulated persistent loss: InitGpu fails while > 0
 
 #ifdef ESP_GPU_GFX
     bool InitGpu();
@@ -128,6 +139,8 @@ private:
     bool PresentGpu(HWND hwnd, int x, int y);
     bool RecoverGpu();
     void ReleaseGpu();
+    void NoteLoss(const char* where, HRESULT hr);
+    bool IsLoss(HRESULT hr) const;
 
     ComPtr<ID2D1Factory1> factory1_;
     ComPtr<ID3D11Device> d3d_;
@@ -144,8 +157,8 @@ private:
     FARPROC dcompCreate_ = nullptr; // DCompositionCreateDevice
     FARPROC d3dCreate_ = nullptr; // D3D11CreateDevice
     HWND hwnd_ = nullptr;
-    bool deviceLost_ = false, layerOn_ = false;
-    ULONGLONG lastRecover_ = 0;
+    bool layerOn_ = false;
+
     int winX_ = -32768, winY_ = -32768, winW_ = -1, winH_ = -1; // last window rect applied by Present
 #endif
 };
