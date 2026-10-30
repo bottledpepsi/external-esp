@@ -22,6 +22,8 @@ final class AgentConfig {
     volatile int wire = 4;
     /** Option verbose=1 (mcesp --verbose): log DEBUG lines too. */
     volatile boolean verbose;
+    /** Option dump=1: write esp_structure.json (StructureDump). */
+    volatile boolean dump;
     /** Session token the overlay generated (option token=...): sent in every v5 datagram. Null = none (then only v4 can be spoken). */
     volatile String token;
 
@@ -38,6 +40,7 @@ final class AgentConfig {
         try { if (kv.containsKey("port")) c.port = Integer.parseInt(kv.get("port")); } catch (NumberFormatException ignored) { }
         try { if (kv.containsKey("hz")) c.hz = Math.max(1, Math.min(240, Integer.parseInt(kv.get("hz")))); } catch (NumberFormatException ignored) { }
         try { if (kv.containsKey("wire")) c.wire = Integer.parseInt(kv.get("wire")); } catch (NumberFormatException ignored) { }
+        c.dump = "1".equals(kv.get("dump")) || "true".equalsIgnoreCase(kv.get("dump"));
         c.verbose = "1".equals(kv.get("verbose")) || "true".equalsIgnoreCase(kv.get("verbose"));
         String tok = kv.get("token");
         if (tok != null && tok.matches("[0-9A-Za-z]{16,64}")) c.token = tok;
@@ -58,6 +61,7 @@ final class AgentConfig {
         if (given.containsKey("hz") && n.hz != hz) { sb.append("hz ").append(hz).append(" -> ").append(n.hz).append("; "); hz = n.hz; }
         if (given.containsKey("wire") && n.wire != wire) { sb.append("wire ").append(wire).append(" -> ").append(n.wire).append("; "); wire = n.wire; }
         if (given.containsKey("verbose") && n.verbose != verbose) { sb.append("verbose ").append(verbose).append(" -> ").append(n.verbose).append("; "); verbose = n.verbose; }
+        if (given.containsKey("dump") && n.dump != dump) { sb.append("dump ").append(dump).append(" -> ").append(n.dump).append("; "); dump = n.dump; }
         final String old = token;
         if (old == null ? n.token != null : !old.equals(n.token)) { sb.append(n.token == null ? "session token removed; " : "session token replaced; "); token = n.token; }
         if (given.containsKey("export") && !n.exportDir.equals(exportDir)) sb.append("export folder change ignored (fixed while the agent runs); ");

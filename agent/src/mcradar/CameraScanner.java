@@ -50,11 +50,11 @@ final class CameraScanner {
     // decided
     boolean decided;
     FieldPath camPath;
-    private Probe.PosCand posAcc;
-    private Acc yawAcc, pitchAcc;
-    private FieldPath holderPath;
-    private Method fovMethod;
-    private boolean fovTakesCam;
+    Probe.PosCand posAcc;                 // package-private: StructureDump records what was decided
+    Acc yawAcc, pitchAcc;
+    FieldPath holderPath;
+    Method fovMethod;
+    boolean fovTakesCam;
     private float lastFov = Float.NaN;
     private long lastFovAt;
     String describe = "camera: not found yet";

@@ -43,7 +43,7 @@ final class ItemScanner {
     private static final class StackModel { Method key; Acc count; }
     /** One hop of a stack path: a field (acc != null) or an element of a container/array snapshot (idx). */
     private static final class Step { final Acc acc; final int idx; Step(Acc a, int i) { acc = a; idx = i; } }
-    private static final class ItemClass { Step[] path; Probe.Model model; String pathText; }
+    private static final class ItemClass { Step[] path; Probe.Model model; String pathText; Class<?> stackClass; java.lang.ref.WeakReference<Object> sample, sampleEntity; }
     private static final class Meta { int count; String key, ench, tags; int gen; }
     private static final class Neg { final long at; Neg(long t) { at = t; } }
 
@@ -301,7 +301,13 @@ final class ItemScanner {
                     List<Object> sample = new ArrayList<Object>();
                     sample.add(e);
                     Probe.Model m = p.buildModel(c, sample);
-                    if (m != null) { res = new ItemClass(); res.path = path; res.model = m; res.pathText = pathText(path); }
+                    if (m != null) {
+                        res = new ItemClass(); res.path = path; res.model = m; res.pathText = pathText(path);
+                        Object st = follow(e, path);
+                        res.stackClass = st == null ? null : st.getClass();
+                        res.sample = new java.lang.ref.WeakReference<Object>(st);
+                        res.sampleEntity = new java.lang.ref.WeakReference<Object>(e);
+                    }
                 }
             }
         } catch (Throwable ignored) { }
@@ -443,6 +449,62 @@ final class ItemScanner {
         if (!out.isEmpty()) lastNonEmpty = now;
         else if (seenEntities > 0 && now - lastDebug > 30000 && now - lastNonEmpty > 5000) { lastDebug = now; writeDebug(elements); }
         if (out.size() > max) return new ArrayList<Snapshot.Item>(out.subList(0, max));
+        return out;
+    }
+
+    // ------------------------------------------------------------------ view for StructureDump
+
+    /** What was learned about one item entity class: its class, how its stack is reached, the stack class and its id method (if any). */
+    static final class DumpItem {
+        Class<?> entity, stack; String pathText; List<Object[]> steps = new ArrayList<Object[]>(); Method key; Probe.Model model;
+        List<IdRef> refs = new ArrayList<IdRef>();
+        List<String> vcs = new ArrayList<String>();   // runtime class of the object each step leads to
+    }
+
+    /** An object a stack points to that carries the item id: via a String method (descMethod) or by printing a ResourceKey (idText). */
+    static final class IdRef { Class<?> cls; boolean idText; List<String> via = new ArrayList<String>(); Method desc; }
+
+    private void collectRefs(Object v, List<String> via, int depth, List<IdRef> out) {
+        for (Acc a : p.refFieldsOf(v.getClass())) {
+            Object x = a.getObj(v);
+            if (x == null) continue;
+            Class<?> c = x.getClass();
+            if (c.isPrimitive() || c.isArray() || x instanceof CharSequence || x instanceof Number || Probe.isJdkish(c) || p.isEntityClass(c)) continue;
+            List<String> w = new ArrayList<String>(via);
+            w.add(a.f.getName());
+            Method km = null;
+            try { km = keyMethodOf(c, x); } catch (Throwable ignored) { }
+            boolean text = ITEM_KEY_TEXT.matcher(Tags.safeText(x, 400)).find();
+            if (km != null || text) { IdRef r = new IdRef(); r.cls = c; r.idText = text; r.via = w; r.desc = km; out.add(r); }
+            if (depth < 1 && a.f.getType() == Object.class) collectRefs(x, w, depth + 1, out);
+        }
+    }
+
+    /** Number of item classes learned so far; StructureDump rewrites its file when it grows. */
+    int learnedClasses() { int n = 0; for (Object o : itemClasses.values()) if (o instanceof ItemClass) n++; return n; }
+
+    FieldPath bestContainer() { return best; }
+
+    List<DumpItem> dumpItems() {
+        List<DumpItem> out = new ArrayList<DumpItem>();
+        for (Map.Entry<Class<?>, Object> e : itemClasses.entrySet()) {
+            if (!(e.getValue() instanceof ItemClass)) continue;
+            ItemClass ic = (ItemClass) e.getValue();
+            DumpItem d = new DumpItem();
+            d.entity = e.getKey(); d.stack = ic.stackClass; d.pathText = ic.pathText; d.model = ic.model;
+            for (Step s : ic.path) d.steps.add(s.acc != null ? new Object[] {s.acc} : new Object[] {Integer.valueOf(s.idx)});
+            Object ent = ic.sampleEntity == null ? null : ic.sampleEntity.get();
+            Object cur = ent;
+            for (Step s : ic.path) {
+                cur = cur == null ? null : follow(cur, new Step[] {s});
+                d.vcs.add(cur == null ? null : cur.getClass().getName());
+            }
+            Object sm = ic.stackClass == null ? null : stackModels.get(ic.stackClass);
+            if (sm instanceof StackModel) d.key = ((StackModel) sm).key;
+            Object samp = ic.sample == null ? null : ic.sample.get();
+            if (samp != null) try { collectRefs(samp, new ArrayList<String>(), 0, d.refs); } catch (Throwable ignored) { }
+            out.add(d);
+        }
         return out;
     }
 

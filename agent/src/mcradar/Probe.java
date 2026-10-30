@@ -72,6 +72,7 @@ final class Probe {
     private FieldPath localPath;
     private final AuxSearch aux = new AuxSearch(this);
     private final CameraScanner camScan = new CameraScanner(this);
+    private final StructureDump dumper = new StructureDump(this);
     private final ItemScanner itemScan = new ItemScanner(this);
     private boolean auxDone;
     private long auxNextTry, lastItemPoll;
@@ -91,6 +92,12 @@ final class Probe {
     }
 
     boolean isReady() { return ready; }
+    FieldPath localPath() { return localPath; }
+    List<FieldPath> entityContainerPaths() { return aux.entityContainers; }
+    CameraScanner camera() { return camScan; }
+    ItemScanner items() { return itemScan; }
+    Class<?> gameProfileClass() { return gameProfile; }
+    AgentConfig config() { return cfg; }
 
     private final Map<Class<?>, Boolean> entityClassCache = new HashMap<Class<?>, Boolean>();
 
@@ -773,6 +780,7 @@ final class Probe {
                 exportLayout();
             }
         }
+        if (cfg.dump) dumper.maybeWrite();
         s.status = s.local == null ? "connected, but local player not found (set user=NAME?)"
                                    : "agent ok: " + s.players.size() + " player(s), " + lastItems.size() + " item(s) [" + itemScan.summary() + "]"
                                      + (s.camera == null ? ", camera: reconstructing" : (Float.isNaN(s.camera.fov) ? ", camera: exact, FOV: configured" : ", camera+FOV: exact"));

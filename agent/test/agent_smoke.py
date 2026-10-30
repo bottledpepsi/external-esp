@@ -184,21 +184,52 @@ def check_realistic(dgs, problems):
         problems.append("expected 5 items (the real-structure game), saw at most %d" % best)
 
 
+def check_dump_file(export):
+    """esp_structure.json (agent option dump=1): valid JSON, the paths and roles discovery used, and nothing personal in it"""
+    import json
+    path = os.path.join(export, "esp_structure.json")
+    if not os.path.exists(path):
+        return ["esp_structure.json was not written"]
+    raw = open(path, encoding="utf-8").read()
+    try:
+        j = json.loads(raw)
+    except ValueError as e:
+        return ["esp_structure.json is not valid JSON: %s" % e]
+    out = []
+    if j.get("schema") != 1 or not j.get("classes"):
+        out.append("esp_structure.json has no schema 1 / classes")
+    if len(j.get("paths", {}).get("playerList", {}).get("steps", [])) < 2:
+        out.append("no player list path in the dump")
+    if not j.get("roles", {}).get("camera", {}).get("decided"):
+        out.append("the dump does not say the camera was decided")
+    if not j.get("roles", {}).get("items"):
+        out.append("no item stack path in the dump")
+    for bad in ("Alice", "Bob", "Carol", "OfflinePlayer", "0123456789abcdef"):
+        if bad in raw:
+            out.append("the dump contains %r (names / tokens must never be in it)" % bad)
+    return out
+
+
+FILE_CHECKS = {"fake-dump": check_dump_file}
+
 CASES = {
     "fake": ("fake", "FakeGame", ["--username", "Alice", "wiggle"], lambda d, p: check_fake(d, p)),
     "fake-old": ("fake", "FakeGame", ["--username", "Alice", "old"], lambda d, p: check_fake(d, p, old=True)),
     "fake-third": ("fake", "FakeGame", ["--username", "Alice", "wiggle", "third"], lambda d, p: check_fake(d, p, third=True)),
     "realistic": ("real", "RealisticGame", [], lambda d, p: check_realistic(d, p)),
     "fake-v5": ("fake", "FakeGame", ["--username", "Alice", "wiggle"], lambda d, p: check_v5(d, p)),
+    "fake-dump": ("fake", "FakeGame", ["--username", "Alice", "wiggle"], lambda d, p: check_fake(d, p)),
 }
 
 # extra agent options and the negotiation line expected in esp_agent.log, per case (default: wire=4, no token)
-EXTRA_OPTS = {"fake-v5": "wire=5;token=" + TOKEN + ";verbose=1"}
+EXTRA_OPTS = {"fake-v5": "wire=5;token=" + TOKEN + ";verbose=1", "fake-dump": "wire=4;dump=1"}
 NEGOTIATION = {"fake-v5": "overlay reads up to v5, agent writes up to v5 -> sending v5, session token set"}
 
 
 def done(case, dgs):
     """stop early when the interesting state has been reached (the camera needs a few seconds of head movement)"""
+    if case in FILE_CHECKS and len(dgs) < 480:
+        return False                       # the dump is rewritten (at most every 2 s) as things are learned: give it about 8 s
     probs = []
     CASES[case][3](dgs, probs)
     return not probs
@@ -235,13 +266,14 @@ def run_case(case, java_home, jar, timeout):
         proc.kill()
         proc.wait()
         sock.close()
+        file_problems = FILE_CHECKS[case](export) if case in FILE_CHECKS else []
         try:
             with open(os.path.join(export, "esp_agent.log"), "r", encoding="utf-8", errors="replace") as lf:
                 agent_log = lf.read()
         except OSError:
             agent_log = ""
         shutil.rmtree(export, ignore_errors=True)
-    problems = []
+    problems = list(file_problems)
     check(dgs, problems)
     # every line of the agent's log has the common format (docs/logging.md); verbose=1 (fake-v5) adds the DEBUG line
     fmt = re.compile(r"^\d\d:\d\d:\d\d\.\d\d\d \[(DEBUG|INFO |WARN |ERROR)\] \[agent\] .*$")
