@@ -117,6 +117,52 @@ public final class ChainTest {
                 check(dumpJson.contains("\"getter\":{\"class\""), "items getter-only: esp_structure.json records the getter");
             }
 
+            // ---- camera and FOV strategies (the fakegame fixture has a camera and a FOV method)
+            File fk = new File(fx, "synthetic-fakegame");
+            {
+                FixtureGame g0 = FixtureGame.load(fk, v());
+                Probe p0 = start(g0, "c1");
+                double[] t0 = {0};
+                run(g0, p0, 700, t0);
+                check(p0.camera().decided && p0.camera().matchStrategy.equals("value-match") && p0.camera().fovStrategy.equals("holder"), "camera: strict match and the holder's FOV method on a normal game, got " + p0.camera().matchStrategy + " / " + p0.camera().fovStrategy);
+
+                // camera yaw is 25 degrees off the player's: over the strict 20 degree limit, inside the relaxed 35
+                CameraScanner.RELAXED_AFTER_MS = 500;
+                try {
+                    g0 = FixtureGame.load(fk, v("camera-offset"));
+                    p0 = start(g0, "c2");
+                    t0 = new double[] {0};
+                    run(g0, p0, 120, t0);                                  // well inside the first 500 ms: strict fails, relaxed not yet allowed
+                    check(!p0.camera().decided, "camera-offset: not decided by the strict match");
+                    Snapshot s0 = run(g0, p0, 1500, t0);
+                    check(p0.camera().decided && p0.camera().matchStrategy.contains("relaxed"), "camera-offset: decided by the relaxed match, got " + p0.camera().matchStrategy);
+                    check(s0.status.contains("relaxed match"), "camera-offset: the status says the match was relaxed: " + s0.status);
+                } finally { CameraScanner.RELAXED_AFTER_MS = 15000; }
+
+                // the FOV method lives on the root object, two levels above the camera's holder
+                g0 = FixtureGame.load(fk, v("fov-on-root"));
+                p0 = start(g0, "c3");
+                t0 = new double[] {0};
+                Snapshot s0 = run(g0, p0, 800, t0);
+                check(p0.camera().fovStrategy.startsWith("ancestor"), "fov-on-root: found on an ancestor, got " + p0.camera().fovStrategy);
+                check(s0.camera != null && s0.camera.fov >= 60 && s0.camera.fov <= 80, "fov-on-root: FOV read, got " + (s0.camera == null ? "no camera" : s0.camera.fov + ""));
+
+                // the FOV method throws when the camera is decided (chunk race), and works later: it must be found on a retry
+                CameraScanner.FOV_RETRY_MS = 300;
+                try {
+                    g0 = FixtureGame.load(fk, v());
+                    g0.fovBroken(true);
+                    p0 = start(g0, "c4");
+                    t0 = new double[] {0};
+                    s0 = run(g0, p0, 700, t0);
+                    check(p0.camera().decided && p0.camera().fovMethod == null, "fov retry: camera decided while the FOV method is broken, FOV unknown");
+                    check(s0.camera != null && Float.isNaN(s0.camera.fov), "fov retry: the snapshot says FOV unknown, not a made-up value");
+                    g0.fovBroken(false);
+                    s0 = run(g0, p0, 400, t0);
+                    check(p0.camera().fovMethod != null && s0.camera != null && s0.camera.fov >= 60, "fov retry: found on a later try, got " + (s0.camera == null ? "no camera" : s0.camera.fov + ""));
+                } finally { CameraScanner.FOV_RETRY_MS = 5000; }
+            }
+
             // ---- epoch: item entities without stacks are condemned (10 s negative); in the next world they must be found at once
             FixtureGame g = FixtureGame.load(new File(fx, "synthetic-realistic"), v("no-stacks"));
             Probe p = start(g, "e");

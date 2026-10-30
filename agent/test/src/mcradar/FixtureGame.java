@@ -70,7 +70,7 @@ public final class FixtureGame {
 
     // ---- controls for tests that need the game to misbehave
     private volatile Float forceYaw, forcePitch;          // the local player looks exactly there (pitch -90: no horizontal look vector)
-    private volatile boolean lookNaN, cameraNaN;          // the look method returns NaN / the camera object's yaw is NaN
+    private volatile boolean lookNaN, cameraNaN, fovBroken;      // fovBroken: the FOV method throws (a chunk race)          // the look method returns NaN / the camera object's yaw is NaN
     private final List<Object> stacks = new ArrayList<Object>();
     private final List<String> stackIds = new ArrayList<String>();
     private final List<Integer> stackCounts = new ArrayList<Integer>();
@@ -79,6 +79,7 @@ public final class FixtureGame {
     public void forceLook(Float yaw, Float pitch) { forceYaw = yaw; forcePitch = pitch; }
     public void lookNaN(boolean on) { lookNaN = on; }
     public void cameraNaN(boolean on) { cameraNaN = on; }
+    public void fovBroken(boolean on) { fovBroken = on; }
     public int stackCount() { return stacks.size(); }
     /** ItemStack.EMPTY: count 0, no item - the id method throws, like the real one on the empty stack. */
     public void emptyStack(int i) throws Exception {
@@ -161,7 +162,10 @@ public final class FixtureGame {
         }
         Map<String, Object> cam = MiniJson.obj(roles.get("camera"));
         Map<String, Object> fov = MiniJson.obj(cam.get("fov"));
-        addRole(MiniJson.str(fov.get("class")), "fov", fov);
+        if (variants.contains("fov-on-root")) {                                       // the FOV method is on the root object, not on the camera's holder
+            List<Object> cs = MiniJson.arr(MiniJson.obj(cam.get("path")).get("steps"));
+            if (!cs.isEmpty() && !fov.isEmpty()) addRole(MiniJson.str(MiniJson.obj(cs.get(0)).get("vc")), "fov", fov);
+        } else addRole(MiniJson.str(fov.get("class")), "fov", fov);
         for (Object o : MiniJson.arr(roles.get("items"))) {
             Map<String, Object> it = MiniJson.obj(o);
             Map<String, Object> getter = MiniJson.obj(it.get("getter"));
@@ -584,7 +588,7 @@ public final class FixtureGame {
                 Map<String, Object> cam = MiniJson.obj(MiniJson.obj(doc.get("roles")).get("camera"));
                 double[] s = state.get(players.get(0));
                 writePos(camera, MiniJson.obj(cam.get("position")), s[0], s[1] + 1.62, s[2]);
-                set(camera, MiniJson.str(MiniJson.obj(cam.get("yaw")).get("field")), cameraNaN ? Float.NaN : (float) s[3]);
+                set(camera, MiniJson.str(MiniJson.obj(cam.get("yaw")).get("field")), cameraNaN ? Float.NaN : (float) (s[3] + (variants.contains("camera-offset") ? 25 : 0)));
                 set(camera, MiniJson.str(MiniJson.obj(cam.get("pitch")).get("field")), (float) s[4]);
             }
         } catch (Exception e) { throw new IllegalStateException(e); }
@@ -606,7 +610,7 @@ public final class FixtureGame {
             }
             if (role.equals("health")) return Float.valueOf(20f);
             if (role.equals("getitem")) return STACK_OF.get(self);
-            if (role.equals("fov")) return Double.valueOf(fovNow);
+            if (role.equals("fov")) { if (current.fovBroken) throw new IllegalStateException("fov unavailable"); return Double.valueOf(fovNow); }
             if (role.equals("key") || role.equals("desc")) {
                 String id = ID_OF.get(self);
                 if (id == null) {                                    // a key method on a stack asks its item reference; the empty stack has none

@@ -864,7 +864,7 @@ final class Probe {
         if (cfg.dump) dumper.maybeWrite();
         s.status = s.local == null ? "connected, but local player not found (set user=NAME?)"
                                    : "agent ok: " + s.players.size() + " player(s), " + lastItems.size() + " item(s) [" + itemScan.summary() + "]"
-                                     + (playerRank > 0 ? " [players via " + playerSource() + "]" : "") + (s.camera == null ? ", camera: reconstructing" : (Float.isNaN(s.camera.fov) ? ", camera: exact, FOV: configured" : ", camera+FOV: exact"));
+                                     + (playerRank > 0 ? " [players via " + playerSource() + "]" : "") + (s.camera == null ? ", camera: reconstructing" : (Float.isNaN(s.camera.fov) ? ", camera: exact, FOV: configured" : ", camera+FOV: exact") + (camScan.matchStrategy.contains("relaxed") ? " (relaxed match)" : ""));
         return s;
     }
 
