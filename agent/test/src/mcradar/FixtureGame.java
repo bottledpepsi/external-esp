@@ -67,6 +67,30 @@ public final class FixtureGame {
     static volatile double fovNow = 70.0;
     static FixtureGame current;
 
+    // ---- controls for tests that need the game to misbehave
+    private volatile Float forceYaw, forcePitch;          // the local player looks exactly there (pitch -90: no horizontal look vector)
+    private volatile boolean lookNaN, cameraNaN;          // the look method returns NaN / the camera object's yaw is NaN
+    private final List<Object> stacks = new ArrayList<Object>();
+    private final List<String> stackIds = new ArrayList<String>();
+    private final List<Integer> stackCounts = new ArrayList<Integer>();
+    private final List<Object[]> stackRefs = new ArrayList<Object[]>();     // {stack, field, holder}: the first id reference of each stack, nulled on an empty stack
+
+    public void forceLook(Float yaw, Float pitch) { forceYaw = yaw; forcePitch = pitch; }
+    public void lookNaN(boolean on) { lookNaN = on; }
+    public void cameraNaN(boolean on) { cameraNaN = on; }
+    public int stackCount() { return stacks.size(); }
+    /** ItemStack.EMPTY: count 0, no item - the id method throws, like the real one on the empty stack. */
+    public void emptyStack(int i) throws Exception {
+        ID_OF.remove(stacks.get(i)); setCount(stacks.get(i), 0);
+        Object[] r = stackRefs.get(i);
+        if (r != null) ((Field) r[1]).set(r[0], null);                  // item == null, like ItemStack.EMPTY
+    }
+    public void fillStack(int i, String id, int count) throws Exception {
+        ID_OF.put(stacks.get(i), id); setCount(stacks.get(i), count);
+        Object[] r = stackRefs.get(i);
+        if (r != null) { ((Field) r[1]).set(r[0], r[2]); ID_OF.put(r[2], id); }
+    }
+
     private FixtureGame(String name, boolean real, Map<String, Object> doc, Set<String> variants) {
         this.name = name; this.real = real; this.doc = doc; this.variants = variants;
     }
@@ -449,6 +473,7 @@ public final class FixtureGame {
                 String id = ids[k];
                 ID_OF.put(stack, id);
                 setCount(stack, k == 1 ? 37 : 1);
+                stacks.add(stack); stackIds.add(id); stackCounts.add(k == 1 ? 37 : 1);
                 for (Object ro : MiniJson.arr(it.get("idRefs"))) {
                     Map<String, Object> ref = MiniJson.obj(ro);
                     List<Object> via = MiniJson.arr(ref.get("via"));
@@ -460,7 +485,9 @@ public final class FixtureGame {
                         holder = nx;
                     }
                     ID_OF.put(holder, id);
+                    if (via.size() >= 1 && stackRefs.size() == stacks.size() - 1) stackRefs.add(new Object[] {stack, field(stack.getClass(), (String) via.get(0)), field(stack.getClass(), (String) via.get(0)).get(stack)});
                 }
+                if (stackRefs.size() < stacks.size()) stackRefs.add(null);
                 double[] st = {98 + 2 * n, 64, -48 - n, 0, 0};
                 state.put(e, st);
                 itemEntities.add(e);
@@ -511,7 +538,7 @@ public final class FixtureGame {
             for (int i = 0; i < players.size(); i++) {
                 Object p = players.get(i);
                 double[] s = state.get(p);
-                s[3] = i == 0 ? yaw : 45 * i; s[4] = i == 0 ? pitch : 10 * i;
+                s[3] = i == 0 ? (forceYaw != null ? forceYaw : yaw) : 45 * i; s[4] = i == 0 ? (forcePitch != null ? forcePitch : pitch) : 10 * i;
                 s[0] = 100 + 10 * i + (i == 0 ? 3 * Math.sin(t) : 0);
                 LOOK.put(p, new float[] {(float) s[3], (float) s[4]});
                 Map<String, Object> pr = playerRole(p.getClass());
@@ -523,7 +550,7 @@ public final class FixtureGame {
                 Map<String, Object> cam = MiniJson.obj(MiniJson.obj(doc.get("roles")).get("camera"));
                 double[] s = state.get(players.get(0));
                 writePos(camera, MiniJson.obj(cam.get("position")), s[0], s[1] + 1.62, s[2]);
-                set(camera, MiniJson.str(MiniJson.obj(cam.get("yaw")).get("field")), (float) s[3]);
+                set(camera, MiniJson.str(MiniJson.obj(cam.get("yaw")).get("field")), cameraNaN ? Float.NaN : (float) s[3]);
                 set(camera, MiniJson.str(MiniJson.obj(cam.get("pitch")).get("field")), (float) s[4]);
             }
         } catch (Exception e) { throw new IllegalStateException(e); }
@@ -540,6 +567,7 @@ public final class FixtureGame {
                 float[] a = LOOK.get(self);
                 double y = Math.toRadians(a[0]), p = Math.toRadians(a[1]);
                 Class<?> rt = current.lookReturn(self);
+                if (current.lookNaN && self == current.players.get(0)) return current.vec(rt, Double.NaN, Double.NaN, Double.NaN);
                 return current.vec(rt, -Math.sin(y) * Math.cos(p), -Math.sin(p), Math.cos(y) * Math.cos(p));
             }
             if (role.equals("health")) return Float.valueOf(20f);

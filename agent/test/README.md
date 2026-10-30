@@ -49,3 +49,9 @@ fails a test instead of a game session. After an intentional wire change: `sh ag
 ## Reload (overlay restarted while the game keeps running)
 `AgentReloadTest` (in `run-java-tests.sh`) runs the real `Agent` in-process with a fake `Instrumentation` and loads it several times with different
 port / rate / token; `agent_smoke.py reload` does the same with a real Attach into `FakeGame` (needs JDK 9+; skipped on 8).
+
+## Discovery regressions (`DiscoveryRegressionTest`)
+Driven through `FixtureGame` (docs/fixtures.md), which can make the fake game misbehave: a NaN look vector (a half-initialised player), a NaN camera yaw,
+a player looking straight up (pitch -90: no horizontal look vector, so the yaw is held). Asserted: nothing throws, no `NaN`/`Infinity` reaches the wire,
+the camera scanner is not trained on unknown or held yaw (900 ticks of held yaw would push the mean yaw error to ~33 degrees, over the scanner's 20 degree
+limit - the test fails if that guard in `Probe.read` is removed; checked by hand with that mutation).
