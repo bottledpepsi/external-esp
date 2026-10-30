@@ -90,6 +90,9 @@ Tabs: GENERAL · PLAYERS (+friends) · TRACERS · ITEMS · MINIMAP · PROFILES �
   items in NBT style (both `id`/`lvl` orders) and component style, item frame filtered; JDK 17, 21 and 25.
 * Full chain under **Wine + Xvfb**: agent → UDP → overlay with `cam: exact`, items with enchantment lines and tag text; config UI driven with synthetic input; skins against a local mock of Mojang/Crafatar/session servers
   (Crafatar path and the session-texture fallback incl. hat compositing).
+* Phase 2 (compatibility/robustness), see docs/compatibility.md for what each piece was and was not verified with: structure dumps and **fixtures** (a fake game rebuilt from `esp_structure.json`, 2 synthetic ones ship, 0 real);
+  discovery **fallback chains** with fixture variants; the agent's reload on a second load; the self-test; the process-selection, inject-retry, device-recovery, window-state and adapter-choice logic as portable tested headers;
+  the whole exe **cross-compiled against real Windows headers** (mingw-w64 11 on Linux) and its non-graphical paths run under Wine.
 * **Not tested:** a real Minecraft install, real-Windows behavior (click-through/focus, `DwmFlush` pacing, Attach on Windows), the live Mojang/Crafatar services, and discovery against real Minecraft classes. Treat the first run as a test; read `esp_log.txt`, `esp_agent.log`, `esp_layout.json`.
 
 ## Known limits
@@ -97,7 +100,7 @@ Tabs: GENERAL · PLAYERS (+friends) · TRACERS · ITEMS · MINIMAP · PROFILES �
   Calibrate in first person; in front-view third person the angle match accounts for the 180° flip.
 * **Enchantment/tag extraction** relies on `toString()` of NBT tags (<=1.20.4) and of component holders (>=1.20.5); legacy numeric enchantment ids show as `Enchant #16`. Items that are not dropped items but carry a stack (fireworks, thrown potions) can appear as items.
 * **Skins:** need internet; offline/cracked players have v3 UUIDs, so they are looked up by *name* (like the original) - a premium account with the same name shows that account's skin, unknown names keep the letter placeholder.
-* Health shows only where the method is literally `getHealth`. Exclusive fullscreen can't be overlaid. Two clients on one PC: pass `--pid`.
+* Health shows only where the method is literally `getHealth`. Exclusive fullscreen can't be overlaid (it is detected heuristically and logged). Two clients on one PC: pass `--pid` or `--title` (more than one is refused, not guessed).
 * Newer JDKs restrict `sun.misc.Unsafe` (add `--sun-misc-unsafe-memory-access=allow`) and warn about dynamic agent loading (`-XX:+EnableDynamicAgentLoading`, or `--no-inject` + `-javaagent`).
 
 ## Troubleshooting
