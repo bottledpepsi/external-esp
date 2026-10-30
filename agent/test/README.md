@@ -45,3 +45,7 @@ It stops a case as soon as everything is satisfied (about 2 s) or fails after `-
 `run-java-tests.sh` also runs `SnapshotTest --dump` and compares the datagrams with `tests/data/wire/*.dgram` (a full snapshot, an empty one, unicode names,
 a crowd of 40 players and 60 items). The C++ parser tests read exactly those files, so an encoder change that the parser does not understand
 fails a test instead of a game session. After an intentional wire change: `sh agent/test/run-java-tests.sh --update-corpus` and review the diff.
+
+## Reload (overlay restarted while the game keeps running)
+`AgentReloadTest` (in `run-java-tests.sh`) runs the real `Agent` in-process with a fake `Instrumentation` and loads it several times with different
+port / rate / token; `agent_smoke.py reload` does the same with a real Attach into `FakeGame` (needs JDK 9+; skipped on 8).

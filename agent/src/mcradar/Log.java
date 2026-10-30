@@ -82,6 +82,9 @@ final class Log {
 
     static boolean debugEnabled() { return minLevel <= DEBUG; }
 
+    /** A second agent load (overlay restarted with or without --verbose) changes the level without touching the file. */
+    static synchronized void setVerbose(boolean verbose) { minLevel = verbose ? DEBUG : INFO; }
+
     static void error(String msg) { write(ERROR, msg); }
     static void warn(String msg) { write(WARN, msg); }
     static void info(String msg) { write(INFO, msg); }

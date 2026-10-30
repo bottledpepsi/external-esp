@@ -3,7 +3,7 @@
 
     python3 agent/test/agent_smoke.py [--java-home DIR] [--timeout SECONDS] [case ...]
 
-Cases (default: all): fake, fake-old, fake-third, realistic, fake-v5 (wire=5 with a session token).
+Cases (default: all): fake, fake-old, fake-third, realistic, fake-v5 (wire=5 with a session token), reload (a second Attach with a new token and port).
 What it proves: the agent finds players / camera / FOV / items in games with Minecraft-like structure and that what goes on
 the wire matches the format documented in Snapshot.java. What it does NOT prove: anything about real Minecraft, real Windows,
 or obfuscated real-game class layouts.
@@ -256,6 +256,57 @@ def run_case(case, java_home, jar, timeout):
     return dgs, problems, time.time() - t0
 
 
+def run_reload(java_home, jar, timeout):
+    """The overlay was restarted while the game kept running: the agent is attached a SECOND time, with a new session token and port.
+    The new overlay only sees datagrams with its own token on its own port, so the running agent must switch over."""
+    java = tool("java", java_home)
+    if java_major(java) < 9:
+        return [], ["skipped: the attach helper needs JDK 9+ (--add-modules jdk.attach)"], 0.0
+    ta, tb = "a" * 32, "b" * 32
+    s1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s1.bind(("127.0.0.1", 0)); s1.settimeout(0.3)
+    s2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s2.bind(("127.0.0.1", 0)); s2.settimeout(0.3)
+    p1, p2 = s1.getsockname()[1], s2.getsockname()[1]
+    export = tempfile.mkdtemp(prefix="esp-smoke-")
+    ex = export.replace("\\", "/")
+    cmd = [java]
+    if java_major(java) >= 23:
+        cmd.append("--sun-misc-unsafe-memory-access=allow")
+    cmd += ["-javaagent:%s=port=%d;hz=60;wire=5;token=%s;export=%s;user=Alice" % (jar, p1, ta, ex), "-cp", os.path.join(OUT, "fake"), "FakeGame", "--username", "Alice", "wiggle"]
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    problems, t0 = [], time.time()
+
+    def toks(sock, secs):
+        seen, end = {}, time.time() + secs
+        while time.time() < end:
+            try:
+                d = sock.recvfrom(65536)[0].decode("utf-8", "replace")
+            except socket.timeout:
+                continue
+            m = re.search(r"^K (\S+)$", d, re.M)
+            seen[m.group(1) if m else "-"] = seen.get(m.group(1) if m else "-", 0) + 1
+        return seen
+    try:
+        first = toks(s1, 3.0)
+        if set(first) != {ta}:
+            problems.append("first load: expected only token A on port 1, saw %s" % first)
+        opts = "port=%d;hz=60;wire=5;token=%s;export=%s" % (p2, tb, ex)
+        att = [java] + (["--add-modules", "jdk.attach"]) + ["-cp", jar, "mcradar.Attach", str(proc.pid), jar, opts]
+        r = subprocess.run(att, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, timeout=60)
+        if r.returncode != 0:
+            problems.append("second attach failed: " + r.stdout.strip()[:200])
+        second = toks(s2, 3.0)
+        if set(second) != {tb} or sum(second.values()) < 50:
+            problems.append("after the second load the stream on the new port should carry token B only (>= 50 datagrams), saw %s" % second)
+        toks(s1, 0.5)                                   # drain what was already queued on the old port before the switch
+        stale = toks(s1, 1.0)
+        if stale:
+            problems.append("the old port still receives datagrams: %s" % stale)
+    finally:
+        proc.kill(); proc.wait(); s1.close(); s2.close()
+        shutil.rmtree(export, ignore_errors=True)
+    return [b"x"] * 1, problems, time.time() - t0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--java-home")
@@ -263,14 +314,22 @@ def main():
     ap.add_argument("cases", nargs="*")
     a = ap.parse_args()
     java_home = a.java_home or os.environ.get("JAVA_HOME")
-    cases = a.cases or list(CASES)
+    cases = a.cases or list(CASES) + ["reload"]
     for c in cases:
-        if c not in CASES:
+        if c not in CASES and c != "reload":
             sys.exit("unknown case %s (have: %s)" % (c, ", ".join(CASES)))
     jar = build(java_home)
     print("java: %s (major %d)" % (tool("java", java_home), java_major(tool("java", java_home))))
     bad = 0
     for c in cases:
+        if c == "reload":
+            dgs, problems, secs = run_reload(java_home, jar, a.timeout)
+            skipped = bool(problems) and problems[0].startswith("skipped")
+            print("%-11s %s  (%.1fs)" % (c, "SKIP" if skipped else "PASS" if not problems else "FAIL", secs))
+            for p in problems:
+                print("    - " + p)
+            bad += bool(problems) and not skipped
+            continue
         dgs, problems, secs = run_case(c, java_home, jar, a.timeout)
         print("%-11s %s  (%d datagrams, %.1fs)" % (c, "PASS" if not problems else "FAIL", len(dgs), secs))
         for p in problems:

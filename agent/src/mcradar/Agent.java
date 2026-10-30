@@ -15,14 +15,18 @@ import java.net.InetAddress;
  */
 public final class Agent {
     private static boolean started;
+    private static AgentConfig current;
+    private static Thread worker;
 
     public static void premain(String args, Instrumentation inst) { start(args, inst); }
     public static void agentmain(String args, Instrumentation inst) { start(args, inst); }
 
     private static synchronized void start(String args, Instrumentation inst) {
-        if (started) { System.err.println("[mcradar-agent] already running; ignoring second load."); return; }
+        if (started) { reload(args, inst); return; }
         started = true;
-        AgentConfig cfg = AgentConfig.parse(args);
+        java.util.Map<String, String> unused = new java.util.HashMap<String, String>();
+        AgentConfig cfg = AgentConfig.parse(args, unused);
+        current = cfg;
         Log.init(cfg.exportDir, cfg.verbose);
         Log.info("Starting (Java " + System.getProperty("java.version") + ", port " + cfg.port + ", export " + cfg.exportDir + ")");
         int wire = cfg.negotiatedWire();
@@ -34,10 +38,30 @@ public final class Agent {
                     + "; sending v" + wire + " anyway. Rebuild mcesp.exe and esp-agent.jar together.");
         else if (cfg.wire > Snapshot.WIRE_VERSION)
             Log.warn("The overlay understands a newer protocol (v" + cfg.wire + ") than this agent writes (v" + Snapshot.WIRE_VERSION + "): rebuild esp-agent.jar to use its features.");
+        launchWorker(cfg, inst);
+    }
+
+    private static void launchWorker(AgentConfig cfg, Instrumentation inst) {
         Thread t = new Thread(new Worker(cfg, inst), "mcradar-agent");
         t.setDaemon(true);                       // never keeps the game from exiting
         t.setPriority(Thread.MIN_PRIORITY);
+        worker = t;
         t.start();
+    }
+
+    /**
+     * The agent is loaded a second time: the overlay was restarted (new session token, maybe another port or rate) while the game kept running.
+     * Ignoring the load - what this used to do - left the agent sending the OLD token to the OLD port, so the new overlay dropped everything until
+     * Minecraft was restarted. Now the running agent takes the new options over; a worker thread that died is started again.
+     */
+    private static void reload(String args, Instrumentation inst) {
+        java.util.Map<String, String> given = new java.util.HashMap<String, String>();
+        AgentConfig next = AgentConfig.parse(args, given);
+        String changed = current.reloadFrom(next, given);
+        Log.setVerbose(current.verbose);
+        boolean dead = worker == null || !worker.isAlive();
+        Log.info("Loaded again: " + (changed.isEmpty() ? "options unchanged" : changed) + (dead ? "; worker thread was not running, restarting it" : ""));
+        if (dead) launchWorker(current, inst);
     }
 
     private static final class Worker implements Runnable {
@@ -51,7 +75,6 @@ public final class Agent {
                 sock = new DatagramSocket();
                 InetAddress lo = InetAddress.getByAddress(new byte[] {127, 0, 0, 1});
                 Probe probe = new Probe(inst, cfg);
-                final long periodNs = 1000000000L / cfg.hz;
                 long nextDiscover = 0, backoff = 1500;
                 long next = System.nanoTime();
                 // wire v5: a random id for this agent run and a running datagram number (counted whether or not the send works, so a gap = a datagram that never arrived)
@@ -90,6 +113,7 @@ public final class Agent {
 
                     // Absolute schedule: sleep jitter does not accumulate, and a late wake-up is made up for by a shorter
                     // next sleep. The sample instants are stamped, so uneven spacing is harmless to the overlay.
+                    final long periodNs = 1000000000L / Math.max(1, cfg.hz);     // read every tick: a reload may change hz
                     next += periodNs;
                     long nowNs = System.nanoTime();
                     if (next < nowNs - 4 * periodNs) next = nowNs;      // fell far behind (GC pause...): resynchronise, no burst
