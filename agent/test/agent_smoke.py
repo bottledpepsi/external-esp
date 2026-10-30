@@ -48,7 +48,7 @@ def build(java_home):
     jar_path = os.path.join(OUT, "esp-agent.jar")
     run([jar, "cfm", jar_path, os.path.join(AGENT, "manifest.mf"), "-C", os.path.join(OUT, "agent"), "."])
     t = os.path.join(HERE, "src")
-    run([javac, "-d", os.path.join(OUT, "fake"), os.path.join(t, "com/mojang/authlib/GameProfile.java"), os.path.join(t, "FakeGame.java")])
+    run([javac, "-d", os.path.join(OUT, "fake"), os.path.join(t, "com/mojang/authlib/GameProfile.java"), os.path.join(t, "FakeGame.java"), os.path.join(t, "IdleJvm.java")])
     run([javac, "-d", os.path.join(OUT, "real"), os.path.join(t, "com/mojang/authlib/GameProfile.java"),
          os.path.join(t, "it/unimi/dsi/fastutil/ints/Int2ObjectLinkedOpenHashMap.java"),
          os.path.join(t, "it/unimi/dsi/fastutil/objects/Object2IntOpenHashMap.java"), os.path.join(t, "RealisticGame.java")])
@@ -339,6 +339,45 @@ def run_reload(java_home, jar, timeout):
     return [b"x"] * 1, problems, time.time() - t0
 
 
+def run_selftest(kind, java_home, jar, timeout):
+    """The command-line self-test (java -cp esp-agent.jar mcradar.SelfTest PID SECONDS) against a running fake game; checks the exit code and report."""
+    java = tool("java", java_home)
+    if java_major(java) < 9:
+        return [], ["skipped: the attach helper needs JDK 9+"], 0.0
+    export = tempfile.mkdtemp(prefix="esp-smoke-")
+    ex = export.replace("\\", "/")
+    t0 = time.time()
+    if kind == "selftest-nonmc":
+        cmd = [java, "-cp", os.path.join(OUT, "fake"), "IdleJvm"]
+    else:
+        agent = "-javaagent:%s=port=47855;hz=60;wire=5;token=%s;export=%s;user=Alice" % (jar, "a" * 32, ex)
+        cmd = [java] + (["--sun-misc-unsafe-memory-access=allow"] if java_major(java) >= 23 else []) + [agent, "-cp", os.path.join(OUT, "real" if kind == "selftest-realistic" else "fake"),
+                "RealisticGame" if kind == "selftest-realistic" else "FakeGame"] + ([] if kind == "selftest-realistic" else ["--username", "Alice", "wiggle"])
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    problems = []
+    try:
+        time.sleep(2.5)
+        r = subprocess.run([java, "--add-modules", "jdk.attach", "-cp", jar, "mcradar.SelfTest", str(proc.pid), "8"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           universal_newlines=True, timeout=90)
+        out = r.stdout
+        want = {"selftest-fake": (0,), "selftest-realistic": (1, 3), "selftest-nonmc": (10,)}[kind]
+        if r.returncode not in want:
+            problems.append("exit code %d, expected one of %s\n%s%s" % (r.returncode, want, out, r.stderr[-300:]))
+        if kind == "selftest-fake" and ("CHECK camera PASS" not in out or "CHECK items PASS" not in out or "RESULT PASS" not in out):
+            problems.append("report of the fake game lacks camera/items PASS:\n" + out)
+        if kind == "selftest-nonmc" and "RESULT NOT-MINECRAFT" not in out:
+            problems.append("a JVM that is not Minecraft must be reported as such:\n" + out)
+        if kind == "selftest-realistic" and "CHECK items PASS" not in out:
+            problems.append("the realistic game must have working items:\n" + out)
+        for bad in ("Alice", "Bob", "Carol", "a" * 32):
+            if bad in out:
+                problems.append("the report contains %r" % bad)
+    finally:
+        proc.kill(); proc.wait()
+        shutil.rmtree(export, ignore_errors=True)
+    return [b"x"], problems, time.time() - t0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--java-home")
@@ -346,16 +385,16 @@ def main():
     ap.add_argument("cases", nargs="*")
     a = ap.parse_args()
     java_home = a.java_home or os.environ.get("JAVA_HOME")
-    cases = a.cases or list(CASES) + ["reload"]
+    cases = a.cases or list(CASES) + ["reload", "selftest-fake", "selftest-realistic", "selftest-nonmc"]
     for c in cases:
-        if c not in CASES and c != "reload":
+        if c not in CASES and c != "reload" and not c.startswith("selftest-"):
             sys.exit("unknown case %s (have: %s)" % (c, ", ".join(CASES)))
     jar = build(java_home)
     print("java: %s (major %d)" % (tool("java", java_home), java_major(tool("java", java_home))))
     bad = 0
     for c in cases:
-        if c == "reload":
-            dgs, problems, secs = run_reload(java_home, jar, a.timeout)
+        if c == "reload" or c.startswith("selftest-"):
+            dgs, problems, secs = run_reload(java_home, jar, a.timeout) if c == "reload" else run_selftest(c, java_home, jar, a.timeout)
             skipped = bool(problems) and problems[0].startswith("skipped")
             print("%-11s %s  (%.1fs)" % (c, "SKIP" if skipped else "PASS" if not problems else "FAIL", secs))
             for p in problems:

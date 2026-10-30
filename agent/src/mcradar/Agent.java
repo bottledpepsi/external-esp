@@ -39,11 +39,23 @@ public final class Agent {
                     + "; sending v" + wire + " anyway. Rebuild mcesp.exe and esp-agent.jar together.");
         else if (cfg.wire > Snapshot.WIRE_VERSION)
             Log.warn("The overlay understands a newer protocol (v" + cfg.wire + ") than this agent writes (v" + Snapshot.WIRE_VERSION + "): rebuild esp-agent.jar to use its features.");
+        startSelfTest(cfg);
         launchWorker(cfg, inst);
     }
 
     /** Achieved tick intervals of the running worker (always collected: one array store per tick). */
     static final PacingStats pacing = new PacingStats();
+    static volatile long datagramsSent, sendErrors;
+    private static volatile SelfTestRun selfTest;
+
+    /** Starts (or restarts) the self-test described by the options: results go to selftestout=FILE, else esp_selftest.txt in the export folder. */
+    static void startSelfTest(AgentConfig cfg) {
+        if (cfg.selftestSeconds <= 0) return;
+        String out = cfg.selftestOut != null ? cfg.selftestOut : new java.io.File(cfg.exportDir, "esp_selftest.txt").getPath();
+        selfTest = new SelfTestRun(cfg.selftestSeconds, out);
+        cfg.dump = true;                                                  // the structure dump is the other half of the report
+        Log.info("Self-test started: " + cfg.selftestSeconds + " s, report to esp_selftest.txt");
+    }
     private static Pacer pacerCache = new Pacer(false);
     private static long workerStartedAt = System.currentTimeMillis();
 
@@ -92,6 +104,7 @@ public final class Agent {
         AgentConfig next = AgentConfig.parse(args, given);
         String changed = current.reloadFrom(next, given);
         Log.setVerbose(current.verbose);
+        if (given.containsKey("selftest")) { current.selftestSeconds = next.selftestSeconds; current.selftestOut = next.selftestOut; startSelfTest(current); }
         boolean dead = worker == null || !worker.isAlive();
         Log.info("Loaded again: " + (changed.isEmpty() ? "options unchanged" : changed) + (dead ? "; worker thread was not running, restarting it" : ""));
         if (dead) launchWorker(current, inst);
@@ -141,7 +154,9 @@ public final class Agent {
                     snap.session = session;
                     snap.seq = ++seqCounter;
                     byte[] data = snap.encode();
-                    try { sock.send(new DatagramPacket(data, data.length, lo, cfg.port)); } catch (Throwable ignored) { }
+                    try { sock.send(new DatagramPacket(data, data.length, lo, cfg.port)); datagramsSent++; } catch (Throwable ignored) { sendErrors++; }
+                    SelfTestRun st = selfTest;
+                    if (st != null) { try { st.observe(probe, snap); } catch (Throwable t) { Log.warn("Self-test observe failed: " + t); } }
 
                     // Slow work goes AFTER the send, in the idle part of the period (see Probe.pollItemsIfDue).
                     try { probe.pollItemsIfDue(); } catch (Throwable t) { Log.error("Error polling items: " + t); probe.reset(); }

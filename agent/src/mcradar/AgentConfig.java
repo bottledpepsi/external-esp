@@ -28,6 +28,9 @@ final class AgentConfig {
     volatile boolean pacingReportDone;
     volatile String pacer = "sleep";
     volatile int pacingSeconds;
+    /** Option selftest=SECONDS (+ selftestout=FILE): gather facts for that long, then write the self-test report (SelfTestRun). */
+    volatile int selftestSeconds;
+    volatile String selftestOut;
     /** Session token the overlay generated (option token=...): sent in every v5 datagram. Null = none (then only v4 can be spoken). */
     volatile String token;
 
@@ -46,6 +49,8 @@ final class AgentConfig {
         try { if (kv.containsKey("wire")) c.wire = Integer.parseInt(kv.get("wire")); } catch (NumberFormatException ignored) { }
         if (kv.get("pacer") != null) c.pacer = kv.get("pacer").equalsIgnoreCase("hybrid") ? "hybrid" : "sleep";
         try { if (kv.get("pacing") != null) c.pacingSeconds = Math.max(0, Math.min(3600, Integer.parseInt(kv.get("pacing")))); } catch (NumberFormatException ignored) { }
+        try { if (kv.get("selftest") != null) c.selftestSeconds = Math.max(0, Math.min(600, Integer.parseInt(kv.get("selftest")))); } catch (NumberFormatException ignored) { }
+        c.selftestOut = kv.get("selftestout");
         c.dump = "1".equals(kv.get("dump")) || "true".equalsIgnoreCase(kv.get("dump"));
         c.verbose = "1".equals(kv.get("verbose")) || "true".equalsIgnoreCase(kv.get("verbose"));
         String tok = kv.get("token");

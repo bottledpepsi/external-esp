@@ -50,6 +50,22 @@ final class GameInfo {
         return null;
     }
 
+    /** "a1b2c3d4 (284 KB, modified 2026-10-26)": a short SHA-256 of the agent jar this code was loaded from - which build is really in the game. */
+    static String agentBuild() {
+        try {
+            java.security.CodeSource cs = GameInfo.class.getProtectionDomain().getCodeSource();
+            if (cs == null) return "unknown (no code source)";
+            java.io.File f = new java.io.File(cs.getLocation().toURI());
+            if (!f.isFile()) return "classes directory";
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            java.io.InputStream in = new java.io.FileInputStream(f);
+            try { byte[] b = new byte[16384]; int r; while ((r = in.read(b)) > 0) md.update(b, 0, r); } finally { in.close(); }
+            StringBuilder h = new StringBuilder();
+            for (int i = 0; i < 4; i++) h.append(String.format("%02x", md.digest()[i] & 0xff));
+            return h + " (" + f.length() / 1024 + " KB, modified " + new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date(f.lastModified())) + ")";
+        } catch (Throwable t) { return "unknown"; }
+    }
+
     static String java() {
         return System.getProperty("java.version") + " (" + System.getProperty("java.vm.name") + ", " + System.getProperty("java.vendor") + ")";
     }

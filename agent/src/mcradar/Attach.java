@@ -16,7 +16,11 @@ public final class Attach {
             System.err.println("usage: java -jar mcradar-agent.jar <pid> <agent-jar> [options]");
             System.exit(2);
         }
-        String pid = a[0], jar = a[1], opts = a.length > 2 ? a[2] : "";
+        System.exit(load(a[0], a[1], a.length > 2 ? a[2] : "", System.out, System.err));
+    }
+
+    /** Loads the agent into `pid`. Returns 0 on success, 1 if the attach failed, 3 if this Java has no Attach API. */
+    static int load(String pid, String jar, String opts, java.io.PrintStream out, java.io.PrintStream err) {
         try {
             Class<?> vmc = Class.forName("com.sun.tools.attach.VirtualMachine");
             Object vm = vmc.getMethod("attach", String.class).invoke(null, pid);
@@ -25,17 +29,18 @@ public final class Attach {
             } finally {
                 vmc.getMethod("detach").invoke(vm);
             }
-            System.out.println("agent loaded into PID " + pid);
+            out.println("agent loaded into PID " + pid);
+            return 0;
         } catch (ClassNotFoundException e) {
-            System.err.println("This Java has no Attach API (jdk.attach). Use a full JDK (17+) as java_path.");
-            System.exit(3);
+            err.println("This Java has no Attach API (jdk.attach). Use a full JDK (17+) as java_path.");
+            return 3;
         } catch (InvocationTargetException e) {
             Throwable c = e.getCause() == null ? e : e.getCause();
-            System.err.println("attach failed: " + c);
-            System.exit(1);
+            err.println("attach failed: " + c);
+            return 1;
         } catch (Throwable t) {
-            System.err.println("attach failed: " + t);
-            System.exit(1);
+            err.println("attach failed: " + t);
+            return 1;
         }
     }
 }

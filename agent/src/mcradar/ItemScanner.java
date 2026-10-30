@@ -55,7 +55,7 @@ final class ItemScanner {
     private final IdentityHashMap<Object, Meta> meta = new IdentityHashMap<Object, Meta>();
     private int gen;
     private long lastDebug, lastNonEmpty = System.currentTimeMillis();
-    private int entitiesSeen, itemEntities;
+    int entitiesSeen, itemEntities;
     String describe = "items: no entity container found yet";
 
     private static final long NEG_TTL = 10000;
