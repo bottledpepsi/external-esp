@@ -50,3 +50,18 @@ re-activated lands above our topmost overlay, which then looks "blank"; the over
 | alt-tab away and back (fullscreen) | the overlay is above the game again within about a quarter of a second; log: `Overlay was below the game window in the z-order; raised it` |
 | move the game to another virtual desktop (Win+Tab) | `hidden`; the overlay is not shown |
 | a second monitor: fullscreen on each | `monitor WxH` in the log is the one the game is on |
+
+## 4. Which GPU, hybrid graphics, no GPU
+Logic: `src/AdapterChoice.h` (tests/adapter_choice_test.cpp, 17 checks on hand-made laptops, a VM and bad flags). `InitGpu` lists every DXGI adapter, chooses, then walks:
+chosen adapter -> Direct3D's default hardware adapter -> **WARP** (the software rasteriser) -> (the existing fallback) the legacy GDI renderer. Under Wine the listing, the
+decision text, `--adapter 0/9/nvidia/radeon` and the explicit-adapter device creation ran against Wine's single emulated adapter; nothing about a real multi-GPU machine did.
+
+| step | expected |
+|---|---|
+| any machine: read the start of `esp_log.txt` | one `GPU adapter [N] name, vendor 0x.. device 0x.., X MB dedicated[, software][, drives the primary monitor]` line per adapter, then `GPU adapter: <what>. Why: <reason>.` |
+| **hybrid laptop** (Intel/AMD iGPU + NVIDIA dGPU), default settings | the adapter marked "drives the primary monitor" is chosen (normally the iGPU) with the reason; the overlay draws over the game even when the game runs on the dGPU. If the overlay is missing or slow: try `--adapter 0` and `--adapter 1` and send both logs |
+| laptop with a MUX switch set to discrete-only | the dGPU is the one that drives the monitor; same reasoning applies |
+| `mcesp --adapter nvidia` / `--adapter 1` | `chosen with --adapter ...`; a wrong value is ignored and said so |
+| a **VM or remote desktop session** with no GPU | `only software adapters exist`, then `Running on the WARP software rasteriser` (or the legacy renderer if even that fails). WARP drawing a DirectComposition overlay is expected to work but is **untested**; if the overlay is missing, `--gdi` is the CPU alternative |
+
+Known limit: the adapter is chosen once at start-up from the **primary** monitor. If the game runs on a secondary monitor that is driven by a different GPU, choose the adapter by hand (`--adapter`).

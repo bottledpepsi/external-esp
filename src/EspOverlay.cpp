@@ -347,6 +347,7 @@ void EspOverlay::Pace(Clock::time_point frameStart)
 int EspOverlay::Run()
 {
     settings_.Load();
+    gfx_.SetAdapterPreference(opt_.adapter);
     if (!gfx_.Init(!opt_.legacyGfx))
     {
         LOG_ERROR("Direct2D/DirectWrite initialisation failed.");

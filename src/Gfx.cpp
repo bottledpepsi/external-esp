@@ -312,17 +312,71 @@ bool Gfx::InitGpu()
     const D3D_FEATURE_LEVEL levels[] = {
         D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0
     };
-    D3D_FEATURE_LEVEL got{};
-    HRESULT hr = create(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 4,
-                        D3D11_SDK_VERSION, d3d_.put(), &got, nullptr);
-    if (hr == E_INVALIDARG) // pre-11.1 runtime does not know FEATURE_LEVEL_11_1
-        hr = create(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels + 1, 3,
-                    D3D11_SDK_VERSION, d3d_.put(), &got, nullptr);
-    if (FAILED(hr))
+
+    // Which adapter? List them all (the log is the first thing asked for on a hybrid-graphics laptop), choose by AdapterChoice.h, then walk the chain:
+    // the chosen adapter -> Direct3D's default hardware adapter -> WARP (the software rasteriser: slow, but a VM or remote session has nothing else).
+    std::vector<gpuselect::Adapter> list;
+    std::vector<ComPtr<IDXGIAdapter1>> adapters;
     {
-        LOG_WARN("D3D11CreateDevice failed (0x%08lX)", static_cast<unsigned long>(hr));
-        return false;
+        using FactoryFn = HRESULT(WINAPI*)(REFIID, void**);
+        HMODULE dxgi = LoadLibraryW(L"dxgi.dll");
+        auto mk = dxgi ? reinterpret_cast<FactoryFn>(reinterpret_cast<void*>(GetProcAddress(dxgi, "CreateDXGIFactory1"))) : nullptr;
+        ComPtr<IDXGIFactory1> fac;
+        if (mk && SUCCEEDED(mk(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(fac.put()))))
+        {
+            const HMONITOR primary = MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+            for (UINT i = 0;; ++i)
+            {
+                ComPtr<IDXGIAdapter1> ad;
+                if (fac->EnumAdapters1(i, ad.put()) == DXGI_ERROR_NOT_FOUND) break;
+                DXGI_ADAPTER_DESC1 d{};
+                if (FAILED(ad->GetDesc1(&d))) continue;
+                gpuselect::Adapter a;
+                a.index = static_cast<int>(i);
+                char nm[256]{};
+                WideCharToMultiByte(CP_UTF8, 0, d.Description, -1, nm, sizeof nm - 1, nullptr, nullptr);
+                a.name = nm;
+                a.vendor = d.VendorId; a.device = d.DeviceId; a.vramBytes = d.DedicatedVideoMemory;
+                a.software = (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0 || (d.VendorId == 0x1414 && d.DeviceId == 0x8C);   // Microsoft Basic Render Driver
+                for (UINT o = 0;; ++o)
+                {
+                    ComPtr<IDXGIOutput> out;
+                    if (ad->EnumOutputs(o, out.put()) == DXGI_ERROR_NOT_FOUND) break;
+                    DXGI_OUTPUT_DESC od{};
+                    if (SUCCEEDED(out->GetDesc(&od)) && od.Monitor == primary) a.ownsOutput = true;
+                }
+                LOG_INFO("GPU adapter [%d] %s, vendor 0x%04X device 0x%04X, %llu MB dedicated%s%s", a.index, a.name.c_str(), a.vendor, a.device, a.vramBytes >> 20,
+                         a.software ? ", software" : "", a.ownsOutput ? ", drives the primary monitor" : "");
+                list.push_back(a);
+                adapters.push_back(std::move(ad));
+            }
+        }
+        else LOG_WARN("DXGI adapter enumeration unavailable: Direct3D picks its default.");
     }
+    const gpuselect::Decision dec = gpuselect::Choose(list, adapterPref_);
+    struct Attempt { IDXGIAdapter* adapter; D3D_DRIVER_TYPE type; std::string what; };
+    std::vector<Attempt> chain;
+    if (dec.index >= 0)
+        for (size_t i = 0; i < list.size(); ++i)
+            if (list[i].index == dec.index) chain.push_back({adapters[i].get(), D3D_DRIVER_TYPE_UNKNOWN, "adapter " + std::to_string(dec.index) + " " + list[i].name});
+    chain.push_back({nullptr, D3D_DRIVER_TYPE_HARDWARE, "Direct3D's default hardware adapter"});
+    chain.push_back({nullptr, D3D_DRIVER_TYPE_WARP, "WARP software rasteriser"});
+
+    D3D_FEATURE_LEVEL got{};
+    HRESULT hr = E_FAIL;
+    std::string used;
+    for (const auto& at : chain)
+    {
+        d3d_ = {};
+        hr = create(at.adapter, at.type, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 4, D3D11_SDK_VERSION, d3d_.put(), &got, nullptr);
+        if (hr == E_INVALIDARG) // pre-11.1 runtime does not know FEATURE_LEVEL_11_1
+            hr = create(at.adapter, at.type, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels + 1, 3, D3D11_SDK_VERSION, d3d_.put(), &got, nullptr);
+        if (SUCCEEDED(hr)) { used = at.what; break; }
+        LOG_WARN("D3D11CreateDevice on %s failed (0x%08lX)%s", at.what.c_str(), static_cast<unsigned long>(hr), &at == &chain.back() ? "" : " - trying the next option");
+    }
+    if (FAILED(hr)) return false;
+    LOG_INFO("GPU adapter: %s. Why: %s.", used.c_str(), dec.reason.c_str());
+    if (used.find("WARP") != std::string::npos) LOG_WARN("Running on the WARP software rasteriser (no usable GPU): expect higher CPU use; --gdi is the other CPU option.");
     hr = d3d_->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(dxgiDev_.put()));
     if (FAILED(hr)) return false;
 

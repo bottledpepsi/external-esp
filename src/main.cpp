@@ -52,6 +52,7 @@ namespace
             "  --title T    pick the Minecraft client whose window title contains T (several clients, or a custom client whose title is not \"Minecraft...\")\n"
             "  --exe E      ... whose program name contains E (javaw.exe, java.exe); combines with --title; --pid N names the process directly (docs/launchers.md)\n"
             "  --selftest [S]  attach, watch S seconds (default 20: look around, drop an item), print what works and exit with a code (docs/selftest.md)\n"
+            "  --adapter X  GPU for the overlay: its number or part of its name (default: automatic; the log lists every adapter and says why one was chosen)\n"
             "  --simulate-device-loss[=persistent]  test aid: F10 injects a GPU device loss (persistent: recovery fails too, so the GDI fallback must follow)\n"
             "  --dump-structure  the agent also writes esp_structure.json (class structure only, for bug reports; docs/fixtures.md)\n"
             "  --gdi        use the legacy CPU renderer (layered window) instead of the GPU swap chain\n"
@@ -121,6 +122,7 @@ int main(int argc, char** argv)
             if (i + 1 < argc && argv[i + 1][0] != '-') opt.selftestSeconds = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 600L));
         }
         else if (a == "--dump-structure") opt.dumpStructure = true;
+        else if (a == "--adapter" && i + 1 < argc) opt.adapter = argv[++i];
         else if (a == "--simulate-device-loss") opt.simulateLoss = 1;
         else if (a == "--simulate-device-loss=persistent") opt.simulateLoss = 2;
         else if (a == "--record" && i + 1 < argc) opt.recordPath = argv[++i];

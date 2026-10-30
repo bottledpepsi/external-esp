@@ -12,6 +12,7 @@
 //
 // The drawing API below is identical for both, so EspRenderer / ConfigUi do not care which one is active.
 #pragma once
+#include "AdapterChoice.h"
 #include "GpuRecovery.h"
 #include "Platform.h"
 #include "Image.h"
@@ -63,6 +64,8 @@ public:
     // recreate it and call ForceLegacy(). SimulateLoss() is for --simulate-device-loss: one loss at the next Present (persistent: every recovery fails too).
     // The window was moved or resized by something other than us (DPI change, display change): the next Present must place it again.
     void InvalidatePlacement();
+    // --adapter N|NAME: which GPU the overlay's device is created on (AdapterChoice.h); empty = automatic. Set before Init().
+    void SetAdapterPreference(const std::string& arg) { adapterPref_ = gpuselect::ParsePreference(arg); }
     bool WantsLegacy() const;
     bool DeviceLost() const;
     void SimulateLoss(bool persistent);
@@ -130,6 +133,7 @@ private:
     float opacity_ = 1.f;
     bool vsync_ = true;
     // device-loss bookkeeping: always present (the public queries are unconditional), only the GPU backend ever changes it
+    gpuselect::Preference adapterPref_;
     GpuRecovery rec_;
     bool deviceLost_ = false, wantLegacy_ = false, injectLoss_ = false;
     int failInit_ = 0; // simulated persistent loss: InitGpu fails while > 0
