@@ -11,6 +11,15 @@ self-test **without touching its port or token** - and watches for `seconds` (de
 the report and exits with its code. The same report is written by the agent option `selftest=SECONDS` (`selftestout=FILE`, default `esp_selftest.txt`).
 A self-test also turns on the structure dump (`esp_structure.json`, docs/fixtures.md).
 
+## Overlay side
+```
+mcesp --selftest [seconds]        (default 20; add --pid N if several clients run; close a running mcesp first: the UDP port must be free)
+```
+Finds the one Minecraft client (none -> 10, several -> 13), attaches the agent with `selftest=SECONDS` (and `dump=1`), receives the agent's UDP stream with the
+normal token check, waits for `esp_selftest.txt` next to the jar, and prints the agent's report followed by what only the overlay can see: the OS, the
+Minecraft version from the window title, and how many datagrams were accepted / rejected on the UDP port. If the agent is fine but nothing reached the
+overlay the code is 12. `--dump-structure` makes any run write `esp_structure.json` as well.
+
 ## The report
 ```
 esp-selftest 1
@@ -38,5 +47,7 @@ pass). No player names, tokens or machine paths are in it.
 | 14 | attach failed |
 | 15 | the agent loaded but no report arrived in time |
 
-Tested on Linux with fake games only (`agent_smoke.py selftest-*`): a pass, a JVM that is not Minecraft (10), and the realistic game. No real Minecraft was
-available while writing it.
+Tested on Linux with fake games only (`agent_smoke.py selftest-*`): a pass, a JVM that is not Minecraft (10), and the realistic game. The overlay side is
+tested for what can run without Windows: the report parser and the exit-code decision (`tests/selftest_test.cpp`, parsing a real agent report), and the
+cross-built `mcesp.exe` under Wine for "no Minecraft" (10). Process discovery and attach on Windows, and the UDP check against a live agent, were **not** run.
+No real Minecraft was available while writing it.

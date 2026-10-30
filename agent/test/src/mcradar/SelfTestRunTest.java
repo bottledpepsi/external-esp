@@ -64,6 +64,12 @@ public final class SelfTestRunTest {
         String rep = r.render(c, code(r, c));
         check(rep.startsWith("esp-selftest 1\n") && rep.contains("\nRESULT PASS\n") && rep.contains("\nEXIT 0\n") && rep.contains("CHECK camera PASS "), "report format");
         check(!rep.contains("Alice") && !rep.contains("token="), "no names or tokens in the report");
+        // the grammar src/SelfTestReport.h (C++) parses: tests/data/selftest_sample.txt is a real report and tests/selftest_test.cpp reads it
+        for (String line : rep.split("\n")) {
+            boolean ok = line.equals("esp-selftest 1") || line.matches("(agent|java|os|minecraft|window|player-source|camera|entities|pacing): .+")
+                    || line.matches("CHECK [a-z-]+ (PASS|WARN|FAIL|SKIP) .+") || line.matches("RESULT [A-Z-]+") || line.matches("EXIT \\d+") || line.startsWith("FILES ");
+            check(ok, "report line matches the grammar the overlay parses: " + line);
+        }
         System.out.println(fails == 0 ? "ALL OK (" + checks + " checks)" : fails + " FAILURES of " + checks);
         System.exit(fails == 0 ? 0 : 1);
     }

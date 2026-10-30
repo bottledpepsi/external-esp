@@ -1,0 +1,22 @@
+esp-selftest 1
+agent: build 88b0c442 (101 KB, modified 2026-10-26), wire 5
+java: 21.0.12.1 (OpenJDK 64-Bit Server VM, Ubuntu)
+os: Linux (sandbox)
+minecraft: unknown
+window: 8 s, 482 ticks
+player-source: players-list (singleton roots)
+camera: value-match, fov: holder
+entities: up to 8 seen, 4 item entities, 3 items reported
+pacing: samples 636 over 10.6 s | interval ms: mean 16.66 p50 16.55 p95 17.51 p99 19.69 max 55.64 | 60.0 Hz | late(>1.5x) 0.2% very late(>3x) 0.2%
+CHECK game PASS Minecraft classes found
+CHECK world PASS discovered; player source: players-list (singleton roots)
+CHECK local-player PASS the local player is found
+CHECK players PASS other players seen: up to 2
+CHECK camera PASS exact camera found (value-match)
+CHECK fov PASS FOV method found (holder)
+CHECK items PASS dropped items found via field-path: up to 3 at once
+CHECK pacing PASS tick interval mean 16.66 p99 19.69 max 55.64 ms at 60 Hz configured, late 0.2%
+CHECK send PASS 637 datagrams sent
+RESULT PASS
+EXIT 0
+FILES esp_selftest.txt esp_structure.json esp_agent.log (send these three with a bug report; they contain no names or tokens)

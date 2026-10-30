@@ -3,13 +3,14 @@
 //   Minecraft JVM <--(JVM Attach API)-- esp-agent.jar --UDP 127.0.0.1:47615--> UdpListener --> EspOverlay (D2D layered window)
 //
 // Usage:
-//   mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--list] [--record FILE]
+//   mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--selftest [S]] [--dump-structure] [--list] [--record FILE]
 //   Insert = config window, Delete = toggle ESP, hold End = exit (all rebindable in the HOTKEYS tab).
 //
 // Scope: written for single-player / LAN worlds you control (two accounts on your own machine) -
 // reverse-engineering practice, not for use on other people's servers.
 #include "AgentInjector.h"
 #include "App.h"
+#include "SelfTestApp.h"
 #include "EspOverlay.h"
 #include "FriendList.h"
 #include "Logger.h"
@@ -47,6 +48,8 @@ namespace
             "  --hz N       agent snapshot rate, 1-240 (default 120; more = smoother boxes, a little more CPU in the game)\n"
             "  --agent-pacer M  how the agent waits for its next tick: sleep (default) or hybrid (sleep + spin the last ~2 ms; precise, costs CPU in the game)\n"
             "  --pacing-report [S]  the agent writes esp_pacing.txt (achieved tick intervals) after S seconds (default 20); see docs/pacing.md\n"
+            "  --selftest [S]  attach, watch S seconds (default 20: look around, drop an item), print what works and exit with a code (docs/selftest.md)\n"
+            "  --dump-structure  the agent also writes esp_structure.json (class structure only, for bug reports; docs/fixtures.md)\n"
             "  --gdi        use the legacy CPU renderer (layered window) instead of the GPU swap chain\n"
             "  --record F   also save the raw agent datagrams + arrival times to F (.esprec) for --replay / tests / bug reports\n"
             "  --replay F   play back an .esprec recording over the whole screen instead of attaching to Minecraft\n"
@@ -108,6 +111,12 @@ int main(int argc, char** argv)
             opt.pacingSeconds = 20;
             if (i + 1 < argc && argv[i + 1][0] != '-') opt.pacingSeconds = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 3600L));
         }
+        else if (a == "--selftest")
+        {
+            opt.selftestSeconds = 20;
+            if (i + 1 < argc && argv[i + 1][0] != '-') opt.selftestSeconds = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 600L));
+        }
+        else if (a == "--dump-structure") opt.dumpStructure = true;
         else if (a == "--record" && i + 1 < argc) opt.recordPath = argv[++i];
         else if (a == "--token" && i + 1 < argc) opt.token = argv[++i];
         else if (a == "--no-auth") opt.requireAuth = false;
@@ -146,6 +155,7 @@ int main(int argc, char** argv)
         }
         return 0;
     }
+    if (opt.selftestSeconds > 0) return RunSelfTest(opt);
     if (list)
     {
         const auto procs = ProcessManager::Scan();
