@@ -23,5 +23,16 @@ struct AppOptions
     double replaySpeed = 1.0;         // --replay-speed X
     bool replayLoop = false;          // --replay-loop
     std::filesystem::path recordPath; // --record FILE: tee the raw agent datagrams into an .esprec file (docs/esprec.md)
+    std::string agentPacer; // --agent-pacer sleep|hybrid: how the agent waits for its next tick (default: the agent's own default, sleep)
+    int pacingSeconds = 0; // --pacing-report [S]: the agent writes esp_pacing.txt after S seconds (docs/pacing.md)
     bool legacyGfx = false; // --gdi: force the old DIB + UpdateLayeredWindow renderer (default: GPU swap chain)
+
+    // Agent options beyond the common ones, as ";key=value" pieces, shared by the automatic attach and the printed -javaagent line.
+    std::string agentExtraOptions() const
+    {
+        std::string o;
+        if (!agentPacer.empty()) o += ";pacer=" + agentPacer;
+        if (pacingSeconds > 0) o += ";pacing=" + std::to_string(pacingSeconds);
+        return o;
+    }
 };

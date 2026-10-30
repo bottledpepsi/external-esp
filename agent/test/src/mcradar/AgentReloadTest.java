@@ -75,6 +75,7 @@ public final class AgentReloadTest {
 
         // an option that is not mentioned keeps its running value (hz stays 100); no token option removes the token
         Agent.agentmain("port=" + pb + ";wire=4;export=" + ex, inst);
+        listen(b, 150);                                                     // datagrams queued before the reload still carry token B
         Object[] r5 = listen(b, 600);
         check((Integer) r5[0] >= 40 && r5[1].equals("[-]"), "no token / wire=4: tokenless datagrams, hz kept (" + r5[0] + ")");
 

@@ -24,6 +24,7 @@ public final class Agent {
     private static synchronized void start(String args, Instrumentation inst) {
         if (started) { reload(args, inst); return; }
         started = true;
+        workerStartedAt = System.currentTimeMillis();
         java.util.Map<String, String> unused = new java.util.HashMap<String, String>();
         AgentConfig cfg = AgentConfig.parse(args, unused);
         current = cfg;
@@ -39,6 +40,38 @@ public final class Agent {
         else if (cfg.wire > Snapshot.WIRE_VERSION)
             Log.warn("The overlay understands a newer protocol (v" + cfg.wire + ") than this agent writes (v" + Snapshot.WIRE_VERSION + "): rebuild esp-agent.jar to use its features.");
         launchWorker(cfg, inst);
+    }
+
+    /** Achieved tick intervals of the running worker (always collected: one array store per tick). */
+    static final PacingStats pacing = new PacingStats();
+    private static Pacer pacerCache = new Pacer(false);
+    private static long workerStartedAt = System.currentTimeMillis();
+
+    static Pacer pacer(AgentConfig cfg) {
+        if (pacerCache.hybrid != cfg.pacer.equals("hybrid")) { pacerCache = Pacer.of(cfg.pacer); Log.info("Pacer: " + pacerCache.name()); }
+        return pacerCache;
+    }
+
+    /** Text of the pacing report: configuration, achieved intervals, and how Thread.sleep(1) behaves in this JVM right now. */
+    static String pacingReport(AgentConfig cfg) {
+        long period = 1000000000L / Math.max(1, cfg.hz);
+        StringBuilder b = new StringBuilder("esp-agent pacing report\n");
+        b.append("configured: ").append(cfg.hz).append(" Hz (period ").append(String.format(java.util.Locale.ROOT, "%.3f", period / 1e6)).append(" ms), pacer ").append(cfg.pacer).append('\n');
+        b.append("achieved:   ").append(pacing.summary(period)).append('\n');
+        b.append("java ").append(GameInfo.java()).append("; os ").append(System.getProperty("os.name")).append(' ').append(System.getProperty("os.version"))
+                .append("; ").append(Runtime.getRuntime().availableProcessors()).append(" logical processors\n");
+        return b.toString();
+    }
+
+    private static void maybeReportPacing(AgentConfig cfg) {
+        if (cfg.pacingSeconds <= 0 || cfg.pacingReportDone || System.currentTimeMillis() - workerStartedAt < cfg.pacingSeconds * 1000L) return;
+        cfg.pacingReportDone = true;
+        String r = pacingReport(cfg);
+        Log.info("Pacing: " + r.replace('\n', ' '));
+        try {
+            java.io.FileOutputStream f = new java.io.FileOutputStream(new java.io.File(cfg.exportDir, "esp_pacing.txt"));
+            try { f.write(r.getBytes("UTF-8")); } finally { f.close(); }
+        } catch (Throwable t) { Log.warn("Could not write esp_pacing.txt: " + t); }
     }
 
     private static void launchWorker(AgentConfig cfg, Instrumentation inst) {
@@ -99,6 +132,8 @@ public final class Agent {
                         Log.error("Error in tick: " + t);
                         probe.reset();
                     }
+                    pacing.tick(tSample);
+                    maybeReportPacing(cfg);
                     snap.sampleNs = tSample;
                     snap.hasSampleTime = true;
                     snap.wire = cfg.negotiatedWire();
@@ -117,8 +152,7 @@ public final class Agent {
                     next += periodNs;
                     long nowNs = System.nanoTime();
                     if (next < nowNs - 4 * periodNs) next = nowNs;      // fell far behind (GC pause...): resynchronise, no burst
-                    long ms = (next - nowNs) / 1000000L;
-                    if (ms >= 1) Thread.sleep(ms);
+                    pacer(cfg).waitUntil(next);
                 }
             } catch (InterruptedException ie) {
                 Log.info("Worker interrupted; stopping.");

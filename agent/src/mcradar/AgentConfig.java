@@ -24,6 +24,10 @@ final class AgentConfig {
     volatile boolean verbose;
     /** Option dump=1: write esp_structure.json (StructureDump). */
     volatile boolean dump;
+    /** Option pacer=sleep|hybrid (how the worker waits, see Pacer) and pacing=SECONDS (write esp_pacing.txt after that long; 0 = never). */
+    volatile boolean pacingReportDone;
+    volatile String pacer = "sleep";
+    volatile int pacingSeconds;
     /** Session token the overlay generated (option token=...): sent in every v5 datagram. Null = none (then only v4 can be spoken). */
     volatile String token;
 
@@ -40,6 +44,8 @@ final class AgentConfig {
         try { if (kv.containsKey("port")) c.port = Integer.parseInt(kv.get("port")); } catch (NumberFormatException ignored) { }
         try { if (kv.containsKey("hz")) c.hz = Math.max(1, Math.min(240, Integer.parseInt(kv.get("hz")))); } catch (NumberFormatException ignored) { }
         try { if (kv.containsKey("wire")) c.wire = Integer.parseInt(kv.get("wire")); } catch (NumberFormatException ignored) { }
+        if (kv.get("pacer") != null) c.pacer = kv.get("pacer").equalsIgnoreCase("hybrid") ? "hybrid" : "sleep";
+        try { if (kv.get("pacing") != null) c.pacingSeconds = Math.max(0, Math.min(3600, Integer.parseInt(kv.get("pacing")))); } catch (NumberFormatException ignored) { }
         c.dump = "1".equals(kv.get("dump")) || "true".equalsIgnoreCase(kv.get("dump"));
         c.verbose = "1".equals(kv.get("verbose")) || "true".equalsIgnoreCase(kv.get("verbose"));
         String tok = kv.get("token");
@@ -62,6 +68,8 @@ final class AgentConfig {
         if (given.containsKey("wire") && n.wire != wire) { sb.append("wire ").append(wire).append(" -> ").append(n.wire).append("; "); wire = n.wire; }
         if (given.containsKey("verbose") && n.verbose != verbose) { sb.append("verbose ").append(verbose).append(" -> ").append(n.verbose).append("; "); verbose = n.verbose; }
         if (given.containsKey("dump") && n.dump != dump) { sb.append("dump ").append(dump).append(" -> ").append(n.dump).append("; "); dump = n.dump; }
+        if (given.containsKey("pacer") && !n.pacer.equals(pacer)) { sb.append("pacer ").append(pacer).append(" -> ").append(n.pacer).append("; "); pacer = n.pacer; }
+        if (given.containsKey("pacing") && n.pacingSeconds != pacingSeconds) { sb.append("pacing report after ").append(n.pacingSeconds).append(" s; "); pacingSeconds = n.pacingSeconds; pacingReportDone = false; }
         final String old = token;
         if (old == null ? n.token != null : !old.equals(n.token)) { sb.append(n.token == null ? "session token removed; " : "session token replaced; "); token = n.token; }
         if (given.containsKey("export") && !n.exportDir.equals(exportDir)) sb.append("export folder change ignored (fixed while the agent runs); ");

@@ -28,7 +28,7 @@ EspOverlay::EspOverlay(const AppOptions& opt)
     : opt_(opt),
       ui_(settings_),
       udp_(opt.port),
-      injector_(InjectorConfig{opt.jarPath, opt.javaPath, opt.port, opt.agentHz, opt.verbose, opt.token}),
+      injector_(InjectorConfig{opt.jarPath, opt.javaPath, opt.port, opt.agentHz, opt.verbose, opt.token, opt.agentExtraOptions()}),
       sup_(opt_, udp_, injector_)
 {
 }

@@ -3,7 +3,7 @@
 //   Minecraft JVM <--(JVM Attach API)-- esp-agent.jar --UDP 127.0.0.1:47615--> UdpListener --> EspOverlay (D2D layered window)
 //
 // Usage:
-//   mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--list] [--record FILE]
+//   mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--list] [--record FILE]
 //   Insert = config window, Delete = toggle ESP, hold End = exit (all rebindable in the HOTKEYS tab).
 //
 // Scope: written for single-player / LAN worlds you control (two accounts on your own machine) -
@@ -34,7 +34,7 @@ namespace
     {
         std::puts(
             "external-esp (C++)\n"
-            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]] [--token T | --no-auth] [--verbose] [--diagnostics [FILE]]\n"
+            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]] [--token T | --no-auth] [--verbose] [--diagnostics [FILE]]\n"
             "\n"
             "  --demo       synthetic players (test the overlay/config UI without Minecraft)\n"
             "  --pid N      attach to this java(w).exe PID (two Minecraft clients on one PC)\n"
@@ -45,6 +45,8 @@ namespace
             "  --open-config  open the config window right away\n"
             "  --screen     cover the whole primary monitor instead of tracking the game window\n"
             "  --hz N       agent snapshot rate, 1-240 (default 120; more = smoother boxes, a little more CPU in the game)\n"
+            "  --agent-pacer M  how the agent waits for its next tick: sleep (default) or hybrid (sleep + spin the last ~2 ms; precise, costs CPU in the game)\n"
+            "  --pacing-report [S]  the agent writes esp_pacing.txt (achieved tick intervals) after S seconds (default 20); see docs/pacing.md\n"
             "  --gdi        use the legacy CPU renderer (layered window) instead of the GPU swap chain\n"
             "  --record F   also save the raw agent datagrams + arrival times to F (.esprec) for --replay / tests / bug reports\n"
             "  --replay F   play back an .esprec recording over the whole screen instead of attaching to Minecraft\n"
@@ -92,6 +94,20 @@ int main(int argc, char** argv)
         else if (a == "--screen") opt.screenOverlay = true;
         else if (a == "--gdi") opt.legacyGfx = true;
         else if (a == "--hz" && i + 1 < argc) opt.agentHz = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 240L));
+        else if (a == "--agent-pacer" && i + 1 < argc)
+        {
+            opt.agentPacer = argv[++i];
+            if (opt.agentPacer != "sleep" && opt.agentPacer != "hybrid")
+            {
+                std::fprintf(stderr, "--agent-pacer takes sleep or hybrid\n");
+                return 2;
+            }
+        }
+        else if (a == "--pacing-report")
+        {
+            opt.pacingSeconds = 20;
+            if (i + 1 < argc && argv[i + 1][0] != '-') opt.pacingSeconds = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 3600L));
+        }
         else if (a == "--record" && i + 1 < argc) opt.recordPath = argv[++i];
         else if (a == "--token" && i + 1 < argc) opt.token = argv[++i];
         else if (a == "--no-auth") opt.requireAuth = false;
@@ -170,8 +186,8 @@ int main(int argc, char** argv)
         }
     }
     if (!opt.autoInject && !opt.demo && opt.replayPath.empty())
-        std::printf("Start the game with:  -javaagent:esp-agent.jar=port=%d;hz=%d;wire=%d%s%s%s\n", static_cast<int>(opt.port), opt.agentHz, wire::kMaxVersion,
-                    opt.token.empty() ? "" : ";token=", opt.token.c_str(), opt.verbose ? ";verbose=1" : "");
+        std::printf("Start the game with:  -javaagent:esp-agent.jar=port=%d;hz=%d;wire=%d%s%s%s%s\n", static_cast<int>(opt.port), opt.agentHz, wire::kMaxVersion,
+                    opt.token.empty() ? "" : ";token=", opt.token.c_str(), opt.verbose ? ";verbose=1" : "", opt.agentExtraOptions().c_str());
     FriendList::Load();
     ProfileManager::Refresh();
     LOG_INFO("Mode: %s | UDP port %u | agent jar: %s", opt.demo ? "DEMO" : "agent", static_cast<unsigned>(opt.port),
