@@ -49,7 +49,7 @@ public final class FixtureGame {
     public final String name;
     public final boolean real;                          // fixture.txt says "real: true" - a dump from a real Minecraft, not from a fake game
     public final Map<String, Object> doc;
-    final Set<String> variants;
+    Set<String> variants;
     private final Map<String, Map<String, Object>> defs = new LinkedHashMap<String, Map<String, Object>>();
     private final Map<String, String> libKinds = new HashMap<String, String>();
     private final Map<String, Class<?>> cls = new LinkedHashMap<String, Class<?>>();
@@ -439,7 +439,8 @@ public final class FixtureGame {
         Map<String, Object> paths = MiniJson.obj(doc.get("paths"));
         Map<String, Object> pl = MiniJson.obj(paths.get("playerList")), lp = MiniJson.obj(paths.get("localPlayer"));
         Object localObj = lp.isEmpty() || MiniJson.arr(lp.get("steps")).isEmpty() ? null : chain("", null, MiniJson.arr(lp.get("steps")));
-        Object container = chain("", null, MiniJson.arr(pl.get("steps")));
+        boolean noLists = variants.contains("local-only"), mixedOnly = variants.contains("mixed-only");
+        Object container = noLists || mixedOnly ? null : chain("", null, MiniJson.arr(pl.get("steps")));
         List<Object> elems = MiniJson.arr(pl.get("elems"));
         if (elems.isEmpty() && localObj != null) elems = new ArrayList<Object>(Arrays.asList(localObj.getClass().getName()));
         for (int i = 0; i < 3; i++) {
@@ -453,7 +454,7 @@ public final class FixtureGame {
                         f.set(p, Class.forName("com.mojang.authlib.GameProfile").getConstructor(UUID.class, String.class).newInstance(UUID.nameUUIDFromBytes(("OfflinePlayer:" + names.get(i)).getBytes()), names.get(i)));
                     }
             state.put(p, new double[] {100 + 10 * i, 64, -50 + 7 * i, 0, 0});
-            add(container, p, i);
+            if (container != null) add(container, p, i);
         }
         // camera
         Map<String, Object> cam = MiniJson.obj(MiniJson.obj(doc.get("roles")).get("camera"));
@@ -469,8 +470,9 @@ public final class FixtureGame {
             Map<String, Object> it = MiniJson.obj(io);
             for (int k = 0; k < 3; k++) {
                 Object e = inst(MiniJson.str(it.get("entity")));
-                Object stack = chainFrom(e, MiniJson.arr(it.get("steps")));
+                Object stack = variants.contains("no-stacks") ? null : chainFrom(e, MiniJson.arr(it.get("steps")));
                 String id = ids[k];
+                if (stack == null) { double[] st0 = {98 + 2 * n, 64, -48 - n, 0, 0}; state.put(e, st0); itemEntities.add(e); writeBox(e, MiniJson.obj(it.get("bbField")), st0[0], st0[1], st0[2], 0.25, 0.25); writePos(e, MiniJson.obj(it.get("position")), st0[0], st0[1], st0[2]); n++; continue; }
                 ID_OF.put(stack, id);
                 setCount(stack, k == 1 ? 37 : 1);
                 stacks.add(stack); stackIds.add(id); stackCounts.add(k == 1 ? 37 : 1);
@@ -499,9 +501,10 @@ public final class FixtureGame {
         // entity containers: players + item entities + one of every other element class
         for (Object co : MiniJson.arr(paths.get("entityContainers"))) {
             Map<String, Object> c = MiniJson.obj(co);
-            Object cont = chain("", null, MiniJson.arr(c.get("steps")));
             Set<String> el = new HashSet<String>();
             for (Object x : MiniJson.arr(c.get("elems"))) el.add((String) x);
+            if (noLists || (mixedOnly && onlyPlayers(el))) continue;                       // variants: no containers at all / no container that holds only players
+            Object cont = chain("", null, MiniJson.arr(c.get("steps")));
             if (el.isEmpty()) continue;
             int id = 0;
             for (Object p : players) if (el.contains(p.getClass().getName())) add(cont, p, id++);
@@ -514,6 +517,25 @@ public final class FixtureGame {
             }
         }
         tick(0);
+    }
+
+    private boolean onlyPlayers(Set<String> classNames) {
+        if (classNames.isEmpty()) return false;
+        for (String n : classNames) if (!isPlayerClassName(n)) return false;
+        return true;
+    }
+
+    private boolean isPlayerClassName(String n) {
+        for (Object o : MiniJson.arr(MiniJson.obj(doc.get("roles")).get("playerClasses"))) if (n.equals(MiniJson.obj(o).get("class"))) return true;
+        return false;
+    }
+
+    /** A different world with the same classes: everything below the static root is built again (new level object, new entities, new stacks). */
+    public void swapWorld(Set<String> newVariants) throws Exception {
+        built.clear(); players.clear(); state.clear(); itemEntities.clear(); stacks.clear(); stackIds.clear(); stackCounts.clear(); stackRefs.clear();
+        camera = null; fovHolder = null;
+        variants = newVariants;
+        buildScene();
     }
 
     private Object chainFrom(Object start, List<Object> steps) throws Exception { return chain("item@" + System.identityHashCode(start), start, steps); }

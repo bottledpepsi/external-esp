@@ -57,6 +57,19 @@ final class ItemScanner {
     String describe = "items: no entity container found yet";
 
     private static final long NEG_TTL = 10000;
+    /** Time allowed for classifying entity classes in one poll; what is left over waits for the next poll (never cached as a negative). Tests change it. */
+    static volatile long classifyBudgetMs = 30;
+    int budgetStops;                                   // polls in which the budget ran out before every class was classified (for tests and the log)
+    private Budget budget;
+    private boolean budgetHit;
+
+    /** A new world: forget every negative (not an item class / not a stack); positives are structural and stay. */
+    void onWorldChange() {
+        for (java.util.Iterator<Object> it = itemClasses.values().iterator(); it.hasNext();) if (it.next() instanceof Neg) it.remove();
+        for (java.util.Iterator<Object> it = stackModels.values().iterator(); it.hasNext();) if (it.next() instanceof Neg) it.remove();
+        itemKeyMethods.values().removeAll(java.util.Collections.singleton(Boolean.FALSE));
+        best = null; lastPick = 0;
+    }
     private static final int PATH_MAX_HOPS = 6, PATH_MAX_NODES = 500, SMALL_CLASS_FIELDS = 16;
     private static final Pattern ITEM_KEY_TEXT = Pattern.compile("ResourceKey\\[[^/\\]]*(?:item|block)[^/\\]]*/\\s*([a-z0-9_.-]+:[a-z0-9_/.-]+)\\s*\\]");
 
@@ -300,6 +313,7 @@ final class ItemScanner {
         if (cached instanceof ItemClass) return (ItemClass) cached;
         if (cached instanceof Neg && System.currentTimeMillis() - ((Neg) cached).at < NEG_TTL) return null;
         if (searchesThisPoll >= 40) return null;                  // bound the cost per poll
+        if (budget != null && budget.expired()) { if (!budgetHit) { budgetHit = true; budgetStops++; } return null; }    // out of time: decide on a later poll, remember nothing
         searchesThisPoll++;
         ItemClass res = null;
         boolean[] sawEmpty = new boolean[1];
@@ -388,6 +402,8 @@ final class ItemScanner {
         if (containers.isEmpty()) return out;
         long now = System.currentTimeMillis();
         searchesThisPoll = 0;
+        budget = new Budget(classifyBudgetMs);
+        budgetHit = false;
         Object[] elements = null;
         if (best == null || now - lastPick > 3000) {                    // re-pick: the container holding item entities, then the biggest
             lastPick = now;

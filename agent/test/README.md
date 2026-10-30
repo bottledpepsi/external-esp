@@ -55,3 +55,9 @@ Driven through `FixtureGame` (docs/fixtures.md), which can make the fake game mi
 a player looking straight up (pitch -90: no horizontal look vector, so the yaw is held). Asserted: nothing throws, no `NaN`/`Infinity` reaches the wire,
 the camera scanner is not trained on unknown or held yaw (900 ticks of held yaw would push the mean yaw error to ~33 degrees, over the scanner's 20 degree
 limit - the test fails if that guard in `Probe.read` is removed; checked by hand with that mutation).
+
+## Discovery chains (`ChainTest`)
+`FixtureGame` variants degrade the fake game on purpose: `mixed-only` (no list that holds only players), `local-only` (no container at all), `no-stacks`
+(item entities without stacks), and `swapWorld()` builds a different world under the same classes. `ChainTest` asserts which player source wins, what the
+status says, that a fallback is replaced when the better source appears, that negatives are forgotten on a world change and that a classification that
+runs out of its budget is deferred rather than condemned. Each mechanism was checked by disabling it and watching the matching test fail.

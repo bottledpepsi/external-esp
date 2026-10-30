@@ -180,6 +180,13 @@ final class CameraScanner {
         } catch (Throwable t) { Log.info("FOV method search failed: " + t); }
     }
 
+    /** A new world: statistics gathered before may describe objects that no longer exist; start the window again. A decided camera stays decided. */
+    void onWorldChange() {
+        if (decided) return;
+        for (Cand c : cands) c.reset();
+        windowStart = System.currentTimeMillis();
+    }
+
     /** Current camera, or null if not (yet) identified. `eye`/`playerYaw` classify first / third person. */
     Snapshot.Cam read(double[] eye, float playerYaw) {
         if (!decided) return null;

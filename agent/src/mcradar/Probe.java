@@ -70,6 +70,20 @@ final class Probe {
 
     FieldPath containerPath;
     private FieldPath localPath;
+
+    // Where the player list came from. The sources are tried in this order (discover()); rank 0 is the normal case, anything higher is a fallback
+    // and is re-tried for a better one every UPGRADE_INTERVAL_MS (a world that loads late, a list that appears after the first join).
+    static final String[] PLAYER_SOURCES = {"players-list (singleton roots)", "players-list (all static roots)", "entity container (mixed)", "local player only"};
+    private int playerRank;
+    private boolean localOnly;                         // containerPath IS the local player's path: there is no list to read
+    private long upgradeAt;
+    static volatile long UPGRADE_INTERVAL_MS = 15000;
+    String playerSource() { return PLAYER_SOURCES[playerRank]; }
+
+    // A new level object = a new world (join, leave, dimension change). Negative results learned in the old one are forgotten.
+    private Object lastHolder;
+    private long lastHolderCheck;
+    int epoch;
     private final AuxSearch aux = new AuxSearch(this);
     private final CameraScanner camScan = new CameraScanner(this);
     private final StructureDump dumper = new StructureDump(this);
@@ -351,8 +365,10 @@ final class Probe {
         final List<Cand> containers = new ArrayList<Cand>();
         final List<Node> locals = new ArrayList<Node>();
         final int maxNodes, maxDepth;
+        final boolean allowMixed;       // accept a container that holds players AND other entities (a level's entity list)
 
-        Search(int maxNodes, int maxDepth) { this.maxNodes = maxNodes; this.maxDepth = maxDepth; }
+        Search(int maxNodes, int maxDepth) { this(maxNodes, maxDepth, false); }
+        Search(int maxNodes, int maxDepth, boolean allowMixed) { this.maxNodes = maxNodes; this.maxDepth = maxDepth; this.allowMixed = allowMixed; }
 
         void consider(Object v, Node parent, Acc via, int depth) {
             if (v == null) return;
@@ -364,7 +380,7 @@ final class Probe {
                 int n = 0;
                 for (Object e : el) {
                     if (e == null) continue;
-                    if (!isPlayerClass(e.getClass())) return;     // must contain ONLY players
+                    if (!isPlayerClass(e.getClass())) { if (allowMixed) continue; return; }     // pure search: must contain ONLY players
                     n++;
                 }
                 if (n > 0) containers.add(new Cand(parent, via, depth, n));
@@ -411,24 +427,36 @@ final class Probe {
         }
         if (!Mem.OK) { status = "Unsafe unavailable; add --sun-misc-unsafe-memory-access=allow to the game's JVM args"; return false; }
 
-        // Stage 1: only self-typed singleton roots (Minecraft.instance-like). Small and fast.
+        // The chain, in order (each stage has its own time budget; the first that finds something wins):
+        //  0 singleton roots, pure players list   1 every static field, pure players list
+        //  2 the same search accepting a mixed entity container   3 no list at all: only the local player
         Search s = new Search(150_000, 5);
         s.run(staticRoots(all, true), t0 + 4000);
+        int rank = 0;
         if (s.containers.isEmpty()) {
-            // Stage 2: every static field. Bigger, slower, last resort.
             s = new Search(500_000, 6);
             s.run(staticRoots(all, false), System.currentTimeMillis() + 8000);
+            rank = 1;
         }
-        if (s.containers.isEmpty()) {
+        if (s.containers.isEmpty() && !s.locals.isEmpty()) {
+            // Player objects exist, but no list holds only players: try a container that also holds other entities (read() filters the players).
+            Search m = new Search(150_000, 5, true);
+            m.run(staticRoots(all, true), System.currentTimeMillis() + 3000);
+            if (m.containers.isEmpty()) { m = new Search(500_000, 6, true); m.run(staticRoots(all, false), System.currentTimeMillis() + 5000); }
+            if (!m.containers.isEmpty()) { s = m; rank = 2; } else rank = 3;
+        }
+        if (s.containers.isEmpty() && rank != 3) {
             status = "searching: no player list yet (join a world)";
             return false;
         }
+        return adopt(s, rank, t0);
+    }
 
-        Cand best = s.containers.get(0);
+    /** Takes the result of a successful search: the list (or, at rank 3, just the local player) and the local player path. */
+    private boolean adopt(Search s, int rank, long t0) {
+        Cand best = null;
         for (Cand c : s.containers)
-            if (c.depth < best.depth || (c.depth == best.depth && c.count > best.count)) best = c;
-        containerPath = pathOf(best.parent, best.via);
-        worldClasses = null;
+            if (best == null || c.depth < best.depth || (c.depth == best.depth && c.count > best.count)) best = c;
 
         Node localNode = null;
         for (Node n : s.locals) {
@@ -436,14 +464,23 @@ final class Probe {
             if (username != null && username.equals(nm)) { localNode = n; break; }
             if (localNode == null || n.depth < localNode.depth) localNode = n;
         }
-        localPath = localNode == null ? null : pathOf(localNode.parent, localNode.via);
+        FieldPath newLocal = localNode == null ? null : pathOf(localNode.parent, localNode.via);
+        if (rank == 3 && newLocal == null) return false;
+        containerPath = rank == 3 ? newLocal : pathOf(best.parent, best.via);
+        localPath = newLocal;
+        worldClasses = null;
+        localOnly = rank == 3;
+        playerRank = rank;
+        upgradeAt = System.currentTimeMillis() + UPGRADE_INTERVAL_MS;
+        lastHolder = null;
 
         ready = true;
         failTicks = 0;
         auxDone = false;
         status = "ok";
-        Log.info("Discovery done in " + (System.currentTimeMillis() - t0) + " ms; " + best.count
-                + " player(s) in container at depth " + best.depth);
+        Log.info("Discovery done in " + (System.currentTimeMillis() - t0) + " ms; "
+                + (rank == 3 ? "no player list - local player only" : best.count + " player(s) in container at depth " + best.depth) + "  [player source: " + playerSource() + "]");
+        if (rank >= 2) Log.warn("Player list fallback in use (" + playerSource() + "); a better source is looked for every " + UPGRADE_INTERVAL_MS / 1000 + " s.");
         Log.info("  player list path: " + containerPath.describe());
         if (localPath != null) Log.info("  local player path: " + localPath.describe());
         exportLayout();
@@ -695,6 +732,46 @@ final class Probe {
         } catch (Throwable t) { return "-"; }
     }
 
+    // ------------------------------------------------------------------ world changes and fallback upgrades
+
+    /** Four times a second: did the level object change? Then what was learned as "not an item class" / "not a stack" may be wrong in the new world. */
+    private void checkWorld() {
+        long now = System.currentTimeMillis();
+        if (now - lastHolderCheck < 250) return;
+        lastHolderCheck = now;
+        Node h = holderNode();
+        Object cur = h == null ? null : h.obj;
+        if (cur == null) return;
+        if (lastHolder != null && cur != lastHolder) {
+            epoch++;
+            Log.info("World changed (epoch " + epoch + "): negative caches cleared.");
+            itemScan.onWorldChange();
+            camScan.onWorldChange();
+        }
+        lastHolder = cur;
+    }
+
+    /** While a fallback player source is in use, look again for a better one (cheap: singleton roots only, 600 ms). */
+    private void tryUpgrade() {
+        upgradeAt = System.currentTimeMillis() + UPGRADE_INTERVAL_MS;
+        try {
+            long t0 = System.currentTimeMillis();
+            Class<?>[] all = inst.getAllLoadedClasses();
+            Search s = new Search(150_000, 5);
+            s.run(staticRoots(all, true), t0 + 600);
+            int rank = 0;
+            if (s.containers.isEmpty() && playerRank == 3) {
+                s = new Search(150_000, 5, true);
+                s.run(staticRoots(all, true), System.currentTimeMillis() + 600);
+                rank = 2;
+            }
+            if (s.containers.isEmpty() || rank >= playerRank) return;
+            String was = playerSource();
+            adopt(s, rank, t0);
+            Log.info("Player source upgraded: " + was + " -> " + playerSource());
+        } catch (Throwable t) { Log.debug("Player source upgrade failed: " + t); }
+    }
+
     // ------------------------------------------------------------------ per-tick read
 
     Snapshot read() {
@@ -702,8 +779,11 @@ final class Probe {
         Snapshot s = new Snapshot();
         if (!ready) { s.status = status; return s; }
 
+        checkWorld();
+        if (playerRank > 0 && System.currentTimeMillis() >= upgradeAt) tryUpgrade();
+
         Object container = containerPath.follow();
-        Object[] el = container == null ? null : elements(container);
+        Object[] el = container == null ? null : (localOnly ? new Object[] {container} : elements(container));
         if (el == null) {
             if (++failTicks > 60) { Log.info("Player list path went stale; re-discovering."); ready = false; status = "re-discovering"; }
             s.status = "no world loaded (player list unavailable)";
@@ -785,7 +865,7 @@ final class Probe {
         if (cfg.dump) dumper.maybeWrite();
         s.status = s.local == null ? "connected, but local player not found (set user=NAME?)"
                                    : "agent ok: " + s.players.size() + " player(s), " + lastItems.size() + " item(s) [" + itemScan.summary() + "]"
-                                     + (s.camera == null ? ", camera: reconstructing" : (Float.isNaN(s.camera.fov) ? ", camera: exact, FOV: configured" : ", camera+FOV: exact"));
+                                     + (playerRank > 0 ? " [players via " + playerSource() + "]" : "") + (s.camera == null ? ", camera: reconstructing" : (Float.isNaN(s.camera.fov) ? ", camera: exact, FOV: configured" : ", camera+FOV: exact"));
         return s;
     }
 
@@ -873,6 +953,7 @@ final class Probe {
              .append(",\n  \"username\": ").append(esc(username))
              .append(",\n  \"unsafe\": ").append(Mem.OK)
              .append(",\n  \"gameProfileClass\": ").append(esc(gameProfile == null ? null : gameProfile.getName()))
+             .append(",\n  \"playerSource\": ").append(esc(playerSource()))
              .append(",\n  \"playerListPath\": ").append(pathJson(containerPath))
              .append(",\n  \"localPlayerPath\": ").append(pathJson(localPath))
              .append(",\n  \"camera\": ").append(esc(camScan.describe))
