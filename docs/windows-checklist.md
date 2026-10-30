@@ -16,3 +16,20 @@ Logic: `src/GpuRecovery.h` (tests/gpu_recovery_test.cpp, 68 checks with injected
 | the real thing: **Win+Ctrl+Shift+B** (Windows restarts the graphics driver) | the screen flickers; log shows a real `DXGI_ERROR_DEVICE_REMOVED/RESET` from Present or EndDraw and a recovery; the overlay returns |
 
 The simulated loss injects the error code at the next `Present`; the recreation that follows (device, swap chain, Direct2D, DirectComposition) is the real code.
+
+## 2. DPI and several monitors
+Code: `src/DpiInfo.cpp` (per-monitor v2 awareness through `SetProcessDpiAwarenessContext`, falling back to per-monitor, then system aware), `WM_DPICHANGED` /
+`WM_DISPLAYCHANGE` handling in `EspOverlay`. Pure text helpers: tests/dpi_format_test.cpp. Under Wine (which only offers system awareness) the fallback line and the
+monitor list were seen in the log; nothing about real scaling was.
+
+Why it matters: a system-aware process gets coordinates *virtualised* for every monitor whose scale differs from the primary's. The overlay is placed from the game
+window's rectangle in screen pixels, so over a game on a second monitor with another scale it could be offset or the wrong size.
+
+| step | expected |
+|---|---|
+| start `mcesp`, read `esp_log.txt` | `DPI awareness: per-monitor v2 (SetProcessDpiAwarenessContext)` (Windows 10 1703+) and `Monitors: monitor 1: 2560x1440 at (0,0), 150% (144 dpi), primary; monitor 2: ...` with the right scales |
+| game on the primary monitor, 100% / 125% / 150% / 200% scale | boxes sit on the players; the overlay covers exactly the game's client area |
+| game on a second monitor with a *different* scale, windowed | same - no offset, no size error. This is the case the old `SetProcessDPIAware()` could get wrong |
+| drag the game window from one monitor to the other | the overlay follows; `WM_DPICHANGED` is logged, and the window is re-placed from the game's rectangle (the size Windows suggests for the new scale is deliberately ignored) |
+| change the display resolution or plug a monitor in/out while running | `WM_DISPLAYCHANGE: monitor ...` in the log; the overlay re-fits within a frame or two |
+| `Game window DPI awareness:` in the log | informational: "unaware" games (very old launchers) are stretched by Windows; the overlay still uses physical pixels, which is what the stretched window occupies |

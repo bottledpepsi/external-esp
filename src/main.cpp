@@ -10,6 +10,7 @@
 // reverse-engineering practice, not for use on other people's servers.
 #include "AgentInjector.h"
 #include "App.h"
+#include "DpiInfo.h"
 #include "SelfTestApp.h"
 #include "EspOverlay.h"
 #include "FriendList.h"
@@ -68,7 +69,7 @@ namespace
 
 int main(int argc, char** argv)
 {
-    SetProcessDPIAware(); // overlay pixels must equal game-window pixels on scaled displays
+    const std::string dpiLevel = dpi::Enable(); // overlay pixels must equal game-window pixels, on every monitor whatever its scale (logged once the logger is up)
     elog::Init();
 
     AppOptions opt;
@@ -209,6 +210,8 @@ int main(int argc, char** argv)
     ProfileManager::Refresh();
     LOG_INFO("Mode: %s | UDP port %u | agent jar: %s", opt.demo ? "DEMO" : "agent", static_cast<unsigned>(opt.port),
              opt.jarPath.string().c_str());
+    LOG_INFO("DPI awareness: %s", dpiLevel.c_str());
+    LOG_INFO("Monitors: %s", dpi::DescribeMonitors().c_str());
 
     EspOverlay overlay(opt);
     return overlay.Run();

@@ -160,6 +160,13 @@ bool Gfx::ForceLegacy()
 
 // ------------------------------------------------------------------------------------------ device loss (public part)
 
+void Gfx::InvalidatePlacement()
+{
+#ifdef ESP_GPU_GFX
+    winX_ = -32768; winY_ = -32768; winW_ = -1; winH_ = -1;
+#endif
+}
+
 bool Gfx::WantsLegacy() const { return wantLegacy_; }
 bool Gfx::DeviceLost() const { return deviceLost_; }
 

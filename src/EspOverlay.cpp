@@ -1,4 +1,5 @@
 #include "EspOverlay.h"
+#include "DpiInfo.h"
 #include "Clipboard.h"
 #include "DiagnosticsApp.h"
 #include "Version.h"
@@ -115,6 +116,15 @@ LRESULT EspOverlay::OnMessage(HWND h, UINT m, WPARAM w, LPARAM l)
         pend_.down = false;
         pend_.released = true;
         return 0;
+    case 0x02E0: // WM_DPICHANGED: the window sits where the game is, in physical pixels, and is placed from the game's rectangle every frame -
+                 // the rectangle Windows suggests for the new scale is NOT applied; the next Present places the window again
+        LOG_INFO("WM_DPICHANGED: overlay window now at %u dpi (placement is taken from the game window, not from the suggestion).", static_cast<unsigned>(LOWORD(w)));
+        gfx_.InvalidatePlacement();
+        return 0;
+    case WM_DISPLAYCHANGE: // resolution, orientation or monitor layout changed
+        LOG_INFO("WM_DISPLAYCHANGE: %s", dpi::DescribeMonitors().c_str());
+        gfx_.InvalidatePlacement();
+        return DefWindowProcW(h, m, w, l);
     case WM_RBUTTONDOWN: pend_.rpressed = true;
         return 0;
     case WM_MOUSEWHEEL: pend_.wheel += static_cast<float>(GET_WHEEL_DELTA_WPARAM(w)) / static_cast<float>(WHEEL_DELTA);

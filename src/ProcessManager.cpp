@@ -1,4 +1,5 @@
 #include "ProcessManager.h"
+#include "DpiInfo.h"
 #include "Logger.h"
 #include <tlhelp32.h>
 #include <algorithm>
@@ -170,6 +171,7 @@ bool ProcessManager::Attach()
     }
     handle_.reset(h);
     target_ = *pick;
+    LOG_INFO("Game window DPI awareness: %s (this process: per-monitor if the log says so at start-up).", dpi::WindowAwareness(target_.hwnd).c_str());
     lastFailedPid_ = 0;
     LOG_INFO("Target: %s | window '%s' | JRE %s", target_.DisplayName().c_str(), target_.title.c_str(),
              target_.javaExe.string().c_str());

@@ -61,6 +61,8 @@ public:
     bool ForceLegacy(); // drop the GPU stack, use the DIB / UpdateLayeredWindow path
     // Device loss (docs/windows-checklist.md): recovery is decided by GpuRecovery. After it gives up WantsLegacy() is true and the owner of the window must
     // recreate it and call ForceLegacy(). SimulateLoss() is for --simulate-device-loss: one loss at the next Present (persistent: every recovery fails too).
+    // The window was moved or resized by something other than us (DPI change, display change): the next Present must place it again.
+    void InvalidatePlacement();
     bool WantsLegacy() const;
     bool DeviceLost() const;
     void SimulateLoss(bool persistent);
