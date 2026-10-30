@@ -16,6 +16,8 @@ import java.util.Set;
  *   budget      classification that runs out of time is deferred, never cached as "not an item"
  */
 public final class ChainTest {
+    /** package access to StructureDump.build() */
+    static final class StructureDumpAccess { final Probe p; StructureDumpAccess(Probe p) { this.p = p; } String json() { return new StructureDump(p).build(); } }
     private static int fails = 0, checks = 0;
     private static void check(boolean ok, String what) { checks++; if (!ok) { fails++; System.out.println("FAIL: " + what); } }
     private static List<Snapshot.Item> lastFresh;
@@ -83,6 +85,36 @@ public final class ChainTest {
                     check(s.players.size() == 2, fixture + " upgrade: other players appear, got " + s.players.size());
                     check(p.epoch >= 1, fixture + " upgrade: the world change was noticed (epoch " + p.epoch + ")");
                 } finally { Probe.UPGRADE_INTERVAL_MS = 15000; }
+            }
+
+            // ---- item stack strategies: the field path first, the getter when there is no field path
+            {
+                FixtureGame g0 = FixtureGame.load(new File(fx, "synthetic-realistic"), v());
+                Probe p0 = start(g0, "s1");
+                double[] t0 = {0};
+                lastFresh = null;
+                Snapshot s0 = run(g0, p0, 300, t0);
+                boolean anyGetter = false;
+                for (ItemScanner.DumpItem d : p0.items().dumpItems()) anyGetter |= d.getter != null;
+                check(!anyGetter && lastFresh != null && lastFresh.size() >= 6, "items: the field path wins when there is one, got " + (lastFresh == null ? 0 : lastFresh.size()) + " items");
+                check(!s0.status.contains("via getter"), "items: status does not mention the getter on a normal game: " + s0.status);
+
+                g0 = FixtureGame.load(new File(fx, "synthetic-realistic"), v("getter-only"));
+                p0 = start(g0, "s2");
+                t0 = new double[] {0};
+                lastFresh = null;
+                s0 = run(g0, p0, 300, t0);
+                anyGetter = false;
+                for (ItemScanner.DumpItem d : p0.items().dumpItems()) anyGetter |= d.getter != null && d.steps.isEmpty();
+                check(anyGetter, "items getter-only: the stack is found through a getter");
+                check(lastFresh != null && lastFresh.size() >= 6, "items getter-only: all 6 items emitted, got " + (lastFresh == null ? 0 : lastFresh.size()));
+                Set<String> ids = new HashSet<String>();
+                if (lastFresh != null) for (Snapshot.Item it : lastFresh) ids.add(it.key);
+                check(ids.contains("minecraft:diamond_sword") && ids.contains("minecraft:cobblestone"), "items getter-only: ids resolved " + ids);
+                check(s0.status.contains("via getter"), "items getter-only: the status names the strategy: " + s0.status);
+                // the structure dump of such a game records the getter, and a game rebuilt from that dump finds it again
+                String dumpJson = new StructureDumpAccess(p0).json();
+                check(dumpJson.contains("\"getter\":{\"class\""), "items getter-only: esp_structure.json records the getter");
             }
 
             // ---- epoch: item entities without stacks are condemned (10 s negative); in the next world they must be found at once

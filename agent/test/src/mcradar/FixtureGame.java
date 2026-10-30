@@ -64,6 +64,7 @@ public final class FixtureGame {
     private final List<String> names = Arrays.asList("Alice", "Bob", "Carol");
     static final IdentityHashMap<Object, String> ID_OF = new IdentityHashMap<Object, String>();
     static final IdentityHashMap<Object, float[]> LOOK = new IdentityHashMap<Object, float[]>();
+    static final IdentityHashMap<Object, Object> STACK_OF = new IdentityHashMap<Object, Object>();   // getter-only entities: entity -> its stack
     static volatile double fovNow = 70.0;
     static FixtureGame current;
 
@@ -163,6 +164,13 @@ public final class FixtureGame {
         addRole(MiniJson.str(fov.get("class")), "fov", fov);
         for (Object o : MiniJson.arr(roles.get("items"))) {
             Map<String, Object> it = MiniJson.obj(o);
+            Map<String, Object> getter = MiniJson.obj(it.get("getter"));
+            if (!getter.isEmpty()) addRole(MiniJson.str(getter.get("class")), "getitem", getter);
+            else if (variants.contains("getter-only")) {                              // hide the field path: the stack is only reachable through a getter
+                Map<String, Object> m = new LinkedHashMap<String, Object>();
+                m.put("name", "getItem"); m.put("ret", MiniJson.str(it.get("stack"))); m.put("params", new ArrayList<Object>());
+                addRole(MiniJson.str(it.get("entity")), "getitem", m);
+            }
             Map<String, Object> key = MiniJson.obj(it.get("keyMethod"));
             if (!variants.contains("nokey")) addRole(MiniJson.str(key.get("class")), "key", key);
             for (Object r : MiniJson.arr(it.get("idRefs"))) {
@@ -470,7 +478,11 @@ public final class FixtureGame {
             Map<String, Object> it = MiniJson.obj(io);
             for (int k = 0; k < 3; k++) {
                 Object e = inst(MiniJson.str(it.get("entity")));
-                Object stack = variants.contains("no-stacks") ? null : chainFrom(e, MiniJson.arr(it.get("steps")));
+                boolean viaGetter = variants.contains("getter-only") || !MiniJson.obj(it.get("getter")).isEmpty();
+                Object stack = variants.contains("no-stacks") ? null
+                        : viaGetter ? chainFrom(inst(MiniJson.str(it.get("entity"))), MiniJson.arr(it.get("steps")))     // built on a throw-away entity: the real one keeps no field path
+                        : chainFrom(e, MiniJson.arr(it.get("steps")));
+                if (viaGetter && stack != null) STACK_OF.put(e, stack);
                 String id = ids[k];
                 if (stack == null) { double[] st0 = {98 + 2 * n, 64, -48 - n, 0, 0}; state.put(e, st0); itemEntities.add(e); writeBox(e, MiniJson.obj(it.get("bbField")), st0[0], st0[1], st0[2], 0.25, 0.25); writePos(e, MiniJson.obj(it.get("position")), st0[0], st0[1], st0[2]); n++; continue; }
                 ID_OF.put(stack, id);
@@ -593,6 +605,7 @@ public final class FixtureGame {
                 return current.vec(rt, -Math.sin(y) * Math.cos(p), -Math.sin(p), Math.cos(y) * Math.cos(p));
             }
             if (role.equals("health")) return Float.valueOf(20f);
+            if (role.equals("getitem")) return STACK_OF.get(self);
             if (role.equals("fov")) return Double.valueOf(fovNow);
             if (role.equals("key") || role.equals("desc")) {
                 String id = ID_OF.get(self);

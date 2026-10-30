@@ -241,6 +241,7 @@ final class StructureDump {
                 } else j.obj(null).i("idx", (Integer) st[0]).s("vc", vc).close('}');
             }
             j.close(']');
+            method(j, "getter", d.getter);
             method(j, "keyMethod", d.key);
             pos(j, "position", d.model == null ? null : d.model.pos);
             acc(j, "bbField", d.model == null ? null : d.model.bbField);

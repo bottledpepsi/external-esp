@@ -43,7 +43,9 @@ final class ItemScanner {
     private static final class StackModel { Method key; Acc count; }
     /** One hop of a stack path: a field (acc != null) or an element of a container/array snapshot (idx). */
     private static final class Step { final Acc acc; final int idx; Step(Acc a, int i) { acc = a; idx = i; } }
-    private static final class ItemClass { Step[] path; Probe.Model model; String pathText; Class<?> stackClass; java.lang.ref.WeakReference<Object> sample, sampleEntity; }
+    private static final class ItemClass { Step[] path; Probe.Model model; String pathText; Class<?> stackClass; java.lang.ref.WeakReference<Object> sample, sampleEntity;
+        Method getter;                   // strategy 2: the stack comes from a public no-arg method (ItemEntity.getItem()), path is empty
+        String strategy = "field-path"; }
     private static final class Meta { int count; String key, ench, tags; int gen; }
     private static final class Neg { final long at; Neg(long t) { at = t; } }
 
@@ -306,6 +308,46 @@ final class ItemScanner {
 
     private int searchesThisPoll;
 
+    private static Object invokeGetter(Method m, Object e) {
+        try { return m.invoke(e); } catch (Throwable t) { return null; }
+    }
+
+    /** Declared type looks like an item stack without looking at an instance: small, no doubles, an int (the count), not an entity/world/JDK class. */
+    private boolean stackShaped(Class<?> t) {
+        if (t.isPrimitive() || t.isArray() || t.isInterface() || Probe.isJdkish(t) || p.isEntityClass(t) || p.isPlayerClass(t) || p.isWorldClass(t)) return false;
+        int total = 0; boolean hasInt = false;
+        for (Class<?> k = t; k != null && k != Object.class; k = k.getSuperclass())
+            for (Field f : k.getDeclaredFields()) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                total++;
+                if (f.getType() == double.class) return false;
+                if (f.getType() == int.class) hasInt = true;
+            }
+        return hasInt && total <= 24;
+    }
+
+    /**
+     * Strategy 2: a public no-arg instance method of the entity whose declared return type is stack-shaped and whose result is a non-empty stack.
+     * Only such methods are invoked (never an arbitrary getter). An empty result leaves the class undecided (sawEmpty), like an empty field path does.
+     */
+    private Method findGetter(Object e, boolean[] sawEmpty) {
+        try {
+            int tried = 0;
+            for (Method m : e.getClass().getMethods()) {
+                if (m.getParameterTypes().length != 0 || Modifier.isStatic(m.getModifiers()) || m.getDeclaringClass() == Object.class) continue;
+                if (!stackShaped(m.getReturnType())) continue;
+                if (++tried > 8 || (budget != null && budget.expired())) break;
+                Object r = invokeGetter(m, e);
+                if (r == null) continue;
+                inconclusiveEmpty = false;
+                if (stackModel(r) == null) { if (inconclusiveEmpty) { inconclusiveEmpty = false; sawEmpty[0] = true; } continue; }
+                if (nonEmptyStack(r)) { m.setAccessible(true); return m; }
+                sawEmpty[0] = true;
+            }
+        } catch (Throwable ignored) { }
+        return null;
+    }
+
     /** Per entity CLASS: is it an item entity, and how to reach its stack. */
     private ItemClass classify(Object e) {
         Class<?> c = e.getClass();
@@ -320,13 +362,19 @@ final class ItemScanner {
         try {
             if (!Probe.isJdkish(c) && !p.isPlayerClass(c) && p.isEntityClass(c)) {
                 Step[] path = findStackPath(e, sawEmpty);
+                Method getter = null;
+                if (path == null && !sawEmpty[0]) {                       // strategy 2: no field path - a getter that returns the stack
+                    getter = findGetter(e, sawEmpty);
+                    if (getter != null) path = new Step[0];
+                }
                 if (path != null) {
                     List<Object> sample = new ArrayList<Object>();
                     sample.add(e);
                     Probe.Model m = p.buildModel(c, sample);
                     if (m != null) {
                         res = new ItemClass(); res.path = path; res.model = m; res.pathText = pathText(path);
-                        Object st = follow(e, path);
+                        if (getter != null) { res.getter = getter; res.strategy = "getter"; res.pathText = "method " + getter.getDeclaringClass().getName() + "." + getter.getName() + "()"; }
+                        Object st = getter != null ? invokeGetter(getter, e) : follow(e, path);
                         res.stackClass = st == null ? null : st.getClass();
                         res.sample = new java.lang.ref.WeakReference<Object>(st);
                         res.sampleEntity = new java.lang.ref.WeakReference<Object>(e);
@@ -336,7 +384,7 @@ final class ItemScanner {
         } catch (Throwable ignored) { }
         if (res != null) {
             itemClasses.put(c, res);
-            Log.info("Item entity class: " + c.getName() + " (stack via " + res.pathText + ")");
+            Log.info("Item entity class: " + c.getName() + " (stack via " + res.pathText + ", strategy " + res.strategy + ")");
         } else if (!sawEmpty[0]) {
             itemClasses.put(c, new Neg(System.currentTimeMillis()));     // sawEmpty: a not-yet-synced item entity - do not cache, retry
         }
@@ -345,6 +393,10 @@ final class ItemScanner {
 
     /** Stack of an entity through its cached path; re-searches (bounded) when the path went stale. */
     private Object stackOf(Object e, ItemClass ic) {
+        if (ic.getter != null) {
+            Object g = invokeGetter(ic.getter, e);
+            return g != null && stackModel(g) != null ? g : null;
+        }
         Object s = follow(e, ic.path);
         if (s != null && stackModel(s) != null) return s;
         if (searchesThisPoll >= 40) return null;
@@ -484,6 +536,7 @@ final class ItemScanner {
         Class<?> entity, stack; String pathText; List<Object[]> steps = new ArrayList<Object[]>(); Method key; Probe.Model model;
         List<IdRef> refs = new ArrayList<IdRef>();
         List<String> vcs = new ArrayList<String>();   // runtime class of the object each step leads to
+        Method getter;                                // set when the stack comes from a method (steps is empty then)
     }
 
     /** An object a stack points to that carries the item id: via a String method (descMethod) or by printing a ResourceKey (idText). */
@@ -516,7 +569,7 @@ final class ItemScanner {
             if (!(e.getValue() instanceof ItemClass)) continue;
             ItemClass ic = (ItemClass) e.getValue();
             DumpItem d = new DumpItem();
-            d.entity = e.getKey(); d.stack = ic.stackClass; d.pathText = ic.pathText; d.model = ic.model;
+            d.entity = e.getKey(); d.stack = ic.stackClass; d.pathText = ic.pathText; d.model = ic.model; d.getter = ic.getter;
             for (Step s : ic.path) d.steps.add(s.acc != null ? new Object[] {s.acc} : new Object[] {Integer.valueOf(s.idx)});
             Object ent = ic.sampleEntity == null ? null : ic.sampleEntity.get();
             Object cur = ent;
@@ -534,7 +587,11 @@ final class ItemScanner {
     }
 
     /** One-line summary for the HUD status. */
-    String summary() { return "items " + itemEntities + "/" + entitiesSeen + " ent"; }
+    String summary() {
+        boolean getter = false;
+        for (Object o : itemClasses.values()) if (o instanceof ItemClass && ((ItemClass) o).getter != null) getter = true;
+        return "items " + itemEntities + "/" + entitiesSeen + " ent" + (getter ? ", via getter" : "");
+    }
 
     // ------------------------------------------------------------------ diagnostics
 

@@ -471,8 +471,7 @@ final class Probe {
         worldClasses = null;
         localOnly = rank == 3;
         playerRank = rank;
-        upgradeAt = System.currentTimeMillis() + UPGRADE_INTERVAL_MS;
-        lastHolder = null;
+        upgradeAt = System.currentTimeMillis() + UPGRADE_INTERVAL_MS;     // lastHolder is deliberately kept: a world change next to an upgrade must still count
 
         ready = true;
         failTicks = 0;
