@@ -33,3 +33,20 @@ window's rectangle in screen pixels, so over a game on a second monitor with ano
 | drag the game window from one monitor to the other | the overlay follows; `WM_DPICHANGED` is logged, and the window is re-placed from the game's rectangle (the size Windows suggests for the new scale is deliberately ignored) |
 | change the display resolution or plug a monitor in/out while running | `WM_DISPLAYCHANGE: monitor ...` in the log; the overlay re-fits within a frame or two |
 | `Game window DPI awareness:` in the log | informational: "unaware" games (very old launchers) are stretched by Windows; the overlay still uses physical pixels, which is what the stretched window occupies |
+
+## 3. Window states, fullscreen and the overlay staying on top
+Logic: `src/WindowState.h` (tests/window_state_test.cpp, 21 checks). Facts from Win32: `src/WindowTracker.cpp`. A probe that creates stand-in game windows runs under Wine
+(9 checks passed there) and in CI as an informational step (`tests/windows/wintrack_probe.cpp`); neither is Windows with a real GPU and a real game.
+
+What the overlay does: every 250 ms it classifies the game window (windowed / borderless fullscreen / **exclusive fullscreen suspected** / minimised / hidden or on
+another virtual desktop), logs a change, and - while shown - checks that it is still above the game in the z-order. A topmost game window (GLFW's fullscreen) that was
+re-activated lands above our topmost overlay, which then looks "blank"; the overlay re-asserts TOPMOST (at most every 250 ms) and logs the first time.
+
+| step | expected |
+|---|---|
+| windowed game; resize, move, maximise | log: `Game window is now: windowed ...` once; the overlay follows every frame |
+| minimise the game, restore it | overlay disappears and comes back; `minimised` / `windowed` in the log |
+| Minecraft F11 fullscreen | `borderless fullscreen`; the overlay is visible. If it is not: `exclusive fullscreen (suspected)` and a warning telling you to switch to windowed/borderless - please send the log lines |
+| alt-tab away and back (fullscreen) | the overlay is above the game again within about a quarter of a second; log: `Overlay was below the game window in the z-order; raised it` |
+| move the game to another virtual desktop (Win+Tab) | `hidden`; the overlay is not shown |
+| a second monitor: fullscreen on each | `monitor WxH` in the log is the one the game is on |

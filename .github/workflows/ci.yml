@@ -146,6 +146,12 @@ jobs:
       - name: Run native tests
         shell: msys2 {0}
         run: ctest --test-dir build/tests-win --output-on-failure
+      - name: Window tracker probe (informational - a CI runner's desktop is not a player's)
+        shell: msys2 {0}
+        continue-on-error: true
+        run: |
+          g++ -std=c++20 -Wall -Wextra tests/windows/wintrack_probe.cpp src/WindowTracker.cpp -o wintrack_probe.exe -luser32 -lgdi32 -static-libgcc -static-libstdc++
+          ./wintrack_probe.exe
       - name: Collect exe + jar + DLL
         shell: msys2 {0}
         run: |

@@ -84,6 +84,10 @@ private:
     void CheckSession();
     void SwitchToLegacy();          // device loss that could not be recovered: new window, legacy renderer
     bool f10Down_ = false;
+    void TrackGameWindow(bool shown);          // classification, advice and the z-order watchdog (every 250 ms)
+    int windowKind_ = -1;                      // winstate::Kind as int, -1 = not classified yet
+    Clock::time_point lastWindowCheck_{}, lastRaise_{};
+    unsigned raiseCount_ = 0;
     void ResetSession(const char* why);
     uint64_t lastSeq_ = 0, demoSeq_ = 0;
     Clock::time_point lastDemoPush_{};

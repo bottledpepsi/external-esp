@@ -1,5 +1,6 @@
 #include "EspOverlay.h"
 #include "DpiInfo.h"
+#include "WindowTracker.h"
 #include "Clipboard.h"
 #include "DiagnosticsApp.h"
 #include "Version.h"
@@ -447,10 +448,12 @@ int EspOverlay::Run()
         if (!active)
         {
             SetShown(false);
+            TrackGameWindow(false);
             MsgWaitForMultipleObjects(0, nullptr, FALSE, 50, QS_ALLINPUT); // idle cheaply while the game is not visible
             continue;
         }
         SetShown(true);
+        TrackGameWindow(true);
         if (opt_.openConfig && !openedAtStart_)
         {
             openedAtStart_ = true;
@@ -484,6 +487,36 @@ void EspOverlay::CheckSession()
 
 // The GPU renderer was lost and could not be recovered (GpuRecovery gave up). The window was made for it (no redirection bitmap), so it has to be built
 // again for the legacy layered-window renderer - the same step the start-up fallback takes.
+// Every 250 ms while a game window exists: what state it is in (logged when it changes; exclusive fullscreen gets advice, since the overlay may then be
+// invisible), and - while the overlay is shown - whether it is still above the game. A topmost game window (GLFW fullscreen) that was re-activated ends up
+// above our topmost overlay; re-asserting TOPMOST puts the overlay back on top.
+void EspOverlay::TrackGameWindow(bool shown)
+{
+    if (opt_.demo || opt_.screenOverlay) return;
+    const HWND mc = sup_.GameWindow();
+    if (!mc) { windowKind_ = -1; return; }
+    const auto now = Clock::now();
+    if (now - lastWindowCheck_ < 250ms) return;
+    lastWindowCheck_ = now;
+    const winstate::Facts f = wintrack::Gather(mc);
+    const winstate::Kind k = winstate::Classify(f);
+    if (static_cast<int>(k) != windowKind_)
+    {
+        windowKind_ = static_cast<int>(k);
+        LOG_INFO("Game window is now: %s (client %dx%d at %d,%d; monitor %dx%d%s%s).", winstate::Name(k), f.client.W(), f.client.H(), f.client.l, f.client.t, f.monitor.W(), f.monitor.H(),
+                 f.displayModeChanged ? "; display mode switched" : "", f.notificationState == 3 ? "; Windows reports a D3D full-screen app" : "");
+        const std::string advice = winstate::Advice(k);
+        if (!advice.empty()) LOG_WARN("%s", advice.c_str());
+    }
+    if (shown && hwnd_ && winstate::ShouldRaise(true, wintrack::OverlayAbove(hwnd_, mc), now, lastRaise_))
+    {
+        lastRaise_ = now;
+        wintrack::Raise(hwnd_);
+        if (++raiseCount_ == 1 || raiseCount_ % 100 == 0)
+            LOG_INFO("Overlay was below the game window in the z-order; raised it (%u time(s) so far).", raiseCount_);
+    }
+}
+
 void EspOverlay::SwitchToLegacy()
 {
     LOG_WARN("Switching to the legacy renderer while running: %s", gfx_.LossSummary().c_str());
