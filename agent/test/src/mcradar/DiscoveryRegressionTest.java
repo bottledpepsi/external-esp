@@ -54,6 +54,12 @@ public final class DiscoveryRegressionTest {
             String wire = new String(s.encode(), "UTF-8");
             check(!wire.contains("NaN") && !wire.contains("Infinity"), "NaN look: no NaN/Infinity text on the wire");
             check(!p.camera().decided, "NaN look: 200 ticks of head movement with an unknown yaw do not decide the camera");
+            // the player model was built while the look vector was NaN, so it has no look method: it must be rebuilt within seconds, not at the 15 s refresh
+            g.lookNaN(false);
+            s = run(g, p, 1500, t);
+            check(s.local != null && !Float.isNaN(s.local.yaw) && !Float.isNaN(s.local.pitch), "after the look vector is valid again the yaw is known within ~4 s (model rebuilt), got " + (s.local == null ? "no local" : s.local.yaw + ""));
+            run(g, p, 800, t);
+            check(p.camera().decided, "and the camera is then decided from real data");
 
             // ---------------- NaN camera yaw after the camera was decided (a fresh game: the look vector is valid throughout)
             g = FixtureGame.load(new File(fx, "synthetic-fakegame"), new HashSet<String>());

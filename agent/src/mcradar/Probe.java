@@ -730,7 +730,9 @@ final class Probe {
         for (Map.Entry<Class<?>, List<Object>> e : byClass.entrySet()) {
             Class<?> c = e.getKey();
             Long last = lastModelAttempt.get(c);
-            if ((!models.containsKey(c) && (last == null || now - last > 1000)) || (rebuild && models.containsKey(c))) {
+            Model have = models.get(c);
+            boolean noLook = have != null && have.look == null && (last == null || now - last > 2000);    // built on a bad moment (NaN look vector): do not wait 15 s
+            if ((have == null && (last == null || now - last > 1000)) || (rebuild && have != null) || noLook) {
                 lastModelAttempt.put(c, now);
                 Model m = buildModel(c, e.getValue());
                 if (m != null) { models.put(c, m); built = true; }
