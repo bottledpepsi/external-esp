@@ -20,3 +20,24 @@ name or token ever appears in it. It does not contain the rest of the game (deco
 easier for the agent than the real one; a fixture that passes is necessary, not sufficient.
 
 `game.minecraft` comes from `version.json` in the game's jar, else from `--version` on the JVM command line, else `unknown`.
+
+## Fixtures: testing discovery without Minecraft
+`agent/test/fixtures/NAME/structure.json` (a dump) + `fixture.txt` (`origin:` and `real: true|false`). `sh agent/test/run-java-tests.sh` (CI runs it) rebuilds a fake
+game from every fixture (`FixtureGame`: the dumped classes, fields, generic types and super classes are generated as Java source, compiled in memory with
+the JDK's compiler and wired into an object graph along the dumped paths), runs the agent's real `Probe` against it and asserts that discovery finds what
+the dump says it found in the real game: player list path, local player path, camera path / yaw / pitch, the FOV method, a stack path for every item entity
+class, and that the snapshot has two other players, a camera, and every item with a resolved id.
+
+**What a passing fixture means.** `real: false` fixtures are dumps of this repo's own fake games: they prove the round trip works and guard against
+regressions, nothing about a Minecraft version. The summary line counts them separately ("0 real, 2 synthetic passed"). Only a dump with `real: true` can
+support "version X is covered", and even then only as far as the dump goes (see the limits above: no decoy graphs, invented values, `final` dropped).
+
+**Adding a real version** (about two minutes):
+1. get `esp_structure.json` from that version (see above); read it once - it holds no names or values;
+2. `mkdir agent/test/fixtures/1.21.1-vanilla` (the version and the loader), copy it there as `structure.json`;
+3. write `fixture.txt`: `origin: <who dumped it, which launcher/loader, date>` and `real: true`;
+4. `sh agent/test/run-java-tests.sh`. A fixture that fails is the bug report: `FixtureTest` names the path or accessor that differs.
+A dump taken where discovery already failed has no `camera.decided`, no items or no paths: the test then only asserts what the dump contains, which is
+exactly the information needed to see why the game is not understood.
+
+`java -cp agent/out:agent/test/out mcradar.FixtureTest agent/test/fixtures [name ...]` runs a subset.

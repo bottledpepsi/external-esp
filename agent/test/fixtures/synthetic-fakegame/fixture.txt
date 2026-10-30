@@ -1,0 +1,2 @@
+origin: agent/test/src/FakeGame.java run with the agent option dump=1 (a fake game, NOT Minecraft)
+real: false

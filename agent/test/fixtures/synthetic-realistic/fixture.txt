@@ -1,0 +1,2 @@
+origin: agent/test/src/RealisticGame.java run with the agent option dump=1 (a fake game modelled on 1.21.x, NOT Minecraft)
+real: false

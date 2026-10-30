@@ -5,13 +5,15 @@ set -e
 cd "$(dirname "$0")/.."
 rm -rf out test/out && mkdir out test/out
 javac --release 8 -Xlint:-options -d out src/mcradar/*.java
-javac --release 8 -Xlint:-options -cp out -d test/out test/src/mcradar/SnapshotTest.java test/src/mcradar/AgentConfigTest.java test/src/mcradar/LogTest.java test/src/mcradar/AgentReloadTest.java
+javac --release 8 -Xlint:-options -cp out -d test/out test/src/com/mojang/authlib/GameProfile.java test/src/it/unimi/dsi/fastutil/ints/*.java test/src/it/unimi/dsi/fastutil/objects/*.java test/src/mcradar/MiniJson.java test/src/mcradar/FixtureGame.java test/src/mcradar/FixtureTest.java test/src/mcradar/SnapshotTest.java test/src/mcradar/AgentConfigTest.java test/src/mcradar/LogTest.java test/src/mcradar/AgentReloadTest.java
 SEP=:
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) SEP=";" ;; esac
 java -cp "out${SEP}test/out" mcradar.SnapshotTest
 java -cp "out${SEP}test/out" mcradar.AgentConfigTest
 java -cp "out${SEP}test/out" mcradar.LogTest
 java -cp "out${SEP}test/out" mcradar.AgentReloadTest
+# structure fixtures: a fake game rebuilt from every test/fixtures/*/structure.json, discovery asserted against the dump (needs a JDK: it compiles the generated classes)
+java -cp "out${SEP}test/out" mcradar.FixtureTest test/fixtures
 
 # The C++ parser tests read real encoder output from ../tests/data/wire. It must be what the encoder produces today.
 #   sh agent/test/run-java-tests.sh --update-corpus   rewrites it (do that on purpose when the wire format changes, and review the diff)
