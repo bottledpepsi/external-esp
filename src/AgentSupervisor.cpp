@@ -6,7 +6,7 @@ using namespace std::chrono_literals;
 AgentSupervisor::AgentSupervisor(const AppOptions& opt, UdpListener& udp, AgentInjector& inj)
     : opt_(opt), udp_(udp), inj_(inj)
 {
-    pm_.SetForcedPid(opt.pid);
+    pm_.SetSelector(procselect::Selector{opt.pid, opt.titleSelector, opt.exeSelector});
 }
 
 void AgentSupervisor::Tick()
@@ -22,7 +22,7 @@ void AgentSupervisor::Tick()
 
     if (!pm_.IsAttached())
     {
-        status_ = "waiting for minecraft";
+        status_ = pm_.Issue().empty() ? "waiting for minecraft" : pm_.Issue(); // e.g. "2 Minecraft clients found: ... choose one with --pid <PID>"
         if (now - lastAttach_ >= 1s)
         {
             lastAttach_ = now;
@@ -32,6 +32,7 @@ void AgentSupervisor::Tick()
                 injectedPid_ = 0;
                 inj_.Reset();
             }
+            status_ = pm_.Issue().empty() ? "waiting for minecraft" : pm_.Issue();
         }
         return;
     }

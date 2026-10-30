@@ -1,4 +1,5 @@
 #include "AgentInjector.h"
+#include "ProcessSelect.h"
 #include "Wire.h"
 #include "Logger.h"
 #include <chrono>
@@ -218,7 +219,9 @@ void AgentInjector::Run(JavaProcess target, std::stop_token st)
                           : out.substr(0, out.find('\n'));
             LOG_WARN("AgentInjector: candidate %s failed: %s", java.string().c_str(), lastErr.c_str());
         }
-        Set(State::Failed, lastErr + (cands.size() == 1 ? " - try --java <path to a JDK 17+ java.exe>" : ""), 0);
+        const std::string hint = procselect::AttachHint(lastErr);
+        LOG_WARN("AgentInjector: attach failed (%s). Hint: %s", lastErr.c_str(), hint.c_str());
+        Set(State::Failed, lastErr + " - " + hint, 0);
     }
     catch (const std::exception& e)
     {

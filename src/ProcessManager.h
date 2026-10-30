@@ -5,6 +5,7 @@
 // them all and --pid <PID> picks one.
 #pragma once
 #include "Platform.h"
+#include "ProcessSelect.h"
 #include "RaiiHandle.h"
 #include <filesystem>
 #include <string>
@@ -27,8 +28,12 @@ public:
     // Every java(w).exe process, those with a "Minecraft" window first.
     static std::vector<JavaProcess> Scan();
 
-    void SetForcedPid(DWORD pid) { forcedPid_ = pid; }
-    bool Attach(); // pick target (forced PID, else first Minecraft-looking one)
+    void SetForcedPid(DWORD pid) { sel_.pid = pid; }
+    void SetSelector(const procselect::Selector& s) { sel_ = s; } // --pid / --title / --exe
+    // Picks the target by ProcessSelect.h (never "the first of several"). False if none, ambiguous, or the process cannot be opened; Issue() says why.
+    bool Attach();
+    const std::string& Issue() const { return issue_; } // user-facing reason Attach() did not pick a target; empty while merely waiting
+    static std::vector<procselect::Candidate> Candidates(const std::vector<JavaProcess>& list);
     void Detach();
     bool IsAttached() const { return handle_.valid(); }
     bool IsAlive() const; // false once the process exited
@@ -39,7 +44,9 @@ public:
 private:
     UniqueHandle handle_; // SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION only: we never read its memory
     JavaProcess target_;
-    DWORD forcedPid_ = 0;
+    procselect::Selector sel_;
+    std::string issue_;
+    std::string lastIssueLogged_;
     DWORD lastFailedPid_ = 0;
     ULONGLONG lastWindowRefresh_ = 0;
 };

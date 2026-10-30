@@ -130,40 +130,33 @@ std::vector<JavaProcess> ProcessManager::Scan()
     return out;
 }
 
+std::vector<procselect::Candidate> ProcessManager::Candidates(const std::vector<JavaProcess>& list)
+{
+    std::vector<procselect::Candidate> c;
+    for (const auto& p : list) c.push_back({p.pid, p.title, p.exe.filename().string()});
+    return c;
+}
+
 bool ProcessManager::Attach()
 {
     Detach();
-    auto list = Scan();
+    const auto list = Scan();
+    const auto cands = Candidates(list);
+    const procselect::Result r = procselect::Select(cands, sel_);
     const JavaProcess* pick = nullptr;
-    if (forcedPid_ != 0)
+    if (r.kind == procselect::Result::Kind::One) pick = &list[r.idx.front()];
+    const std::string why = procselect::Explain(cands, sel_, r);
+    issue_ = why == "waiting for minecraft" ? std::string() : why;
+    if (!pick)
     {
-        for (const auto& p : list) if (p.pid == forcedPid_) pick = &p;
-        if (!pick)
+        if (!issue_.empty() && issue_ != lastIssueLogged_)
         {
-            if (lastFailedPid_ != forcedPid_)
-            {
-                lastFailedPid_ = forcedPid_;
-                LOG_WARN("PID %lu is not a java process.", static_cast<unsigned long>(forcedPid_));
-            }
-            return false;
+            lastIssueLogged_ = issue_;
+            LOG_WARN("%s", issue_.c_str());
         }
+        return false;
     }
-    else
-    {
-        std::vector<const JavaProcess*> mc;
-        for (const auto& p : list) if (p.title.rfind("Minecraft", 0) == 0) mc.push_back(&p);
-        if (mc.size() > 1)
-        {
-            std::string l;
-            for (auto* p : mc) l += (l.empty() ? "" : ", ") + p->DisplayName();
-            LOG_WARN("%llu Minecraft windows found: %s. Using the first; choose another with --pid <PID>.",
-                     static_cast<unsigned long long>(mc.size()), l.c_str());
-        }
-        if (!mc.empty()) pick = mc.front();
-        else if (!list.empty()) pick = &list.front(); // java without a titled window yet (game still starting)
-    }
-    if (!pick) return false;
-
+    lastIssueLogged_.clear();
     HANDLE h = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pick->pid);
     if (!h)
     {

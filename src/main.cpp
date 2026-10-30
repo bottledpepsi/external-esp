@@ -3,7 +3,7 @@
 //   Minecraft JVM <--(JVM Attach API)-- esp-agent.jar --UDP 127.0.0.1:47615--> UdpListener --> EspOverlay (D2D layered window)
 //
 // Usage:
-//   mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--selftest [S]] [--dump-structure] [--list] [--record FILE]
+//   mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--title T] [--exe E] [--selftest [S]] [--dump-structure] [--list] [--record FILE]
 //   Insert = config window, Delete = toggle ESP, hold End = exit (all rebindable in the HOTKEYS tab).
 //
 // Scope: written for single-player / LAN worlds you control (two accounts on your own machine) -
@@ -48,6 +48,8 @@ namespace
             "  --hz N       agent snapshot rate, 1-240 (default 120; more = smoother boxes, a little more CPU in the game)\n"
             "  --agent-pacer M  how the agent waits for its next tick: sleep (default) or hybrid (sleep + spin the last ~2 ms; precise, costs CPU in the game)\n"
             "  --pacing-report [S]  the agent writes esp_pacing.txt (achieved tick intervals) after S seconds (default 20); see docs/pacing.md\n"
+            "  --title T    pick the Minecraft client whose window title contains T (several clients, or a custom client whose title is not \"Minecraft...\")\n"
+            "  --exe E      ... whose program name contains E (javaw.exe, java.exe); combines with --title; --pid N names the process directly (docs/launchers.md)\n"
             "  --selftest [S]  attach, watch S seconds (default 20: look around, drop an item), print what works and exit with a code (docs/selftest.md)\n"
             "  --dump-structure  the agent also writes esp_structure.json (class structure only, for bug reports; docs/fixtures.md)\n"
             "  --gdi        use the legacy CPU renderer (layered window) instead of the GPU swap chain\n"
@@ -123,6 +125,8 @@ int main(int argc, char** argv)
         else if (a == "--replay" && i + 1 < argc) opt.replayPath = argv[++i];
         else if (a == "--replay-speed" && i + 1 < argc) opt.replaySpeed = std::atof(argv[++i]);
         else if (a == "--replay-loop") opt.replayLoop = true;
+        else if (a == "--title" && i + 1 < argc) opt.titleSelector = argv[++i];
+        else if (a == "--exe" && i + 1 < argc) opt.exeSelector = argv[++i];
         else if (a == "--pid" && i + 1 < argc) opt.pid = static_cast<DWORD>(std::strtoul(argv[++i], nullptr, 10));
         else if (a == "--port" && i + 1 < argc) opt.port = static_cast<uint16_t>(std::strtoul(argv[++i], nullptr, 10));
         else if (a == "--java" && i + 1 < argc) opt.javaPath = argv[++i];
