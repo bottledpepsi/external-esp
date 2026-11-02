@@ -180,6 +180,7 @@ namespace ProfileManager
         {
             // a laptop on battery: fewer frames, fewer layers, vsync instead of spinning
             c.FpsCap = 60;
+            c.AgentHz = 60; // half the samples: less work in the game too
             c.VSync = true;
             c.ShowMinimap = false;
             c.ShowTracers = false;

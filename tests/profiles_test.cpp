@@ -31,7 +31,7 @@ int main()
         CHECK(c->ToJson() == BuiltIn(n).ToJson());
     }
     CHECK(BuiltIn("default").ToJson() == EspConfig{}.ToJson());
-    CHECK(BuiltIn("low-power").FpsCap == 60 && !BuiltIn("low-power").ShowMinimap && BuiltIn("low-power").VSync);
+    CHECK(BuiltIn("low-power").AgentHz == 60 && BuiltIn("low-power").FpsCap == 60 && !BuiltIn("low-power").ShowMinimap && BuiltIn("low-power").VSync);
     CHECK(BuiltIn("testing").ShowItemTags && BuiltIn("testing").MaxLabelDist == -1);
     for (const std::string& n : BuiltInNames())      // every built-in passes the schema without a single warning
         CHECK(configschema::LoadText(BuiltIn(n).ToJson()).Warnings() == 0);

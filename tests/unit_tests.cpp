@@ -27,7 +27,7 @@ int main() {
     auto o = json::ParseObject(csharp);
     CHECK(o.has_value());
     Settings s; s.Apply(EspConfig::FromJson(*o));
-    CHECK(s.vkToggle == 0x75); CHECK(s.distFmtIdx == 1); CHECK(s.labelDistIdx == 1); CHECK(!s.textShadow);
+    CHECK(s.vkToggle == 0x75); CHECK(s.distFmtIdx == 1); CHECK(s.labelDist == 50.f); CHECK(!s.textShadow);
     CHECK(s.boxStyleIdx == 2); CHECK(s.cornerRadiusIdx == 2); CHECK(s.boxThickIdx == 2); CHECK(s.playerColorIdx == 1);
     CHECK(s.nameSizeIdx == 2); CHECK(s.boxFillIdx == 2); CHECK(s.tracerOriginIdx == 1); CHECK(s.tracerColorIdx == 1);
     CHECK(s.tracerOpacityIdx == 1); CHECK(s.tracerTargetIdx == 2); CHECK(s.maxPlayerDistIdx == 1);

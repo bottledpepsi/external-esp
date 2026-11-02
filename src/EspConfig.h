@@ -59,6 +59,11 @@ struct EspConfig
     bool ShowItemEnchants = true; // list enchantments under an item's name
     bool ShowItemTags = false; // list the stack's raw tags (NBT / components) under the name
 
+    // ADVANCED tab (see Tunables.h for the ranges): smoothing, agent rate, minimum marker sizes
+    double SmootherBaselineMs = 12, SmootherBlendTauMs = 10, SmootherMaxAheadMs = 50, SmootherTickMs = 50;
+    int AgentHz = 120;
+    double ItemMinPx = 6, PlayerMinPx = 2;
+
     // Keys of the file that this build does not know, as their raw JSON text (key -> value). Kept through load -> edit -> save, so a file written
     // by a newer build (or annotated by hand) does not lose them. See ConfigSchema.h.
     std::map<std::string, std::string> Unknown;
@@ -73,7 +78,8 @@ struct Settings
 {
     int vkToggle = 0x2E, vkConfig = 0x2D, vkExit = 0x23;
     // GENERAL
-    int distFmtIdx = 0, labelDistIdx = 3;
+    int distFmtIdx = 0;
+    float labelDist = 3.4028235e38f; // meters; FLT_MAX = unlimited (presets::kUnlimited)
     bool textShadow = true;
     // PLAYERS
     bool showPlayers = true, showPlayerNames = true;
@@ -101,6 +107,11 @@ struct Settings
     void Apply(const EspConfig& c);
     EspConfig Build() const;
 
+    // ADVANCED tab values (Tunables.h reads and writes them)
+    double smBaselineMs = 12, smBlendTauMs = 10, smMaxAheadMs = 50, smTickMs = 50;
+    int agentHz = 120;
+    float itemMinPx = 6, playerMinPx = 2;
+
     // Keys of the loaded file this build does not know (kept so the next Save writes them back), and what Load() had to correct or migrate.
     std::map<std::string, std::string> unknownKeys;
     std::vector<std::string> loadNotes; // one line per warning of the last Load(); empty = the file was fine
@@ -116,6 +127,7 @@ struct Settings
     bool Flush();
     bool SavePending() const { return saveDirty_; }
     static std::filesystem::path ConfigPath();
+    static int StoredAgentHz(); // AgentHz from the settings file without applying anything (0 when there is no usable file); used before the overlay exists
 
 private:
     bool saveDirty_ = false;

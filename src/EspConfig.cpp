@@ -42,7 +42,9 @@ std::string EspConfig::ToJson() const
     j += Kv("OverlayOpacity", N(OverlayOpacity)) + Kv("FpsCap", N(FpsCap));
     j += Kv("ConfigX", N(ConfigX)) + Kv("ConfigY", N(ConfigY));
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
-        Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags), Unknown.empty());
+        Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags));
+    j += Kv("SmootherBaselineMs", N(SmootherBaselineMs)) + Kv("SmootherBlendTauMs", N(SmootherBlendTauMs)) + Kv("SmootherMaxAheadMs", N(SmootherMaxAheadMs)) +
+        Kv("SmootherTickMs", N(SmootherTickMs)) + Kv("AgentHz", N(AgentHz)) + Kv("ItemMinPx", N(ItemMinPx)) + Kv("PlayerMinPx", N(PlayerMinPx), Unknown.empty());
     size_t i = 0;
     for (const auto& kv : Unknown) j += "  " + json::Escape(kv.first) + ": " + kv.second + (++i == Unknown.size() ? "\n" : ",\n");
     return j + "}\n";
@@ -92,6 +94,13 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.ShowHealth = GetBool(o, "ShowHealth", c.ShowHealth);
     c.ShowItemEnchants = GetBool(o, "ShowItemEnchants", c.ShowItemEnchants);
     c.ShowItemTags = GetBool(o, "ShowItemTags", c.ShowItemTags);
+    c.SmootherBaselineMs = GetNumber(o, "SmootherBaselineMs", c.SmootherBaselineMs);
+    c.SmootherBlendTauMs = GetNumber(o, "SmootherBlendTauMs", c.SmootherBlendTauMs);
+    c.SmootherMaxAheadMs = GetNumber(o, "SmootherMaxAheadMs", c.SmootherMaxAheadMs);
+    c.SmootherTickMs = GetNumber(o, "SmootherTickMs", c.SmootherTickMs);
+    c.AgentHz = static_cast<int>(GetNumber(o, "AgentHz", c.AgentHz));
+    c.ItemMinPx = GetNumber(o, "ItemMinPx", c.ItemMinPx);
+    c.PlayerMinPx = GetNumber(o, "PlayerMinPx", c.PlayerMinPx);
     for (const auto& kv : o)
         if (!configschema::IsKnownKey(kv.first) && !kv.second.raw.empty()) c.Unknown[kv.first] = kv.second.raw;
     return c;
@@ -107,7 +116,7 @@ void Settings::Apply(const EspConfig& c)
     vkExit = NameToVk(c.HotkeyExit);
 
     distFmtIdx = c.DistanceFormat == "Kilometers" ? 1 : c.DistanceFormat == "Off" ? 2 : 0;
-    labelDistIdx = NearestIdx(LabelDist, c.MaxLabelDist < 0 ? kUnlimited : static_cast<float>(c.MaxLabelDist));
+    labelDist = c.MaxLabelDist < 0 ? kUnlimited : static_cast<float>(c.MaxLabelDist); // any distance now, not only the old presets
     textShadow = c.TextShadow;
 
     showPlayers = c.ShowPlayers;
@@ -151,6 +160,13 @@ void Settings::Apply(const EspConfig& c)
     showHealth = c.ShowHealth;
     showItemEnchants = c.ShowItemEnchants;
     showItemTags = c.ShowItemTags;
+    smBaselineMs = c.SmootherBaselineMs;
+    smBlendTauMs = c.SmootherBlendTauMs;
+    smMaxAheadMs = c.SmootherMaxAheadMs;
+    smTickMs = c.SmootherTickMs;
+    agentHz = c.AgentHz;
+    itemMinPx = static_cast<float>(c.ItemMinPx);
+    playerMinPx = static_cast<float>(c.PlayerMinPx);
     unknownKeys = c.Unknown;
 }
 
@@ -162,7 +178,7 @@ EspConfig Settings::Build() const
     c.HotkeyConfig = VkToName(vkConfig);
     c.HotkeyExit = VkToName(vkExit);
     c.DistanceFormat = DistFormatLabels[distFmtIdx];
-    c.MaxLabelDist = LabelDist[labelDistIdx] == kUnlimited ? -1 : static_cast<int>(LabelDist[labelDistIdx]);
+    c.MaxLabelDist = labelDist >= kUnlimited ? -1 : static_cast<int>(labelDist);
     c.TextShadow = textShadow;
     c.ShowPlayers = showPlayers;
     c.ShowPlayerNames = showPlayerNames;
@@ -198,6 +214,13 @@ EspConfig Settings::Build() const
     c.ShowHealth = showHealth;
     c.ShowItemEnchants = showItemEnchants;
     c.ShowItemTags = showItemTags;
+    c.SmootherBaselineMs = smBaselineMs;
+    c.SmootherBlendTauMs = smBlendTauMs;
+    c.SmootherMaxAheadMs = smMaxAheadMs;
+    c.SmootherTickMs = smTickMs;
+    c.AgentHz = agentHz;
+    c.ItemMinPx = itemMinPx;
+    c.PlayerMinPx = playerMinPx;
     c.Unknown = unknownKeys;
     return c;
 }
@@ -240,6 +263,13 @@ void Settings::Load()
     }
     Apply(r.cfg);
     LOG_INFO("LoadConfig: config loaded (%s).", r.Summary().c_str());
+}
+
+int Settings::StoredAgentHz()
+{
+    const configstore::ReadResult rr = configstore::Read(ConfigPath(), configstore::IsJsonObject);
+    if (rr.text.empty()) return 0;
+    return configschema::LoadText(rr.text).cfg.AgentHz;
 }
 
 bool Settings::Save() const

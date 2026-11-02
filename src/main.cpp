@@ -107,7 +107,10 @@ int main(int argc, char** argv)
         else if (a == "--screen") opt.screenOverlay = true;
         else if (a == "--gdi") opt.legacyGfx = true;
         else if (a == "--profile" && i + 1 < argc) opt.profile = argv[++i];
-        else if (a == "--hz" && i + 1 < argc) opt.agentHz = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 240L));
+        else if (a == "--hz" && i + 1 < argc) {
+            opt.agentHz = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 240L));
+            opt.agentHzFromCli = true;
+        }
         else if (a == "--agent-pacer" && i + 1 < argc)
         {
             opt.agentPacer = argv[++i];
@@ -217,12 +220,14 @@ int main(int argc, char** argv)
             return 1;
         }
     }
-    if (!opt.autoInject && !opt.demo && opt.replayPath.empty())
-        std::printf("Start the game with:  -javaagent:esp-agent.jar=port=%d;hz=%d;wire=%d%s%s%s%s\n", static_cast<int>(opt.port), opt.agentHz, wire::kMaxVersion,
-                    opt.token.empty() ? "" : ";token=", opt.token.c_str(), opt.verbose ? ";verbose=1" : "", opt.agentExtraOptions().c_str());
     // settings live in %APPDATA%\external-esp; the first start after an update copies what older builds kept next to the exe
     legacy::ImportFromExeFolder(AppDir(), ConfigDir());
     LOG_INFO("Config folder: %s", ConfigDir().string().c_str());
+    if (!opt.agentHzFromCli)
+        if (const int hz = Settings::StoredAgentHz(); hz > 0) opt.agentHz = hz; // the ADVANCED tab's setting; --hz overrides it
+    if (!opt.autoInject && !opt.demo && opt.replayPath.empty())
+        std::printf("Start the game with:  -javaagent:esp-agent.jar=port=%d;hz=%d;wire=%d%s%s%s%s\n", static_cast<int>(opt.port), opt.agentHz, wire::kMaxVersion,
+                    opt.token.empty() ? "" : ";token=", opt.token.c_str(), opt.verbose ? ";verbose=1" : "", opt.agentExtraOptions().c_str());
     FriendList::Load();
     ProfileManager::Refresh();
     ProfileManager::SeedBuiltIns(); // default / testing / low-power, once

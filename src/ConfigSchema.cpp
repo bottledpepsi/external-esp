@@ -1,5 +1,6 @@
 #include "ConfigSchema.h"
 #include "Presets.h"
+#include "Tunables.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -59,6 +60,13 @@ namespace configschema
                 F("ConfigX", -20000, 20000); F("ConfigY", -20000, 20000);
                 { const auto r = mm(presets::Fovs); I("Fov", r.first, r.second); }
                 B("VSync"); B("Smoothing"); B("ShowHealth"); B("ShowItemEnchants"); B("ShowItemTags");
+                // the ADVANCED tab's numbers: ranges come from Tunables.h, the one table the UI uses too
+                for (int i = 0; i < tunables::Count(); ++i)
+                {
+                    const tunables::Def& d = tunables::Get(static_cast<tunables::Id>(i));
+                    if (d.maxIsUnlimited) continue; // MaxLabelDist is checked above (-1 or a distance)
+                    s.push_back({d.key, d.id == tunables::Id::AgentHz ? Kind::Int : Kind::Float, d.min, d.max, {}});
+                }
                 return s;
             }();
             return t;

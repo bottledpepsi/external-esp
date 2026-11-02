@@ -44,7 +44,7 @@ namespace
 void EspRenderer::DrawLabels(Gfx& g, const Settings& s, const PlayerState& p, float dist, bool isFriend,
                              float cx, float top, float bottom)
 {
-    const float maxLabel = presets::LabelDist[s.labelDistIdx];
+    const float maxLabel = s.labelDist;
     if (dist > maxLabel) return;
     if (s.showPlayerNames && !p.name.empty())
     {
@@ -234,13 +234,13 @@ void EspRenderer::DrawItem(Gfx& g, const Settings& s, const Camera& cam, const I
 {
     const double iw = it.sizeValid ? it.width : 0.25, ih = it.sizeValid ? it.height : 0.25;
     ScreenBox sb;
-    if (!ProjectBox(cam, it.pos, iw, ih, 6.f, sb)) return; // small distant items are kept at a 6 px marker
+    if (!ProjectBox(cam, it.pos, iw, ih, s.itemMinPx, sb)) return; // small distant items are kept at a minimum marker (default 6 px)
     const float minX = sb.x0, minY = sb.y0, maxX = sb.x1, maxY = sb.y1;
     const float op = presets::TraceOpacities[s.itemOpacityIdx];
     const bool enchanted = !it.enchants.empty();
     const Col boxCol = enchanted ? Col{0.62f, 0.78f, 1.f, op} : Col{1, 1, 1, op};
     g.Rect(minX, minY, maxX - minX, maxY - minY, boxCol, 1.f);
-    if (dist > presets::LabelDist[s.labelDistIdx]) return;
+    if (dist > s.labelDist) return;
 
     // Label, reading top to bottom: name xN / enchantments / tags. Drawn bottom-up so the last line sits on the box.
     struct Line

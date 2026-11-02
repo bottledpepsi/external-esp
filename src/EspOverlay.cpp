@@ -8,6 +8,7 @@
 #include "Logger.h"
 #include "Presets.h"
 #include "ProfileManager.h"
+#include "Tunables.h"
 #include "SkinCache.h"
 #include <dwmapi.h>
 #include <algorithm>
@@ -565,6 +566,9 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     gfx_.WaitFrame(); // GPU renderer: pace to the compositor here, before sampling any state for this frame
     const auto now = Clock::now();
     const auto cpuStart = now;
+
+    // the ADVANCED tab's smoothing numbers (a session reset builds a new Smoother, so this is checked every frame; it only compares four doubles)
+    if (const SmootherTuning tu = tunables::ToSmoother(settings_); !(tu == smoother_.Tuning())) smoother_.SetTuning(tu);
 
     // ---- 1. newest data -> smoother (the UDP thread only ever swaps a pointer; we never block on it) ----
     if (opt_.demo)
