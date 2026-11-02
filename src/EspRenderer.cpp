@@ -162,28 +162,13 @@ void EspRenderer::DrawPlayer(Gfx& g, const Settings& s, const Camera& cam, const
     }
 
     const double ph = p.sizeValid ? p.height : kPlayerH, pw = p.sizeValid ? p.width : kPlayerW;
-    // the game's hitbox when known
-    float cx, cy;
-    if (!cam.Project({p.pos.x, p.pos.y + ph * 0.5, p.pos.z}, cx, cy)) return; // centre behind camera -> skip
-
-    // Project the 8 AABB corners; corners that straddle the camera plane are clamped to the near plane.
-    const double hw = pw * 0.5;
-    float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
-    for (int xi = 0; xi < 2; ++xi)
-        for (int yi = 0; yi < 2; ++yi)
-            for (int zi = 0; zi < 2; ++zi)
-            {
-                float sx, sy;
-                cam.ProjectClamped({p.pos.x + (xi ? hw : -hw), p.pos.y + (yi ? ph : 0.0), p.pos.z + (zi ? hw : -hw)},
-                                   sx, sy);
-                minX = std::min(minX, sx);
-                maxX = std::max(maxX, sx);
-                minY = std::min(minY, sy);
-                maxY = std::max(maxY, sy);
-            }
+    // the game's hitbox when known; boxes smaller than the minimum are grown around their centre, never dropped (ScreenBox.h). A player is
+    // 0.6 wide and 1.8 tall, so the width reaches 2 px at a third of the distance where the height does: the old "< 2 px" test made far players
+    // vanish while their height was still 6 px (tests/player_cull_test.cpp). Far players are limited by MaxPlayerDist, not by their size.
+    ScreenBox sb;
+    if (!ProjectBox(cam, p.pos, pw, ph, s.playerMinPx, sb)) return; // behind the camera, or entirely off-screen
+    const float minX = sb.x0, minY = sb.y0, maxX = sb.x1, maxY = sb.y1;
     const float bx = minX, by = minY, bw = maxX - minX, bh = maxY - minY;
-    if (bw < 2.f || bh < 2.f) return;
-    if (maxX < 0 || minX > cam.w || maxY < 0 || minY > cam.h) return; // entirely off-screen
 
     const Col base = isFriend ? kFriend : kEnemy;
     const float fill = presets::Opacities[s.boxFillIdx];

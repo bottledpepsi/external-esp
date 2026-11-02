@@ -17,3 +17,8 @@ These settings live in `esp_config.json` (and in profiles) and are edited in the
 `SmootherBaselineMs`, `SmootherBlendTauMs`, `SmootherMaxAheadMs` and `SmootherTickMs` are applied to the running overlay at once. `AgentHz` needs the agent to be told (see docs/launchers.md for the manual `-javaagent` option).
 
 Files written before these keys existed simply get the defaults; no migration is involved.
+
+## Far players (`PlayerMinPx`)
+
+Player boxes used to be dropped when they came out under 2 px wide **or** tall. A player is 0.6 wide and 1.8 tall, so the width reaches 2 px at a third of the distance where the height does: at 1080p / 70 deg FOV a player vanished at about 232 blocks while the box was still 6 px tall (4K: about twice as far). Items already avoided this with a minimum marker size; players now do the same: a box smaller than `PlayerMinPx` (default 2 px) is grown around its centre instead of dropped. Whatever was drawn before is drawn identically; only players that used to disappear are new.
+How far players are shown is decided by "Max player dist" (GENERAL tab), not by their size. In practice a server only sends players within its own tracking range (often 64-128 blocks), so this mostly matters on a single-player world or a server with a long view distance.
