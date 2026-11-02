@@ -31,7 +31,7 @@ EspOverlay::EspOverlay(const AppOptions& opt)
     : opt_(opt),
       ui_(settings_),
       udp_(opt.port),
-      injector_(InjectorConfig{opt.jarPath, opt.javaPath, opt.port, opt.agentHz, opt.verbose, opt.token, opt.agentExtraOptions()}),
+      injector_(InjectorConfig{opt.jarPath, opt.javaPath, opt.port, opt.agentHz, opt.verbose, opt.token, opt.exportDir, opt.agentExtraOptions()}),
       sup_(opt_, udp_, injector_)
 {
 }
@@ -232,7 +232,7 @@ std::string EspOverlay::CopyDiagnostics()
 {
     diag::AppContext ctx;
     ctx.version = kEspVersion;
-    ctx.agentLog = opt_.jarPath.parent_path() / "esp_agent.log";
+    ctx.agentLog = opt_.exportDir / "esp_agent.log";
     ctx.token = opt_.token;
     ctx.renderer = gfx_.IsGpu() ? "GPU (D3D11 flip swap chain + DirectComposition + Direct2D device context)" : "legacy (DIB + UpdateLayeredWindow)";
     ctx.hudStatus = lastStatus_;

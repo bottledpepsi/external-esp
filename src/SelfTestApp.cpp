@@ -49,10 +49,10 @@ int RunSelfTest(const AppOptions& opt)
     }
 
     // 3. Attach with selftest=SECONDS (AppOptions::agentExtraOptions). The report is written next to the jar.
-    const fs::path report = opt.jarPath.parent_path() / "esp_selftest.txt";
+    const fs::path report = opt.exportDir / "esp_selftest.txt";
     std::error_code ec;
     fs::remove(report, ec);
-    AgentInjector inj(InjectorConfig{opt.jarPath, opt.javaPath, opt.port, opt.agentHz, opt.verbose, opt.token, opt.agentExtraOptions()});
+    AgentInjector inj(InjectorConfig{opt.jarPath, opt.javaPath, opt.port, opt.agentHz, opt.verbose, opt.token, opt.exportDir, opt.agentExtraOptions()});
     inj.Start(target);
     std::printf("attaching the agent ...\n");
     const auto t0 = std::chrono::steady_clock::now();

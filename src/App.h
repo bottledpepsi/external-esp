@@ -12,7 +12,8 @@ struct AppOptions
     uint16_t port = 47615; // UDP port the agent sends to
     bool autoInject = true; // load the agent automatically
     std::string javaPath; // optional java.exe override for the attach helper
-    std::filesystem::path jarPath; // esp-agent.jar (default: next to the exe)
+    std::filesystem::path jarPath; // the agent jar in use (--jar, else the embedded one extracted, else next to the exe; see AgentJarWin.h)
+    std::filesystem::path exportDir; // where esp_agent.log and esp_selftest.txt go (default: next to the exe)
     bool agentHzFromCli = false; // --hz was given: it wins over the AgentHz setting for this run
     int agentHz = 120; // snapshot rate requested from the agent (1..240); higher = less extrapolation = smoother boxes
     bool screenOverlay = false; // cover the whole primary monitor instead of tracking the game window

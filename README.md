@@ -21,13 +21,13 @@ Requirements: **JDK 8+** (builds the agent; also what runs the attach step) and 
 
 | Way | Command |
 |---|---|
-| One step | `build-all.bat` → `dist\mcesp.exe` + `dist\esp-agent.jar` (+ `libwinpthread-1.dll`); finds CLion's/MSYS2's g++ itself |
+| One step | `build-all.bat` → `dist\mcesp.exe` (the agent jar is inside it; `dist\esp-agent.jar` is only a copy; `libwinpthread-1.dll` is added only if the toolchain cannot link it statically); finds CLion's/MSYS2's g++ itself |
 | CLion / CMake | open the folder; first run `agent\build.bat`; build target `mcesp` (jar + DLL are copied next to the exe) |
-| Manual | `agent\build.bat`, then `g++ -std=c++20 -O2 src/*.cpp -o mcesp.exe -ld2d1 -ldwrite -ldwmapi -lwinmm -lgdi32 -luser32 -lws2_32 -lwinhttp -lwindowscodecs -lole32 -luuid -lbcrypt -static-libgcc -static-libstdc++`, then put `esp-agent.jar` and `libwinpthread-1.dll` next to it |
+| Manual | `agent\build.bat`, then `g++ -std=c++20 -O2 src/*.cpp -o mcesp.exe -ld2d1 -ldwrite -ldwmapi -lwinmm -lgdi32 -luser32 -lws2_32 -lwinhttp -lwindowscodecs -lole32 -luuid -lbcrypt -static-libgcc -static-libstdc++`, then put `esp-agent.jar` (and, if the link needed it, `libwinpthread-1.dll`) next to it. `build-all.bat` / CMake also embed the jar (docs/embedded-agent.md) |
 
 Linker libs: `d2d1 dwrite` (Direct2D/DirectWrite) · `dwmapi` (DwmFlush = VSync) · `winmm` (1 ms timer) · `gdi32 user32` · `ws2_32` (UDP) ·
 `winhttp` (skin downloads) · `windowscodecs ole32 uuid` (PNG decoding via WIC) · `bcrypt` (the per-session token). **Do not pass `-mwindows`** - the console subsystem is intentional (logs also go to `esp_log.txt`).
-Do not use `-static`: it fails on CLion 2026's bundled GCC 15 (`undefined reference to __intrinsic_setjmpex`); the exe needs `libwinpthread-1.dll` next to it (copied automatically).
+Do not use `-static`: it fails on CLion 2026's bundled GCC 15 (`undefined reference to __intrinsic_setjmpex`). Instead only libwinpthread is linked statically (`--whole-archive`), which makes the exe one file; CMake and `build-all.bat` test that at build time and fall back to copying `libwinpthread-1.dll` next to the exe if the toolchain cannot do it (the build log says which happened).
 
 ## Continuous integration
 `.github/workflows/ci.yml` runs on every push and pull request: the core tests on Linux, the agent on JDK 17/21/25 (build, Java tests, smoke test against the
@@ -111,7 +111,7 @@ Tabs: GENERAL · PLAYERS (+friends) · TRACERS · ITEMS · MINIMAP · PROFILES �
 | `cam: reconstructed` | normal until you turn your head; if it never changes see `esp_layout.json` → `camera` |
 | `SkinCache: GET ... WinHTTP error 12029/12007` | no network / blocked; set `ESP_*` mirrors or accept placeholders |
 | `Cannot listen on 127.0.0.1:47615` | another instance is running; use `--port` |
-| `agent jar not found` | run `agent\build.bat`; keep `esp-agent.jar` next to `mcesp.exe` |
+| `agent jar not found` | run `agent\build.bat` **before** building the exe (it is embedded at build time), or pass `--jar` |
 | `agent ok: ... 0 item(s) [items A/B ent]` | `B` = entities the agent can see, `A` = how many were recognised as item entities. `B = 0`: entity container not found (see `esp_agent.log`, "Entity container"). `B > 0, A = 0`: open `esp_items_debug.txt` (written ~5-35 s after the problem starts, next to `esp_layout.json`) - it lists each entity class, what is reachable from it and where the search stopped. Send that file + `esp_agent.log`. |
 
 ## Layout

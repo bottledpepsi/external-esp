@@ -76,7 +76,7 @@ int AgentInjector::RunHelper(const fs::path& java, DWORD pid, std::stop_token st
         if (!tools.empty()) classpath += L";" + tools.wstring();
     }
     // Agent options: UDP port, send rate, and where to write esp_layout.json / esp_agent.log (next to the exe).
-    std::wstring exportDir = cfg_.jarPath.parent_path().wstring();
+    std::wstring exportDir = (cfg_.exportDir.empty() ? cfg_.jarPath.parent_path() : cfg_.exportDir).wstring();
     for (auto& c : exportDir) if (c == L'\\') c = L'/'; // avoids backslash-before-quote issues
     // wire=N: the newest wire protocol this overlay can read; the agent never sends a newer one (an agent without this option, or an older
     // overlay that does not pass it, means v4).

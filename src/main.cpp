@@ -15,6 +15,7 @@
 #include "SelfTestApp.h"
 #include "EspOverlay.h"
 #include "FriendList.h"
+#include "AgentJarWin.h"
 #include "LegacyImport.h"
 #include "Logger.h"
 #include "DiagnosticsApp.h"
@@ -44,7 +45,7 @@ namespace
             "  --pid N      attach to this java(w).exe PID (two Minecraft clients on one PC)\n"
             "  --port N     UDP port for the agent stream (default 47615)\n"
             "  --java PATH  java.exe of a JDK to run the attach helper (default: the game's own JRE, JAVA_HOME, PATH)\n"
-            "  --jar PATH   agent jar (default: esp-agent.jar next to the exe)\n"
+            "  --jar PATH   agent jar (default: the one inside the exe; else esp-agent.jar next to it)\n"
             "  --no-inject  do not attach automatically (the exact -javaagent line, with the session token, is printed at start-up)\n"
             "  --open-config  open the config window right away\n"
             "  --screen     cover the whole primary monitor instead of tracking the game window\n"
@@ -78,7 +79,7 @@ int main(int argc, char** argv)
     elog::Init();
 
     AppOptions opt;
-    opt.jarPath = AppDir() / "esp-agent.jar";
+    std::filesystem::path explicitJar; // --jar
     bool list = false, diagnostics = false;
     int pacingTest = 0; // --pacing-test [S]
     std::string diagnosticsFile;
@@ -150,7 +151,7 @@ int main(int argc, char** argv)
         else if (a == "--pid" && i + 1 < argc) opt.pid = static_cast<DWORD>(std::strtoul(argv[++i], nullptr, 10));
         else if (a == "--port" && i + 1 < argc) opt.port = static_cast<uint16_t>(std::strtoul(argv[++i], nullptr, 10));
         else if (a == "--java" && i + 1 < argc) opt.javaPath = argv[++i];
-        else if (a == "--jar" && i + 1 < argc) opt.jarPath = argv[++i];
+        else if (a == "--jar" && i + 1 < argc) explicitJar = argv[++i];
         else
         {
             PrintUsage();
@@ -158,11 +159,24 @@ int main(int argc, char** argv)
         }
     }
 
+    // which agent jar: --jar, else the one inside this exe (extracted and verified), else esp-agent.jar next to it
+    {
+        const agentjar::Resolved j = agentjar::Resolve(explicitJar, AppDir() / "esp-agent.jar");
+        opt.jarPath = j.jar;
+        opt.exportDir = j.exportDir;
+        using S = agentjar::Resolved::Source;
+        if (j.source == S::Embedded)
+            LOG_INFO("Agent jar: embedded in this exe (sha256 %s) -> %s%s", j.hash.substr(0, 12).c_str(), j.jar.string().c_str(),
+                     j.how == agentjar::Extracted::How::Created ? " (extracted now)" : j.how == agentjar::Extracted::How::Repaired ? " (rewritten: the copy was damaged)" : "");
+        else if (j.source == S::CommandLine) LOG_INFO("Agent jar: %s (--jar)", j.jar.string().c_str());
+        else LOG_INFO("Agent jar: %s (next to the exe; this build has no embedded jar%s)", j.jar.string().c_str(), j.problem.empty() ? "" : " that could be used");
+    }
+
     if (diagnostics)
     {
         diag::AppContext ctx;
         ctx.version = kEspVersion;
-        ctx.agentLog = opt.jarPath.parent_path() / "esp_agent.log";
+        ctx.agentLog = opt.exportDir / "esp_agent.log";
         ctx.settings = "port = " + std::to_string(opt.port) + "\nagent hz = " + std::to_string(opt.agentHz) + "\ntoken check = " + (opt.requireAuth ? "on" : "off") + "\n";
         const std::string report = diag::Collect(ctx);
         if (diagnosticsFile.empty()) std::fputs(report.c_str(), stdout);
@@ -226,7 +240,7 @@ int main(int argc, char** argv)
     if (!opt.agentHzFromCli)
         if (const int hz = Settings::StoredAgentHz(); hz > 0) opt.agentHz = hz; // the ADVANCED tab's setting; --hz overrides it
     if (!opt.autoInject && !opt.demo && opt.replayPath.empty())
-        std::printf("Start the game with:  -javaagent:esp-agent.jar=port=%d;hz=%d;wire=%d%s%s%s%s\n", static_cast<int>(opt.port), opt.agentHz, wire::kMaxVersion,
+        std::printf("Start the game with:  -javaagent:%s=port=%d;hz=%d;wire=%d%s%s%s%s\n", opt.jarPath.string().c_str(), static_cast<int>(opt.port), opt.agentHz, wire::kMaxVersion,
                     opt.token.empty() ? "" : ";token=", opt.token.c_str(), opt.verbose ? ";verbose=1" : "", opt.agentExtraOptions().c_str());
     FriendList::Load();
     ProfileManager::Refresh();
