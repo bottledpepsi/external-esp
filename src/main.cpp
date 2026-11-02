@@ -20,6 +20,7 @@
 #include "ExitCodes.h"
 #include "LegacyImport.h"
 #include "Shutdown.h"
+#include "SetupApp.h"
 #include "SingleInstance.h"
 #include "UdpListener.h"
 #include "Logger.h"
@@ -62,6 +63,14 @@ namespace
             return TRUE;
         default: return FALSE;
         }
+    }
+
+    // "the checklist ran and passed": it is not offered again on its own
+    void MarkSetupDone()
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(ConfigDir(), ec);
+        if (std::ofstream f(ConfigDir() / ".setup-done"); f) f << "The first-run checklist passed once. Delete this file to see it again at the next start (or run mcesp --setup).\n";
     }
 
     void PrintUsage() { std::fputs(cli::Help().c_str(), stdout); }
@@ -111,6 +120,7 @@ int main(int argc, char** argv)
         else if (a == "--demo") opt.demo = true;
         else if (a == "--no-inject") opt.autoInject = false;
         else if (a == "--list") list = true;
+        else if (a == "--setup") opt.setupOnly = true;
         else if (a == "--open-config") opt.openConfig = true;
         else if (a == "--screen") opt.screenOverlay = true;
         else if (a == "--gdi") opt.legacyGfx = true;
@@ -166,12 +176,22 @@ int main(int argc, char** argv)
         }
     }
 
+    // settings live in %APPDATA%\external-esp; the first start after an update copies what older builds kept next to the exe
+    legacy::ImportFromExeFolder(AppDir(), ConfigDir());
+    LOG_INFO("Config folder: %s", ConfigDir().string().c_str());
+    // the very first start (no settings yet, the checklist not offered yet): run it once, if there is a console to talk to
+    const bool firstRun = [&]
+    {
+        std::error_code ec;
+        return !std::filesystem::exists(ConfigDir() / "esp_config.json", ec) && !std::filesystem::exists(ConfigDir() / ".setup-done", ec);
+    }();
     // which agent jar: --jar, else the one inside this exe (extracted and verified), else esp-agent.jar next to it
     {
         const agentjar::Resolved j = agentjar::Resolve(explicitJar, AppDir() / "esp-agent.jar");
         opt.jarPath = j.jar;
         opt.exportDir = j.exportDir;
         using S = agentjar::Resolved::Source;
+        opt.jarSource = j.source == S::Embedded ? "embedded in this exe" : j.source == S::CommandLine ? "--jar " + j.jar.string() : "esp-agent.jar next to the exe";
         if (j.source == S::Embedded)
             LOG_INFO("Agent jar: embedded in this exe (sha256 %s) -> %s%s", j.hash.substr(0, 12).c_str(), j.jar.string().c_str(),
                      j.how == agentjar::Extracted::How::Created ? " (extracted now)" : j.how == agentjar::Extracted::How::Repaired ? " (rewritten: the copy was damaged)" : "");
@@ -180,6 +200,22 @@ int main(int argc, char** argv)
     }
 
     // a mode that attaches or starts the agent needs the jar: say so now, with what to do, instead of a failed injection later
+    if (opt.setupOnly)
+    {
+        const int rc = RunSetup(opt, StdinIsConsole());
+        if (rc == exitcode::kOk) MarkSetupDone();
+        return rc;
+    }
+    if (firstRun && !list && !diagnostics && pacingTest == 0 && opt.selftestSeconds == 0 && !opt.demo && opt.replayPath.empty() && StdinIsConsole())
+    {
+        std::printf("First start: a quick check of this PC (it runs once; run it again any time with  mcesp --setup).\n");
+        if (RunSetup(opt, true) != exitcode::kOk)
+        {
+            std::printf("\nFix what is marked [FAIL] and start again - this check will run again until it passes.\n");
+            return exitcode::kRuntime;
+        }
+        MarkSetupDone();
+    }
     if (!list && !diagnostics && pacingTest == 0 && !opt.demo && opt.replayPath.empty())
     {
         std::error_code jec;
@@ -256,9 +292,6 @@ int main(int argc, char** argv)
             return 1;
         }
     }
-    // settings live in %APPDATA%\external-esp; the first start after an update copies what older builds kept next to the exe
-    legacy::ImportFromExeFolder(AppDir(), ConfigDir());
-    LOG_INFO("Config folder: %s", ConfigDir().string().c_str());
     if (!opt.agentHzFromCli)
         if (const int hz = Settings::StoredAgentHz(); hz > 0) opt.agentHz = hz; // the ADVANCED tab's setting; --hz overrides it
     if (!opt.autoInject && !opt.demo && opt.replayPath.empty())

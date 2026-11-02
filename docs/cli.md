@@ -13,6 +13,8 @@
 | 17 | another mcesp is already running on this port |
 | 18 | no usable agent jar |
 
+`--setup` exits with 0, or 1 when a check failed (docs/setup.md).
+
 The values live in `src/ExitCodes.h`; a test checks they do not collide with the self-test's.
 
 ## One overlay per port

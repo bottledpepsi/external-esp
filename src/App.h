@@ -13,6 +13,8 @@ struct AppOptions
     bool autoInject = true; // load the agent automatically
     std::string javaPath; // optional java.exe override for the attach helper
     std::filesystem::path jarPath; // the agent jar in use (--jar, else the embedded one extracted, else next to the exe; see AgentJarWin.h)
+    std::string jarSource; // "embedded in this exe", "esp-agent.jar next to the exe", "--jar PATH": for the setup check
+    bool setupOnly = false; // --setup: run the checklist and exit
     std::filesystem::path exportDir; // where esp_agent.log and esp_selftest.txt go (default: next to the exe)
     bool agentHzFromCli = false; // --hz was given: it wins over the AgentHz setting for this run
     int agentHz = 120; // snapshot rate requested from the agent (1..240); higher = less extrapolation = smoother boxes

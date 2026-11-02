@@ -21,6 +21,7 @@ namespace cli
             {"--profile", "", R, KA, "NAME", 0, 0, "Start", "start with the saved profile NAME (it becomes the current settings; see the PROFILES tab)"},
             {"--open-config", "", N, KA, "", 0, 0, "Start", "open the settings window right away"},
             {"--list", "", N, KA, "", 0, 0, "Start", "list the running Minecraft/java processes and exit"},
+            {"--setup", "", N, KA, "", 0, 0, "Start", "check this PC (settings folder, agent, port, Java, Minecraft) and say what to fix; runs by itself on the very first start"},
             {"--help", "-h", N, KA, "", 0, 0, "Start", "print this text and exit"},
 
             {"--port", "", R, KI, "N", 1, 65535, "Agent", "UDP port for the agent stream (default 47615); one overlay per port"},
