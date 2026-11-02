@@ -26,10 +26,60 @@
 #include <utility>
 #include <vector>
 
+// The numbers that shape the smoothing. Defaults are the values the golden recordings were tuned with; the ADVANCED tab lets the user change them
+// while the overlay runs. Every field is in seconds. Sanitized() clamps to the ranges the UI offers, so a hand-edited config cannot produce a
+// division by zero or an extrapolation into the next minute.
+#ifndef SMOOTHER_BASELINE
+#define SMOOTHER_BASELINE 0.012
+#endif
+#ifndef SMOOTHER_BLEND_TAU
+#define SMOOTHER_BLEND_TAU 0.010
+#endif
+struct SmootherTuning
+{
+    // Velocity is measured against a sample at least this old. The game redraws every ~4 ms, so two samples a few ms apart often hit the same
+    // frame (delta 0) or two (delta 2x): too noisy to extrapolate from.
+    double baseline = SMOOTHER_BASELINE;
+    double blendTau = SMOOTHER_BLEND_TAU; // decay time of the visual correction after a new sample (s); 0 = off (the display snaps)
+    double maxAhead = 0.05; // never extrapolate further than this past the newest sample (s); 0 = no extrapolation
+    double tick = 0.05; // the game tick that entity positions are interpolated over (s); 0.05 = 20 TPS
+
+    static constexpr double kBaselineMin = 0.002, kBaselineMax = 0.050;
+    static constexpr double kBlendTauMax = 0.050;
+    static constexpr double kMaxAheadMax = 0.100;
+    static constexpr double kTickMin = 0.025, kTickMax = 0.100;
+
+    SmootherTuning Sanitized() const
+    {
+        auto fin = [](double v, double fallback) { return std::isfinite(v) ? v : fallback; };
+        const SmootherTuning d;
+        SmootherTuning t;
+        t.baseline = std::clamp(fin(baseline, d.baseline), kBaselineMin, kBaselineMax);
+        t.blendTau = std::clamp(fin(blendTau, d.blendTau), 0.0, kBlendTauMax);
+        t.maxAhead = std::clamp(fin(maxAhead, d.maxAhead), 0.0, kMaxAheadMax);
+        t.tick = std::clamp(fin(tick, d.tick), kTickMin, kTickMax);
+        return t;
+    }
+    bool operator==(const SmootherTuning& o) const { return baseline == o.baseline && blendTau == o.blendTau && maxAhead == o.maxAhead && tick == o.tick; }
+};
+
+// How wrong the extrapolation was at each new camera sample, smoothed (an exponential average over the last ~20 samples). This is the size of the
+// "visual correction" the blend has to hide: the live readout in the ADVANCED tab, in degrees / blocks. Zero until two samples have arrived.
+struct SmootherStats
+{
+    double camAngErrDeg = 0; // hypot(yaw error, pitch error)
+    double camPosErr = 0; // blocks
+    uint64_t samples = 0;
+};
+
 class Smoother
 {
 public:
     using Clock = std::chrono::steady_clock;
+
+    void SetTuning(const SmootherTuning& t) { tune_ = t.Sanitized(); }
+    const SmootherTuning& Tuning() const { return tune_; }
+    const SmootherStats& Stats() const { return stats_; }
 
     // Call whenever a snapshot with a new seq arrives.
     void Push(const WorldSnapshot& s)
@@ -136,7 +186,7 @@ public:
         double v[6];
         if (cam_.n > 0 && out.camera.valid)
         {
-            Eval(cam_, tn, v);
+            Eval(cam_, tn, v, true);
             CameraState& c = out.camera;
             c.pos = {v[0], v[1], v[2]};
             c.yawDeg = static_cast<float>(v[3]);
@@ -145,26 +195,17 @@ public:
         }
         if (loc_.n > 0 && out.localValid && out.local.yawValid && out.local.pitchValid)
         {
-            Eval(loc_, tn, v);
+            Eval(loc_, tn, v, false);
             out.local.yawDeg = static_cast<float>(v[3]);
             out.local.pitchDeg = static_cast<float>(v[4]);
         }
     }
 
 private:
-    static constexpr double kTick = 0.05; // one game tick
-    static constexpr double kMaxAhead = 0.05; // never extrapolate further than this (s)
-#ifndef SMOOTHER_BASELINE
-#define SMOOTHER_BASELINE 0.012
-#endif
-    // Velocity is measured against a sample at least this old. The game redraws every ~4 ms, so two samples a few
-    // ms apart often hit the same frame (delta 0) or two (delta 2x): too noisy to extrapolate from.
-    static constexpr double kBaseline = SMOOTHER_BASELINE;
     static constexpr int kHist = 8;
 #ifndef SMOOTHER_BLEND_TAU
 #define SMOOTHER_BLEND_TAU 0.010
 #endif
-    static constexpr double kBlendTau = SMOOTHER_BLEND_TAU; // decay time of the visual correction (s); 0 = off
 
     struct Pose
     {
@@ -199,9 +240,9 @@ private:
             dirty = true;
         }
 
-        // index of the sample the velocity is measured against: the first one >= kBaseline older than the newest
+        // index of the sample the velocity is measured against: the first one >= `baseline` older than the newest
         // (else the oldest usable one); -1 when there is none (single sample, a view-mode cut, a long gap)
-        int Base() const
+        int Base(double baseline) const
         {
             int best = -1;
             for (int i = 1; i < n; ++i)
@@ -209,7 +250,7 @@ private:
                 const double dt = p[0].t - p[i].t;
                 if (p[i].mode != p[0].mode || dt > 0.25) break;
                 best = i;
-                if (dt >= kBaseline) break;
+                if (dt >= baseline) break;
             }
             return best;
         }
@@ -262,13 +303,13 @@ private:
     }
 
     // ---- continuous quantities ---------------------------------------------------------------------------------
-    static void Predict(const Pose& a, const Pose* b, double tn, double* out)
+    void Predict(const Pose& a, const Pose* b, double tn, double* out) const
     {
         for (int i = 0; i < 6; ++i) out[i] = a.v[i];
         if (!b) return;
         const double dt = a.t - b->t;
         if (dt < 8e-4 || dt > 0.25 || a.mode != b->mode) return; // too close / stale / a cut: no extrapolation
-        const double h = std::clamp(tn - a.t, 0.0, std::min(2.0 * dt, kMaxAhead));
+        const double h = std::clamp(tn - a.t, 0.0, std::min(2.0 * dt, tune_.maxAhead));
         const double f = h / dt;
         for (int i = 0; i < 6; ++i)
         {
@@ -279,10 +320,10 @@ private:
         }
     }
 
-    static void Eval(Cont& c, double tn, double* out)
+    void Eval(Cont& c, double tn, double* out, bool isCamera)
     {
         double now[6];
-        const int bi = c.Base();
+        const int bi = c.Base(tune_.baseline);
         Predict(c.p[0], bi >= 0 ? &c.p[bi] : nullptr, tn, now);
         if (c.dirty)
         {
@@ -292,7 +333,7 @@ private:
                 // model must start from there, otherwise the picture jumps by the prediction error.
                 double old[6];
                 Predict(c.mA, c.mBValid ? &c.mB : nullptr, tn, old);
-                const double k = kBlendTau > 0 ? std::exp(-(tn - c.offAt) / kBlendTau) : 0.0;
+                const double k = tune_.blendTau > 0 ? std::exp(-(tn - c.offAt) / tune_.blendTau) : 0.0;
                 bool cut = false;
                 for (int i = 0; i < 6; ++i)
                 {
@@ -303,12 +344,13 @@ private:
                 // a big disagreement is a teleport or a view change, not an error to blend away
                 if (std::fabs(c.off[0]) > 2 || std::fabs(c.off[1]) > 2 || std::fabs(c.off[2]) > 2 ||
                     std::fabs(c.off[3]) > 30 || std::fabs(c.off[4]) > 30) cut = true;
+                if (isCamera && !cut) RecordError(std::hypot(c.off[3], c.off[4]), std::sqrt(c.off[0] * c.off[0] + c.off[1] * c.off[1] + c.off[2] * c.off[2]));
                 if (cut) for (double& o : c.off) o = 0;
                 c.offAt = tn;
             }
             c.dirty = false;
         }
-        const double k = kBlendTau > 0 ? std::exp(-(tn - c.offAt) / kBlendTau) : 0.0;
+        const double k = tune_.blendTau > 0 ? std::exp(-(tn - c.offAt) / tune_.blendTau) : 0.0;
         for (int i = 0; i < 6; ++i) out[i] = now[i] + c.off[i] * k;
         c.mA = c.p[0];
         if (bi >= 0) c.mB = c.p[bi];
@@ -326,7 +368,15 @@ private:
         return false;
     }
 
-    static double Alpha(double t, double tCur) { return std::clamp((t - tCur) / kTick, 0.0, 1.0); }
+    double Alpha(double t, double tCur) const { return std::clamp((t - tCur) / tune_.tick, 0.0, 1.0); }
+
+    void RecordError(double angDeg, double pos)
+    {
+        constexpr double a = 0.1;
+        stats_.camAngErrDeg = stats_.samples ? stats_.camAngErrDeg + a * (angDeg - stats_.camAngErrDeg) : angDeg;
+        stats_.camPosErr = stats_.samples ? stats_.camPosErr + a * (pos - stats_.camPosErr) : pos;
+        ++stats_.samples;
+    }
 
     static Motion Lerp(const Motion& prev, const Motion& cur, double a)
     {
@@ -340,7 +390,7 @@ private:
         return r;
     }
 
-    static void UpdateTrack(Track& t, const Motion& m, double ts)
+    void UpdateTrack(Track& t, const Motion& m, double ts) const
     {
         if (Changed(t.cur, m))
         {
@@ -354,7 +404,7 @@ private:
         else t.cur = m; // same pose
     }
 
-    static void ApplyTrack(const Track& t, double tn, PlayerState& dst)
+    void ApplyTrack(const Track& t, double tn, PlayerState& dst) const
     {
         const Motion l = Lerp(t.prev, t.cur, Alpha(tn, t.tCur));
         dst.pos = l.pos;
@@ -362,6 +412,8 @@ private:
         if (dst.pitchValid && l.pitchValid) dst.pitchDeg = l.pitchDeg;
     }
 
+    SmootherTuning tune_;
+    SmootherStats stats_;
     WorldSnapshot cur_;
     bool haveCur_ = false;
     Clock::time_point epoch_{};
