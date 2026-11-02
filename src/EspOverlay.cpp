@@ -446,6 +446,11 @@ int EspOverlay::Run()
         const HWND mc = (opt_.demo || opt_.screenOverlay) ? nullptr : sup_.GameWindow();
         const bool gameFocused = opt_.demo || opt_.screenOverlay || (mc && fg == mc);
         const bool overlayFocused = fg == hwnd_;
+        if (closeConfigPending_)
+        {
+            closeConfigPending_ = false;
+            if (configOpen_) CloseConfig();
+        }
         HandleHotkeys(gameFocused || overlayFocused);
         settings_.SaveIfDue(frameStart); // debounced: a burst of UI changes is one write
 
@@ -721,11 +726,14 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     if (configOpen_)
     {
         UiInput in = pend_;
+        in.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        in.ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         pend_.pressed = pend_.released = pend_.rpressed = false; // edges are one-frame events
         pend_.wheel = 0;
         pend_.chars.clear();
         pend_.keys.clear();
         ui_.Draw(gfx_, in, w, h);
+        if (ui_.TakeCloseRequest()) closeConfigPending_ = true; // Esc with nothing waiting for input; closed at the top of the next loop pass
     }
 
     if (!gfx_.End()) return; // render target lost; Resize() rebuilds it next frame

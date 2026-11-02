@@ -8,6 +8,7 @@
 #pragma once
 #include "EspConfig.h"
 #include "Gfx.h"
+#include "UiNav.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -21,6 +22,7 @@ struct UiInput
     float wheel = 0; // notches this frame (+ = up)
     std::string chars; // typed printable ASCII this frame
     std::vector<int> keys; // virtual-key presses this frame (WM_KEYDOWN)
+    bool shift = false, ctrl = false; // modifier state when the frame was built
 };
 
 class ConfigUi
@@ -36,11 +38,19 @@ public:
     void SetDiagnosticsHandler(std::function<std::string()> h) { diagnostics_ = std::move(h); }
     // shown in GENERAL (exact / reconstructed, FOV, perspective)
     bool CapturingKeys() const { return rebindActive_ || friendFocus_ || profileFocus_; }
+    // Esc was pressed with nothing waiting for input: the overlay closes the window (taken once).
+    bool TakeCloseRequest()
+    {
+        const bool r = closeRequested_;
+        closeRequested_ = false;
+        return r;
+    }
 
     void ResetFocus()
     {
         friendFocus_ = profileFocus_ = rebindActive_ = false;
         dragging_ = false;
+        nav_.OnMouse();
     }
 
 private:
@@ -51,6 +61,8 @@ private:
     void InfoRow(const std::string& text, bool warn = false);
     void Section(const std::string& title);
     bool Button(const std::string& label, float x, float w, float h = 20.f, const Col* bg = nullptr);
+    // keyboard: registers the control at the layout cursor as a stop; true when focused (draws the ring); `act` receives the pending key action
+    bool NavStop(float x, float w, float h, UiNav::Act& act);
     bool Input(const std::string& text, float x, float w, bool focused, const char* placeholder);
 
     void TabGeneral();
@@ -71,6 +83,10 @@ private:
     bool clipOn_ = false;
     float clipX_ = 0, clipY_ = 0, clipW_ = 0, clipH_ = 0;
 
+    UiNav nav_;
+    int stopsLast_[UiNav::kMaxTabs] = {};
+    float lastMx_ = -1, lastMy_ = -1;
+    bool closeRequested_ = false;
     int tab_ = 0;
     float scroll_[7] = {0, 0, 0, 0, 0, 0, 0};
     float contentH_[7] = {0, 0, 0, 0, 0, 0, 0};

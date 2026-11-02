@@ -45,6 +45,7 @@ private:
     void Pace(Clock::time_point frameStart);
 
     AppOptions opt_;
+    bool closeConfigPending_ = false; // Esc in the config window
     Settings settings_;
     Gfx gfx_;
     EspRenderer renderer_;

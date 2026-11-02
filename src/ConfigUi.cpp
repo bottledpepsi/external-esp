@@ -14,6 +14,7 @@ namespace
                         400.f;
     constexpr float kValueCol = 300.f; // x offset of the value column
     const char* const kTabs[7] = {"GENERAL", "PLAYERS", "TRACERS", "ITEMS", "MINIMAP", "PROFILES", "HOTKEYS"};
+    constexpr int kTabCount = 7;
 
     // ---- theme: deep slate with violet accent + teal values (the C# tool used a different palette) ----
     const Col kPanelBg{0.070f, 0.078f, 0.102f, 0.96f};
@@ -43,9 +44,22 @@ bool ConfigUi::Hot(float x, float y, float w, float h) const
     return true;
 }
 
+bool ConfigUi::NavStop(float x, float w, float h, UiNav::Act& act)
+{
+    act = UiNav::Act::None;
+    const float contentY = y_ + scroll_[tab_] - (py_ + kTitleH + kTabH + kPad); // the same on every frame, whatever the scroll
+    const bool focused = nav_.Stop(contentY, h);
+    if (!focused) return false;
+    act = nav_.Take();
+    if (nav_.RingVisible()) g_->RRect(x - 1, y_ - 1, w + 2, h + 2, 5.f, kAccent, 1.5f);
+    return true;
+}
+
 bool ConfigUi::CycleRow(const std::string& label, int& idx, int count, const std::string& value)
 {
     const float lx = px_ + kPad, col = px_ + kValueCol, rowW = kW - 2 * kPad + 2;
+    UiNav::Act act;
+    NavStop(lx - 2, rowW, kRowH - 2, act);
     const bool hot = Hot(lx - 2, y_, rowW, kRowH);
     if (hot) g_->FillRRect(lx - 2, y_, rowW, kRowH - 2, 4.f, kHover);
     g_->Text(label, lx + 4, y_ + 4, Font::Ui, hot ? kSectionText : kText);
@@ -61,6 +75,16 @@ bool ConfigUi::CycleRow(const std::string& label, int& idx, int count, const std
         idx = (idx + count - 1) % count;
         changed = true;
     } // right click: previous
+    else if (act == UiNav::Act::Next || act == UiNav::Act::Activate)
+    {
+        idx = (idx + 1) % count;
+        changed = true;
+    }
+    else if (act == UiNav::Act::Prev)
+    {
+        idx = (idx + count - 1) % count;
+        changed = true;
+    }
     y_ += kRowH;
     if (changed) Save();
     return changed;
@@ -69,6 +93,8 @@ bool ConfigUi::CycleRow(const std::string& label, int& idx, int count, const std
 bool ConfigUi::ToggleRow(const std::string& label, bool& v)
 {
     const float lx = px_ + kPad, col = px_ + kValueCol, rowW = kW - 2 * kPad + 2;
+    UiNav::Act act;
+    NavStop(lx - 2, rowW, kRowH - 2, act);
     const bool hot = Hot(lx - 2, y_, rowW, kRowH);
     if (hot) g_->FillRRect(lx - 2, y_, rowW, kRowH - 2, 4.f, kHover);
     g_->Text(label, lx + 4, y_ + 4, Font::Ui, hot ? kSectionText : kText);
@@ -81,6 +107,16 @@ bool ConfigUi::ToggleRow(const std::string& label, bool& v)
     if (hot && in_->pressed)
     {
         v = !v;
+        changed = true;
+    }
+    else if (act == UiNav::Act::Activate)
+    {
+        v = !v;
+        changed = true;
+    }
+    else if ((act == UiNav::Act::Next && !v) || (act == UiNav::Act::Prev && v))
+    {
+        v = !v; // Right = on, Left = off
         changed = true;
     }
     y_ += kRowH;
@@ -104,22 +140,26 @@ void ConfigUi::Section(const std::string& title)
 
 bool ConfigUi::Button(const std::string& label, float x, float w, float h, const Col* bg)
 {
+    UiNav::Act act;
+    NavStop(x, w, h, act);
     const bool hot = Hot(x, y_, w, h);
     g_->FillRRect(x, y_, w, h, 4.f, hot ? kAccent : (bg ? *bg : kButton));
     g_->RRect(x, y_, w, h, 4.f, kPanelBorder, 1.f);
     g_->TextCentered(label, x + w * 0.5f, y_ + (h - 15.f) * 0.5f, Font::UiSmall, kText);
-    return hot && in_->pressed;
+    return (hot && in_->pressed) || act == UiNav::Act::Activate;
 }
 
 bool ConfigUi::Input(const std::string& text, float x, float w, bool focused, const char* placeholder)
 {
+    UiNav::Act act;
+    NavStop(x, w, 20.f, act);
     const bool hot = Hot(x, y_, w, 20.f);
     g_->FillRRect(x, y_, w, 20.f, 4.f, kInputBg);
     g_->RRect(x, y_, w, 20.f, 4.f, focused ? kAccent : kPanelBorder, 1.f);
     const bool caret = focused && ((frame_ / 30) % 2 == 0);
     if (text.empty() && !focused) g_->Text(placeholder, x + 6, y_ + 3, Font::UiSmall, kDim);
     else g_->Text(text + (caret ? "|" : ""), x + 6, y_ + 3, Font::UiSmall, kText);
-    return hot && in_->pressed;
+    return (hot && in_->pressed) || act == UiNav::Act::Activate;
 }
 
 // ---------------------------------------------------------------------------------------------- tabs
@@ -378,6 +418,8 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
     py_ = s_.cfgY;
 
     // ---- text input / rebinding (consumes this frame's keys) ----
+    // Whether a field or a rebind was waiting when the frame began: the keys of this frame (Esc, Enter, ...) belong to it even if it ends below.
+    const bool capturedAtStart = CapturingKeys();
     if (in.pressed)
     {
         friendFocus_ = false;
@@ -408,6 +450,15 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
         }
     }
 
+    // ---- keyboard navigation (not while a text field or a key rebind is waiting for input) ----
+    if (in.mx != lastMx_ || in.my != lastMy_ || in.pressed || in.rpressed || in.wheel != 0.f) nav_.OnMouse();
+    lastMx_ = in.mx;
+    lastMy_ = in.my;
+    nav_.BeginFrame(in.keys, in.shift, in.ctrl, capturedAtStart, stopsLast_[tab_]);
+    if (const int d = nav_.TakeTabDelta(); d != 0) tab_ = ((tab_ + d) % kTabCount + kTabCount) % kTabCount;
+    nav_.SetTab(tab_);
+    if (nav_.CloseRequested()) closeRequested_ = true;
+
     // ---- panel chrome ----
     g.FillRRect(px_ + 2, py_ + 5, kW, panelH, 8.f, Col{0, 0, 0, 0.35f}); // drop shadow
     g.FillRRect(px_, py_, kW, panelH, 8.f, kPanelBg);
@@ -415,7 +466,8 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
     g.FillRect(px_ + 1, py_ + kTitleH, kW - 2, 4, kPanelBg); // square off the title bar's lower corners
     g.FillRect(px_ + 12, py_ + kTitleH - 3, 62, 2, kAccent);
     g.Text("ESP CONFIG", px_ + 12, py_ + 6, Font::UiBold, kText);
-    g.TextRight("drag to move  |  right-click cycles backwards", px_ + kW - 10, py_ + 8, Font::Hint, kDim);
+    g.TextRight(nav_.RingVisible() ? "keys: arrows, Enter, Del = default, Ctrl+Tab, Esc" : "drag to move  |  right-click cycles backwards", px_ + kW - 10,
+                py_ + 8, Font::Hint, kDim);
 
     // ---- tabs ----
     const float tabW = kW / 7.f;
@@ -463,6 +515,8 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
         break;
     }
     contentH_[tab_] = y_ - startY + kPad;
+    stopsLast_[tab_] = nav_.StopCount();
+    scroll_[tab_] = std::clamp(nav_.ScrollFor(scroll_[tab_], viewH), 0.f, std::max(0.f, contentH_[tab_] - viewH)); // applied from the next frame
     clipOn_ = false;
     g.PopClip();
 
