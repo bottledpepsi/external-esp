@@ -7,6 +7,7 @@
 //              with Apply(EspConfig) / Build() converting between the two, like ApplyConfig/BuildConfig.
 #pragma once
 #include "Hotkeys.h"
+#include "Hud.h"
 #include "Json.h"
 #include <chrono>
 #include <filesystem>
@@ -19,7 +20,7 @@ struct EspConfig
     // Hotkeys
     // A hotkey is a key, optionally with Ctrl / Shift / Alt / Win: "F6", "Ctrl+Shift+F5". "" = not bound (allowed except for the first two).
     std::string HotkeyToggle = "Delete", HotkeyConfig = "Insert", HotkeyExit = "End";
-    std::string HotkeyTogglePlayers, HotkeyToggleItems, HotkeyToggleTracers, HotkeyToggleMinimap, HotkeyNextProfile;
+    std::string HotkeyTogglePlayers, HotkeyToggleItems, HotkeyToggleTracers, HotkeyToggleMinimap, HotkeyNextProfile, HotkeyCycleHud;
     std::string& HotkeyText(hotkeys::Action a); // the field of an action
     // GENERAL
     std::string DistanceFormat = "Meters"; // Meters | Kilometers | Off
@@ -62,6 +63,7 @@ struct EspConfig
     bool ShowHealth = true; // health bar next to the box (when the agent reports health)
     bool ShowItemEnchants = true; // list enchantments under an item's name
     bool ShowItemTags = false; // list the stack's raw tags (NBT / components) under the name
+    std::string HudMode = "Compact"; // the status text top-left: Off | Compact | Detailed (hud::Mode)
 
     // ADVANCED tab (see Tunables.h for the ranges): smoothing, agent rate, minimum marker sizes
     double SmootherBaselineMs = 12, SmootherBlendTauMs = 10, SmootherMaxAheadMs = 50, SmootherTickMs = 50;
@@ -115,6 +117,7 @@ struct Settings
     double smBaselineMs = 12, smBlendTauMs = 10, smMaxAheadMs = 50, smTickMs = 50;
     int agentHz = 120;
     float itemMinPx = 6, playerMinPx = 2;
+    int hudMode = 1; // hud::Mode
 
     // Keys of the loaded file this build does not know (kept so the next Save writes them back), and what Load() had to correct or migrate.
     std::map<std::string, std::string> unknownKeys;

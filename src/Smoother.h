@@ -70,6 +70,11 @@ struct SmootherStats
     double camAngErrDeg = 0; // hypot(yaw error, pitch error)
     double camPosErr = 0; // blocks
     uint64_t samples = 0;
+    // For the HUD (both averaged, in ms): how old the newest sample is at the moment a frame is drawn (the age of what you see, excluding the
+    // loopback transport, which is microseconds), and how much later than the best case a sample arrives (arrival - stamp - the smallest such
+    // difference of the last ~5 s; clock offset cancels out). 0 until measured.
+    double ageMs = 0;
+    double jitterMs = 0;
 };
 
 class Smoother
@@ -173,6 +178,12 @@ public:
         out = cur_;
         if (!enable || !haveCur_) return;
         const double tn = Sec(now);
+        if (lastSampleT_ > 0) // the age of the newest sample, averaged over ~50 frames
+        {
+            const double age = std::max(0.0, (tn - lastSampleT_) * 1e3);
+            ageEma_ = ageN_++ == 0 ? age : ageEma_ + 0.02 * (age - ageEma_);
+            stats_.ageMs = ageEma_;
+        }
 
         // entity positions: the game's own tick interpolation
         if (haveLocalTrack_) ApplyTrack(localTrack_, tn, out.local);
@@ -288,7 +299,11 @@ private:
     double SampleTime(const WorldSnapshot& s)
     {
         const double arrived = Sec(s.arrived);
-        if (!s.hasSampleTime) return arrived;
+        if (!s.hasSampleTime)
+        {
+            lastSampleT_ = arrived; // an agent without stamps: the age is counted from the arrival
+            return arrived;
+        }
         const auto arrivedNs = static_cast<int64_t>(arrived * 1e9);
         const int64_t delta = arrivedNs - s.sampleNs;
         const int64_t bucket = arrivedNs / 1000000000LL;
@@ -299,7 +314,10 @@ private:
         int64_t m = buckets_.front().second;
         for (const auto& b : buckets_) m = std::min(m, b.second);
         minDelta_ = m;
-        return static_cast<double>(s.sampleNs + m) * 1e-9;
+        jitterEma_ = jitterN_++ == 0 ? 0.0 : jitterEma_ + 0.05 * (static_cast<double>(delta - m) * 1e-6 - jitterEma_);
+        stats_.jitterMs = jitterEma_;
+        lastSampleT_ = static_cast<double>(s.sampleNs + m) * 1e-9;
+        return lastSampleT_;
     }
 
     // ---- continuous quantities ---------------------------------------------------------------------------------
@@ -414,6 +432,8 @@ private:
 
     SmootherTuning tune_;
     SmootherStats stats_;
+    double jitterEma_ = 0, ageEma_ = 0, lastSampleT_ = 0;
+    uint64_t jitterN_ = 0, ageN_ = 0;
     WorldSnapshot cur_;
     bool haveCur_ = false;
     Clock::time_point epoch_{};

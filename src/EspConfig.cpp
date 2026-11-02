@@ -33,7 +33,8 @@ std::string& EspConfig::HotkeyText(hotkeys::Action a)
     case Action::ToggleItems: return HotkeyToggleItems;
     case Action::ToggleTracers: return HotkeyToggleTracers;
     case Action::ToggleMinimap: return HotkeyToggleMinimap;
-    default: return HotkeyNextProfile;
+    case Action::NextProfile: return HotkeyNextProfile;
+    default: return HotkeyCycleHud;
     }
 }
 
@@ -43,7 +44,8 @@ std::string EspConfig::ToJson() const
     j += Kv("Version", std::to_string(configschema::kCurrentVersion));
     j += Kv("HotkeyToggle", S(HotkeyToggle)) + Kv("HotkeyConfig", S(HotkeyConfig)) + Kv("HotkeyExit", S(HotkeyExit));
     j += Kv("HotkeyTogglePlayers", S(HotkeyTogglePlayers)) + Kv("HotkeyToggleItems", S(HotkeyToggleItems)) +
-        Kv("HotkeyToggleTracers", S(HotkeyToggleTracers)) + Kv("HotkeyToggleMinimap", S(HotkeyToggleMinimap)) + Kv("HotkeyNextProfile", S(HotkeyNextProfile));
+        Kv("HotkeyToggleTracers", S(HotkeyToggleTracers)) + Kv("HotkeyToggleMinimap", S(HotkeyToggleMinimap)) + Kv("HotkeyNextProfile", S(HotkeyNextProfile)) +
+        Kv("HotkeyCycleHud", S(HotkeyCycleHud));
     j += Kv("DistanceFormat", S(DistanceFormat)) + Kv("MaxLabelDist", N(MaxLabelDist)) +
         Kv("TextShadow", B(TextShadow));
     j += Kv("ShowPlayers", B(ShowPlayers)) + Kv("ShowPlayerNames", B(ShowPlayerNames)) + Kv("BoxStyle", S(BoxStyle)) +
@@ -60,7 +62,7 @@ std::string EspConfig::ToJson() const
     j += Kv("OverlayOpacity", N(OverlayOpacity)) + Kv("FpsCap", N(FpsCap));
     j += Kv("ConfigX", N(ConfigX)) + Kv("ConfigY", N(ConfigY));
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
-        Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags));
+        Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags)) + Kv("HudMode", S(HudMode));
     j += Kv("SmootherBaselineMs", N(SmootherBaselineMs)) + Kv("SmootherBlendTauMs", N(SmootherBlendTauMs)) + Kv("SmootherMaxAheadMs", N(SmootherMaxAheadMs)) +
         Kv("SmootherTickMs", N(SmootherTickMs)) + Kv("AgentHz", N(AgentHz)) + Kv("ItemMinPx", N(ItemMinPx)) + Kv("PlayerMinPx", N(PlayerMinPx), Unknown.empty());
     size_t i = 0;
@@ -80,6 +82,8 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HotkeyToggleTracers = GetString(o, "HotkeyToggleTracers", c.HotkeyToggleTracers);
     c.HotkeyToggleMinimap = GetString(o, "HotkeyToggleMinimap", c.HotkeyToggleMinimap);
     c.HotkeyNextProfile = GetString(o, "HotkeyNextProfile", c.HotkeyNextProfile);
+    c.HotkeyCycleHud = GetString(o, "HotkeyCycleHud", c.HotkeyCycleHud);
+    c.HudMode = GetString(o, "HudMode", c.HudMode);
     c.DistanceFormat = GetString(o, "DistanceFormat", c.DistanceFormat);
     c.MaxLabelDist = static_cast<int>(GetNumber(o, "MaxLabelDist", c.MaxLabelDist));
     c.TextShadow = GetBool(o, "TextShadow", c.TextShadow);
@@ -191,6 +195,11 @@ void Settings::Apply(const EspConfig& c)
     smMaxAheadMs = c.SmootherMaxAheadMs;
     smTickMs = c.SmootherTickMs;
     agentHz = c.AgentHz;
+    {
+        hud::Mode m = hud::Mode::Compact;
+        hud::Parse(c.HudMode, m);
+        hudMode = static_cast<int>(m);
+    }
     itemMinPx = static_cast<float>(c.ItemMinPx);
     playerMinPx = static_cast<float>(c.PlayerMinPx);
     unknownKeys = c.Unknown;
@@ -243,6 +252,7 @@ EspConfig Settings::Build() const
     c.SmootherMaxAheadMs = smMaxAheadMs;
     c.SmootherTickMs = smTickMs;
     c.AgentHz = agentHz;
+    c.HudMode = hud::Name(static_cast<hud::Mode>(hudMode));
     c.ItemMinPx = itemMinPx;
     c.PlayerMinPx = playerMinPx;
     c.Unknown = unknownKeys;

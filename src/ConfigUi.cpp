@@ -172,7 +172,13 @@ void ConfigUi::TabGeneral()
         // the quick preset cycle; the ADVANCED tab has the slider. A distance between presets counts as the nearest one here.
         int idx = NearestIdx(LabelDist, s_.labelDist);
         const int before = idx;
-        CycleRow("Max label dist", idx, static_cast<int>(LabelDist.size()), LabelDistLabels[idx]);
+        {
+        int m = std::clamp(s_.hudMode, 0, 2);
+        const int before = m;
+        CycleRow("Status text (top-left)", m, 3, hud::Name(static_cast<hud::Mode>(m)));
+        if (m != before) s_.hudMode = m;
+    }
+    CycleRow("Max label dist", idx, static_cast<int>(LabelDist.size()), LabelDistLabels[idx]);
         if (idx != before) s_.labelDist = LabelDist[idx];
     }
     ToggleRow("Text shadow", s_.textShadow);

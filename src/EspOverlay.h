@@ -10,6 +10,7 @@
 #include "EspRenderer.h"
 #include "Gfx.h"
 #include "HotkeyRegistry.h"
+#include "Hud.h"
 #include "Hotkeys.h"
 #include "Recorder.h"
 #include "Replay.h"
@@ -50,6 +51,11 @@ private:
     void Pace(Clock::time_point frameStart);
 
     AppOptions opt_;
+    hud::Text hudText_;
+    hud::Mode lastHudMode_ = hud::Mode::Compact;
+    Clock::time_point nextHud_{}, hudWinStart_{};
+    uint64_t hudPackets_ = 0, hudNumbered_ = 0, hudLost_ = 0;
+    float sampleHz_ = 0, lossPct_ = 0;
     RateApplier rate_{120}; // sends a changed AgentHz to the running agent
     int lastSeenHz_ = 120;
     void UpdateAgentRate(Clock::time_point now, bool agentLive);

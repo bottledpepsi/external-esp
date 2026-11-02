@@ -48,6 +48,7 @@ namespace configschema
                 { const auto r = mm(presets::Thickness); I("TracerThickness", r.first, r.second); }
                 W("TracerTarget", {"Feet", "Center", "Head"});
                 B("TracerFade");
+                W("HudMode", {"Off", "Compact", "Detailed"});
                 B("ShowItems"); B("ShowItemNames"); B("ShowItemCount");
                 { const auto r = mm(presets::TraceOpacities); F("ItemOpacity", r.first, r.second); }
                 B("HideJunk");

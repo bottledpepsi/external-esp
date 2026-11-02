@@ -10,6 +10,7 @@
 #include "ProfileManager.h"
 #include "CliSpec.h"
 #include "ExitCodes.h"
+#include "Hud.h"
 #include "Shutdown.h"
 #include "SingleInstance.h"
 #include "Tunables.h"
@@ -325,6 +326,11 @@ void EspOverlay::Perform(hotkeys::Action a)
         if (!next.empty() && ProfileManager::Activate(next, settings_)) LOG_INFO("Profile '%s' (hotkey)", next.c_str());
         break;
     }
+    case Action::CycleHud:
+        settings_.hudMode = static_cast<int>(hud::Next(static_cast<hud::Mode>(std::clamp(settings_.hudMode, 0, 2))));
+        LOG_INFO("Status text: %s (hotkey)", hud::Name(static_cast<hud::Mode>(settings_.hudMode)));
+        settings_.RequestSave();
+        break;
     default: break;
     }
 }
@@ -793,7 +799,8 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, cam, snap, w);
     }
 
-    // HUD (top-left)
+    // HUD (top-left). The text is rebuilt four times a second (ten while the exit key is held), not every frame: the draw calls get the same
+    // strings again and again, so Gfx's text-layout cache hits and nothing is allocated per frame (Hud.h).
     ++fpsFrames_;
     if (now - fpsWindowStart_ >= 500ms)
     {
@@ -803,66 +810,100 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         fpsFrames_ = 0;
         fpsWindowStart_ = now;
     }
-    char line[200];
-    const char* state = !visible_ ? "hidden" : (opt_.demo ? "demo" : haveCam ? "active" : "waiting");
-    if (exitHolding_)
+    const hud::Mode hudMode = static_cast<hud::Mode>(std::clamp(settings_.hudMode, 0, 2));
+    if (now >= nextHud_ || hudMode != lastHudMode_)
     {
-        const float left = 3.f - std::chrono::duration<float>(now - exitHoldStart_).count();
-        std::snprintf(line, sizeof line, "external-esp  |  exiting in %.1fs (release to cancel)", std::max(0.f, left));
-        gfx_.Text(line, 10, 8, Font::Ui, Col{1.f, 0.45f, 0.35f, 1.f}, true);
-    }
-    else
-    {
-        std::snprintf(line, sizeof line, "external-esp  |  %s  |  %.0f fps  |  %.2f ms cpu  |  %s", state, fps_, cpuMs_,
-                      gfx_.IsGpu() ? "gpu" : "gdi");
-        gfx_.Text(line, 10, 8, Font::Ui, Col{0.80f, 0.85f, 1.f, 0.95f}, true);
-    }
-    std::string status = sup_.Status();
-    if (const std::string prob = Src().ProtocolProblem(now); !prob.empty() && !replayMode_) status = prob;
-    if (elog::Enabled(elog::Level::Debug) && now >= nextDebugLog_)
-    {
-        nextDebugLog_ = now + std::chrono::seconds(5);
+        nextHud_ = now + (exitHolding_ ? 100ms : 250ms);
+        lastHudMode_ = hudMode;
+
+        // rates over the time since the last rebuild
+        const float winS = std::chrono::duration<float>(now - hudWinStart_).count();
         const auto link = Src().Link();
-        LOG_DEBUG("stream: %llu snapshots published, %llu datagrams rejected (%llu auth), numbered %llu / lost %llu / late %llu / dup %llu",
-                  static_cast<unsigned long long>(Src().PacketCount()), static_cast<unsigned long long>(Src().RejectedCount()), static_cast<unsigned long long>(Src().AuthFailures()),
-                  static_cast<unsigned long long>(link.numbered), static_cast<unsigned long long>(link.lost), static_cast<unsigned long long>(link.reordered),
-                  static_cast<unsigned long long>(link.duplicates));
-    }
-    if (!replayMode_)
-        if (const std::string link = Src().LinkSummary(); !link.empty())
+        if (winS >= 0.2f)
         {
-            status += "  |  " + link;
-            if (now >= nextLinkLog_ && link != lastLinkLog_)
+            const uint64_t pk = Src().PacketCount();
+            sampleHz_ = static_cast<float>(pk - hudPackets_) / winS;
+            const uint64_t dn = link.numbered - hudNumbered_, dl = link.lost - hudLost_;
+            lossPct_ = (dn + dl) > 0 ? 100.f * static_cast<float>(dl) / static_cast<float>(dn + dl) : 0.f;
+            hudPackets_ = pk;
+            hudNumbered_ = link.numbered;
+            hudLost_ = link.lost;
+            hudWinStart_ = now;
+        }
+
+        std::string status = sup_.Status();
+        if (const std::string prob = Src().ProtocolProblem(now); !prob.empty() && !replayMode_) status = prob;
+        if (elog::Enabled(elog::Level::Debug) && now >= nextDebugLog_)
+        {
+            nextDebugLog_ = now + std::chrono::seconds(5);
+            LOG_DEBUG("stream: %llu snapshots published, %llu datagrams rejected (%llu auth), numbered %llu / lost %llu / late %llu / dup %llu",
+                      static_cast<unsigned long long>(Src().PacketCount()), static_cast<unsigned long long>(Src().RejectedCount()), static_cast<unsigned long long>(Src().AuthFailures()),
+                      static_cast<unsigned long long>(link.numbered), static_cast<unsigned long long>(link.lost), static_cast<unsigned long long>(link.reordered),
+                      static_cast<unsigned long long>(link.duplicates));
+        }
+        std::string linkText;
+        if (!replayMode_)
+        {
+            linkText = Src().LinkSummary();
+            if (!linkText.empty() && now >= nextLinkLog_ && linkText != lastLinkLog_)
             {
-                LOG_WARN("%s", link.c_str());
-                lastLinkLog_ = link;
+                LOG_WARN("%s", linkText.c_str());
+                lastLinkLog_ = linkText;
                 nextLinkLog_ = now + std::chrono::seconds(10);
             }
         }
-    if (replayMode_)
-    {
-        char rp[160];
-        std::snprintf(rp, sizeof rp, "REPLAY %llu/%llu  %.2gx%s", static_cast<unsigned long long>(replayDriver_.Position()),
-                      static_cast<unsigned long long>(replayPlayer_.Count()), replayDriver_.Speed(),
-                      replayDriver_.Paused() ? "  PAUSED (F7 step)" : (replayDriver_.Finished() ? "  END" : ""));
-        status = rp;
+        char replayText[160] = "";
+        if (replayMode_)
+        {
+            std::snprintf(replayText, sizeof replayText, "REPLAY %llu/%llu  %.2gx%s", static_cast<unsigned long long>(replayDriver_.Position()),
+                          static_cast<unsigned long long>(replayPlayer_.Count()), replayDriver_.Speed(),
+                          replayDriver_.Paused() ? "  PAUSED (F7 step)" : (replayDriver_.Finished() ? "  END" : ""));
+        }
+
+        const SmootherStats& st = smoother_.Stats();
+        hud::Facts f;
+        f.visible = visible_;
+        f.demo = opt_.demo;
+        f.replay = replayMode_;
+        f.gpu = gfx_.IsGpu();
+        f.fps = fps_;
+        f.cpuMs = cpuMs_;
+        f.exiting = exitHolding_;
+        f.exitLeftS = 3.f - std::chrono::duration<float>(now - exitHoldStart_).count();
+        f.agentLive = !stale || replayMode_;
+        f.haveCam = haveCam;
+        f.sampleHz = sampleHz_;
+        f.ageMs = st.samples > 0 || st.ageMs > 0 ? static_cast<float>(st.ageMs) : -1.f;
+        f.jitterMs = snap.hasSampleTime && st.jitterMs > 0 ? static_cast<float>(st.jitterMs) : -1.f;
+        f.lossPct = lossPct_;
+        f.lostTotal = link.lost;
+        f.reorderedTotal = link.reordered;
+        f.predictionErrPx = st.samples >= 5 ? static_cast<float>(tunables::AngleToPx(st.camAngErrDeg, h, cam.fovYDeg)) : -1.f;
+        f.cam = !haveCam ? hud::Cam::None : !exactCam ? hud::Cam::Reconstructed : snap.camera.mode == 1 ? hud::Cam::Exact : hud::Cam::ExactThirdPerson;
+        f.status = replayMode_ ? std::string_view(replayText) : std::string_view(status);
+        f.link = linkText;
+        f.snapStatus = snap.status;
+        f.recording = recorder_.Active();
+        f.recorded = recorder_.Recorded();
+        f.dropped = recorder_.Dropped();
+        hudText_.Build(hudMode, f);
+        lastStatus_ = status + (linkText.empty() ? std::string() : "  |  " + linkText); // for the diagnostics report
     }
-    if (haveCam && !opt_.demo) status += exactCam
-                                             ? (snap.camera.mode == 1
-                                                    ? "  |  cam: exact"
-                                                    : "  |  cam: exact, third person")
-                                             : "  |  cam: reconstructed";
-    if (!opt_.demo && !snap.status.empty() && !stale) status += "  |  " + snap.status;
-    if (recorder_.Active())
-        status += "  |  REC " + std::to_string(recorder_.Recorded()) +
-            (recorder_.Dropped() ? " (" + std::to_string(recorder_.Dropped()) + " dropped)" : std::string());
-    lastStatus_ = status;
-    gfx_.Text(status, 10, 26, Font::UiSmall, Col{0.62f, 0.67f, 0.80f, 0.9f}, true);
-    if (!opt_.demo && !stale && snap.localValid && !haveCam)
-        gfx_.Text("camera unavailable: the agent could not find the look-vector method (see esp_layout.json)", 10, 42,
-                  Font::UiSmall, Col{1.f, 0.6f, 0.4f, 1.f}, true);
-    if (haveCam && visible_ && snap.players.empty() && !opt_.demo)
-        gfx_.Text("no other players in range", 10, 42, Font::UiSmall, Col{0.55f, 0.6f, 0.72f, 0.8f}, true);
+    static const Col kHudMain{0.80f, 0.85f, 1.f, 0.95f}, kHudDim{0.62f, 0.67f, 0.80f, 0.9f}, kHudAlert{1.f, 0.6f, 0.4f, 1.f};
+    for (int i = 0; i < hudText_.Lines(); ++i)
+    {
+        if (exitHolding_ && i == 0) gfx_.Text(hudText_.Line(i), 10, 8, Font::Ui, Col{1.f, 0.45f, 0.35f, 1.f}, true);
+        else if (i == 0) gfx_.Text(hudText_.Line(i), 10, 8, Font::Ui, kHudMain, true);
+        else gfx_.Text(hudText_.Line(i), 10, 8.f + 18.f * static_cast<float>(i), Font::UiSmall, hudText_.Alert(i) ? kHudAlert : kHudDim, true);
+    }
+    if (hudMode != hud::Mode::Off)
+    {
+        static const std::string kNoCamera = "camera unavailable: the agent could not find the look-vector method (see esp_layout.json)";
+        static const std::string kNoPlayers = "no other players in range";
+        const float extraY = 8.f + 18.f * static_cast<float>(std::max(hudText_.Lines(), 1));
+        if (!opt_.demo && !stale && snap.localValid && !haveCam) gfx_.Text(kNoCamera, 10, extraY, Font::UiSmall, Col{1.f, 0.6f, 0.4f, 1.f}, true);
+        if (haveCam && visible_ && snap.players.empty() && !opt_.demo) gfx_.Text(kNoPlayers, 10, extraY, Font::UiSmall, Col{0.55f, 0.6f, 0.72f, 0.8f}, true);
+    }
 
     if (configOpen_)
     {

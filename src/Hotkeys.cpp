@@ -16,6 +16,7 @@ namespace hotkeys
             {Action::ToggleTracers, "HotkeyToggleTracers", "Toggle tracers", "", false, false},
             {Action::ToggleMinimap, "HotkeyToggleMinimap", "Toggle minimap", "", false, false},
             {Action::NextProfile, "HotkeyNextProfile", "Next profile", "", false, false},
+            {Action::CycleHud, "HotkeyCycleHud", "Cycle status text", "", false, false},
         };
 
         std::string Lower(std::string s)

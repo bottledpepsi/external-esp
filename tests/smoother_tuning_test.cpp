@@ -134,6 +134,29 @@ int main()
         CHECK(c.Stats().camAngErrDeg < 1.0);
     }
 
+    // ---- the HUD numbers: age of the newest sample at draw time, and arrival jitter above the best case ----
+    {
+        Smoother a;
+        for (int i = 0; i < 200; ++i)                       // steady 8 ms samples, constant transport; frames drawn 3 ms after each arrival
+        {
+            a.Push(Sample(i * 0.008, 10.0, 0, static_cast<uint64_t>(i + 1)));
+            a.Predict(At(i * 0.008 + 0.003), true);
+        }
+        CHECK(a.Stats().ageMs > 2.0 && a.Stats().ageMs < 4.0);      // ~3 ms (the stamp is on the same clock as the arrival here)
+        CHECK(a.Stats().jitterMs < 0.01);                            // nothing arrives later than its best case
+        Smoother b;
+        for (int i = 0; i < 400; ++i)                       // every other sample arrives 2 ms late
+        {
+            WorldSnapshot s = Sample(i * 0.008, 10.0, 0, static_cast<uint64_t>(i + 1));
+            s.arrived = At(i * 0.008 + (i % 2 ? 0.002 : 0.0));
+            b.Push(s);
+            b.Predict(s.arrived + 3ms, true);
+        }
+        CHECK(b.Stats().jitterMs > 0.5 && b.Stats().jitterMs < 1.5);   // about 1 ms on average
+        Smoother c;
+        CHECK(c.Stats().ageMs == 0 && c.Stats().jitterMs == 0);
+    }
+
     if (fails) std::printf("%d failure(s)\n", fails); else std::puts("smoother_tuning_test: all passed");
     return fails ? 1 : 0;
 }
