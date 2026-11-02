@@ -51,3 +51,14 @@ All of these exit with 2. (`--hz` used to clamp a too large number silently and 
 | `waiting for minecraft` (HUD) | no Minecraft client was found yet; with several, `--pid N` or `--title`. | - |
 
 The last two stay on the screen while the overlay waits (the game may start later), so they have no exit code.
+
+## Leaving
+
+The overlay ends when you hold the exit hotkey (End, 3 s), close its window, press **Ctrl+C** in its console, close the console, or log off / shut down Windows. All of them run the same fixed sequence (`src/Shutdown.h`), each step timed and guarded, so one that fails or is slow cannot stop the rest; the log line `Shutdown (Ctrl+C): hotkeys 0 ms, settings 4 ms, agent 912 ms, ...` shows how long each took:
+
+1. **hotkeys** - the system hotkeys go back to Windows first;
+2. **settings** - unsaved changes are written;
+3. **agent** - the agent inside the game is told to pause (`paused=1`, through the same reload as a rate change) so it stops sampling at 120 Hz for nobody; waits at most 3 s. Skipped if the agent never sent data (attaching just to pause it would load it), with `--no-inject`, in `--demo`/`--replay`. If it times out the agent keeps running until the game closes or an overlay starts again (which resumes it);
+4. **producers** (the UDP listener, replay driver), then **recorder** (drains and closes the `.esprec` only after nothing writes to it), skin downloads, the timer resolution.
+
+When the console is *closed*, Windows ends the process after about 5 s; the handler waits up to 4.5 s for the sequence to finish. A second Ctrl+C while it is shutting down ends the process at once (exit code 130). If the overlay itself crashes or is killed, nothing runs and the agent stays active in the game until it closes; starting the overlay again takes it over.

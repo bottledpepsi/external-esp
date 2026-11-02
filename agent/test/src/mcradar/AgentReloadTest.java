@@ -79,9 +79,19 @@ public final class AgentReloadTest {
         Object[] r5 = listen(b, 600);
         check((Integer) r5[0] >= 40 && r5[1].equals("[-]"), "no token / wire=4: tokenless datagrams, hz kept (" + r5[0] + ")");
 
+        // paused=1 (the overlay exited): the stream stops completely; paused=0 brings it back; the worker thread stays alive in between
+        Agent.agentmain("port=" + pb + ";paused=1;wire=4;export=" + ex, inst);
+        listen(b, 400);                                                     // what was in flight, and the worker finishing its tick
+        Object[] r6 = listen(b, 700);
+        check((Integer) r6[0] == 0, "paused: no datagrams at all, got " + r6[0]);
+        Agent.agentmain("port=" + pb + ";paused=0;wire=4;export=" + ex, inst);
+        Object[] r7 = listen(b, 700);
+        check((Integer) r7[0] >= 20, "resumed: streaming again at the old rate without a restart, got " + r7[0]);
+        check(AgentConfig.parse("paused=1").paused && !AgentConfig.parse("paused=0").paused && !AgentConfig.parse("hz=50").paused, "paused option parses");
+
         // the log says what happened and never prints a token
         String log = new String(java.nio.file.Files.readAllBytes(new File(dir, "esp_agent.log").toPath()), Charset.forName("UTF-8"));
-        check(log.contains("Loaded again: port " + pa + " -> " + pb) && log.contains("session token replaced") && log.contains("options unchanged") && log.contains("session token removed"), "log describes each reload:\n" + log);
+        check(log.contains("Loaded again: port " + pa + " -> " + pb) && log.contains("session token replaced") && log.contains("options unchanged") && log.contains("session token removed") && log.contains("Loaded again: paused") && log.contains("Loaded again: resumed"), "log describes each reload:\n" + log);
         check(!log.contains(ta) && !log.contains(tb), "the log never contains a token");
 
         // AgentConfig.reloadFrom on its own

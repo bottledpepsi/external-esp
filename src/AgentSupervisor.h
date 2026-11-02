@@ -35,6 +35,10 @@ public:
     enum class RateResult { None, Pending, Done, Failed };
     RateResult PollRateApply(std::string* detail = nullptr);
 
+    // On exit: tell the agent in the game to stop sampling (option paused=1 through the same reload path), waiting at most `budget`. Only when the agent is
+    // known to be running (data arrived since the game was attached): attaching just to pause it would load it for nothing. True when it was told.
+    bool PauseAgent(std::chrono::milliseconds budget);
+
 private:
     InjectPolicy policy_;
     unsigned generation_ = 0;
@@ -46,5 +50,6 @@ private:
     std::string status_ = "waiting for minecraft";
     Clock::time_point lastTick_{}, lastAttach_{}, attachedAt_{}, lastInject_{};
     DWORD injectedPid_ = 0;
+    bool agentLoaded_ = false; // data from the agent has arrived since this game was attached
     bool rateApplying_ = false; // the injector is running because of ApplyRate, not because of the supervisor's own policy
 };

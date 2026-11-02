@@ -128,6 +128,11 @@ public final class Agent {
                 long seqCounter = 0;
 
                 while (true) {
+                    if (cfg.paused) {                          // the overlay is gone (option paused=1): no sampling, no sending, nothing to do but wait
+                        Thread.sleep(250);
+                        next = System.nanoTime();              // no burst of catch-up samples when resumed
+                        continue;
+                    }
                     long t0 = System.currentTimeMillis();
                     long tSample = System.nanoTime();          // the sample instant, stamped on the wire (T line)
                     Snapshot snap;

@@ -20,6 +20,11 @@ final class AgentConfig {
      * hand-written -javaagent line) is treated as speaking v4. The agent sends min(this, Snapshot.WIRE_VERSION).
      */
     volatile int wire = 4;
+    /**
+     * Option paused=1: the worker stops sampling and sending (it only wakes every 250 ms to look at this flag) until a later load says paused=0.
+     * The overlay sends it when it exits, so a closed overlay does not leave the agent working at 120 Hz inside the game.
+     */
+    volatile boolean paused;
     /** Option verbose=1 (mcesp --verbose): log DEBUG lines too. */
     volatile boolean verbose;
     /** Option dump=1: write esp_structure.json (StructureDump). */
@@ -53,6 +58,7 @@ final class AgentConfig {
         c.selftestOut = kv.get("selftestout");
         c.dump = "1".equals(kv.get("dump")) || "true".equalsIgnoreCase(kv.get("dump"));
         c.verbose = "1".equals(kv.get("verbose")) || "true".equalsIgnoreCase(kv.get("verbose"));
+        c.paused = "1".equals(kv.get("paused")) || "true".equalsIgnoreCase(kv.get("paused"));
         String tok = kv.get("token");
         if (tok != null && tok.matches("[0-9A-Za-z]{16,64}")) c.token = tok;
         if (kv.containsKey("export") && !kv.get("export").isEmpty()) c.exportDir = kv.get("export");
@@ -72,6 +78,7 @@ final class AgentConfig {
         if (given.containsKey("hz") && n.hz != hz) { sb.append("hz ").append(hz).append(" -> ").append(n.hz).append("; "); hz = n.hz; }
         if (given.containsKey("wire") && n.wire != wire) { sb.append("wire ").append(wire).append(" -> ").append(n.wire).append("; "); wire = n.wire; }
         if (given.containsKey("verbose") && n.verbose != verbose) { sb.append("verbose ").append(verbose).append(" -> ").append(n.verbose).append("; "); verbose = n.verbose; }
+        if (given.containsKey("paused") && n.paused != paused) { sb.append(n.paused ? "paused; " : "resumed; "); paused = n.paused; }
         if (given.containsKey("dump") && n.dump != dump) { sb.append("dump ").append(dump).append(" -> ").append(n.dump).append("; "); dump = n.dump; }
         if (given.containsKey("pacer") && !n.pacer.equals(pacer)) { sb.append("pacer ").append(pacer).append(" -> ").append(n.pacer).append("; "); pacer = n.pacer; }
         if (given.containsKey("pacing") && n.pacingSeconds != pacingSeconds) { sb.append("pacing report after ").append(n.pacingSeconds).append(" s; "); pacingSeconds = n.pacingSeconds; pacingReportDone = false; }

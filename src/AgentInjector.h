@@ -48,6 +48,8 @@ public:
     // The rate the NEXT Start() asks the agent for. Starting again on a JVM that already runs the agent reloads it with the new options
     // (Agent.reload), which is how the ADVANCED tab's rate reaches the running game.
     void SetHz(int hz) { hz_ = hz; }
+    // The next Start() sends paused=1 (the agent stops sampling and sending until a later load says paused=0) / paused=0 (every normal load).
+    void SetPaused(bool p) { paused_ = p; }
     int Hz() const { return hz_; }
     void Reset(); // Succeeded/Failed -> Idle
     State GetState() const { return state_.load(); }
@@ -76,6 +78,7 @@ private:
 
     InjectorConfig cfg_;
     std::atomic<int> hz_;
+    std::atomic<bool> paused_{false};
     std::atomic<State> state_{State::Idle};
     std::atomic<int> progress_{0};
     mutable std::mutex mtx_;

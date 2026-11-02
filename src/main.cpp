@@ -19,6 +19,7 @@
 #include "CliSpec.h"
 #include "ExitCodes.h"
 #include "LegacyImport.h"
+#include "Shutdown.h"
 #include "SingleInstance.h"
 #include "UdpListener.h"
 #include "Logger.h"
@@ -39,6 +40,30 @@
 
 namespace
 {
+    // Ctrl+C, Ctrl+Break, closing the console window, log-off, shutdown: ask the overlay loop to leave (it pauses the agent, saves, releases the keys)
+    // and, for the events after which Windows kills the process in ~5 s, wait for it to finish. A second Ctrl+C while shutting down ends it at once.
+    BOOL WINAPI ConsoleCtrl(DWORD type)
+    {
+        using exitflow::Reason;
+        switch (type)
+        {
+        case CTRL_C_EVENT:
+        case CTRL_BREAK_EVENT:
+            if (!exitflow::Global().Request(Reason::CtrlC)) ExitProcess(130); // already shutting down and the user insists
+            return TRUE;
+        case CTRL_CLOSE_EVENT:
+            exitflow::Global().Request(Reason::ConsoleClosed);
+            exitflow::Global().WaitDone(std::chrono::milliseconds(4500));
+            return TRUE;
+        case CTRL_LOGOFF_EVENT:
+        case CTRL_SHUTDOWN_EVENT:
+            exitflow::Global().Request(Reason::LogOff);
+            exitflow::Global().WaitDone(std::chrono::milliseconds(4500));
+            return TRUE;
+        default: return FALSE;
+        }
+    }
+
     void PrintUsage() { std::fputs(cli::Help().c_str(), stdout); }
 } // namespace
 
@@ -281,6 +306,8 @@ int main(int argc, char** argv)
             LOG_ERROR("%s", why.c_str());
             return exitcode::kPortInUse;
         }
+    SetConsoleCtrlHandler(ConsoleCtrl, TRUE); // only for the overlay: the short modes keep the normal Ctrl+C
     EspOverlay overlay(opt);
-    return overlay.Run();
+    const int rc = overlay.Run();
+    return rc;
 }

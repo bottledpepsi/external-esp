@@ -1,4 +1,5 @@
 #include "AgentSupervisor.h"
+#include <thread>
 #include "Logger.h"
 
 using namespace std::chrono_literals;
@@ -32,6 +33,7 @@ void AgentSupervisor::Tick()
                 injectedPid_ = 0;
                 inj_.Reset();
                 policy_.OnTargetGone();
+                agentLoaded_ = false;
                 ++generation_;
             }
             status_ = pm_.Issue().empty() ? "waiting for minecraft" : pm_.Issue();
@@ -44,6 +46,7 @@ void AgentSupervisor::Tick()
         pm_.Detach();
         inj_.Reset();
         policy_.OnTargetGone();
+        agentLoaded_ = false;
         ++generation_;
         status_ = "minecraft closed - waiting for it to start again";
         return;
@@ -54,6 +57,7 @@ void AgentSupervisor::Tick()
     if (last != Clock::time_point{} && now - last < 1500ms)
     {
         policy_.OnData();
+        agentLoaded_ = true;
         status_ = "agent connected";
         return;
     }
@@ -134,4 +138,26 @@ AgentSupervisor::RateResult AgentSupervisor::PollRateApply(std::string* detail)
         rateApplying_ = false;
         return RateResult::Failed;
     }
+}
+
+bool AgentSupervisor::PauseAgent(std::chrono::milliseconds budget)
+{
+    if (opt_.demo || !opt_.replayPath.empty() || !opt_.autoInject || !pm_.IsAttached() || !agentLoaded_) return false;
+    if (Busy()) // an attach is running right now: give it a moment to finish, then ours follows
+    {
+        const auto until = Clock::now() + budget / 2;
+        while (Busy() && Clock::now() < until) std::this_thread::sleep_for(20ms);
+        if (Busy()) return false;
+    }
+    inj_.Reset();
+    inj_.SetPaused(true);
+    inj_.Start(pm_.Target());
+    LOG_INFO("Exit: telling the agent in the game to pause (so it does not keep sampling for nobody).");
+    const auto until = Clock::now() + budget;
+    while (Busy() && Clock::now() < until) std::this_thread::sleep_for(20ms);
+    const bool ok = inj_.GetState() == AgentInjector::State::Succeeded;
+    if (ok) LOG_INFO("Exit: the agent is paused.");
+    else LOG_WARN("Exit: the agent could not be paused in time (%s); it keeps running until the game closes or an overlay starts again.",
+                  Busy() ? "the attach helper was still running" : inj_.Message().c_str());
+    return ok;
 }

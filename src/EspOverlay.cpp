@@ -10,6 +10,7 @@
 #include "ProfileManager.h"
 #include "CliSpec.h"
 #include "ExitCodes.h"
+#include "Shutdown.h"
 #include "SingleInstance.h"
 #include "Tunables.h"
 #include "SkinCache.h"
@@ -147,6 +148,7 @@ LRESULT EspOverlay::OnMessage(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_CLOSE: DestroyWindow(h);
         return 0;
     case WM_DESTROY:
+        exitflow::Global().Request(exitflow::Reason::WindowClosed);
         if (!suppressQuit_)
         {
             quit_ = true;
@@ -372,6 +374,7 @@ void EspOverlay::HandleHotkeys(bool focused)
         else if (Clock::now() - exitHoldStart_ >= kExitHold)
         {
             LOG_INFO("Exit hotkey held - shutting down.");
+            exitflow::Global().Request(exitflow::Reason::Hotkey);
             quit_ = true;
         }
     }
@@ -501,6 +504,11 @@ int EspOverlay::Run()
 
     while (!quit_)
     {
+        if (exitflow::Global().Requested()) // Ctrl+C / console closed / log-off (the handler runs on another thread)
+        {
+            LOG_INFO("Exiting: %s.", exitflow::Name(exitflow::Global().Why()));
+            break;
+        }
         const auto frameStart = Clock::now();
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -559,16 +567,26 @@ int EspOverlay::Run()
         RenderFrame(r, gameFocused);
         Pace(frameStart);
     }
-    timeEndPeriod(1);
-    hkRegistry_.Shutdown(); // give the keys back before the window goes
-    settings_.Flush();
-    SkinCache::Stop();
-    replayDriver_.Stop();
-    if (!replayMode_)
-        if (const std::string link = Src().LinkSummary(); !link.empty()) LOG_INFO("Session end - %s", link.c_str());
-    udp_.Stop(); // the producer first, then the recorder (it drains and closes the file)
-    recorder_.Stop();
+    // ---- leaving: one fixed order (Shutdown.h kOrder), each step guarded and timed, so a slow or failing one cannot keep the rest from running ----
+    exitflow::Global().Request(exitflow::Reason::WindowClosed); // no-op when a reason was already given
+    exitflow::Sequence seq;
+    seq.Add("hotkeys", [this] { hkRegistry_.Shutdown(); }); // the keys go back to the system first
+    seq.Add("settings", [this] { settings_.Flush(); });
+    seq.Add("agent", [this] { sup_.PauseAgent(std::chrono::milliseconds(3000)); }, std::chrono::milliseconds(3500));
+    seq.Add("producers", [this]
+    {
+        replayDriver_.Stop();
+        if (!replayMode_)
+            if (const std::string link = Src().LinkSummary(); !link.empty()) LOG_INFO("Session end - %s", link.c_str());
+        udp_.Stop(); // the producer first, then the recorder (it drains and closes the file)
+    });
+    seq.Add("recorder", [this] { recorder_.Stop(); });
+    seq.Add("skins", [] { SkinCache::Stop(); });
+    seq.Add("timer", [] { timeEndPeriod(1); });
+    const auto steps = seq.Run();
+    LOG_INFO("Shutdown (%s): %s", exitflow::Name(exitflow::Global().Why()), exitflow::Sequence::Summary(steps).c_str());
     LOG_INFO("Overlay stopped.");
+    exitflow::Global().MarkDone(); // releases a console-close handler that is waiting for us
     return 0;
 }
 
