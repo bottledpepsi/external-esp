@@ -10,21 +10,21 @@ namespace tunables
         // Defaults for the four smoother values are the ones the golden recordings were tuned with (Smoother.h); see docs/tuning.md.
         const Def kTable[] = {
             {Id::SmootherBaselineMs, "SmootherBaselineMs", "Velocity baseline", "ms", 2, 50, SMOOTHER_BASELINE * 1000.0, 1, 0,
-             "How old the sample is that speed is measured against. Higher = steadier speed, slower to react.", false},
+             "Age of the sample speed is measured from. Up = steadier, slower.", false},
             {Id::SmootherBlendTauMs, "SmootherBlendTauMs", "Correction blend", "ms", 0, 50, SMOOTHER_BLEND_TAU * 1000.0, 1, 0,
-             "How long the jump to each new sample is smeared out. 0 = the picture snaps; higher = softer, but lags more.", false},
+             "How long each jump is smeared out. 0 = snaps; up = softer, lags.", false},
             {Id::SmootherMaxAheadMs, "SmootherMaxAheadMs", "Max extrapolation", "ms", 0, 100, 50, 5, 0,
-             "How far past the newest sample the pose may be guessed. 0 = never guess; higher = smoother at a low sample rate.", false},
+             "How far past the newest sample the pose is guessed. 0 = never.", false},
             {Id::SmootherTickMs, "SmootherTickMs", "Game tick", "ms", 25, 100, 50, 5, 0,
-             "Length of one game tick for player movement. 50 = 20 TPS (normal); raise it only for a server that runs slow.", false},
+             "Game tick length for other players. 50 ms = 20 TPS (normal).", false},
             {Id::AgentHz, "AgentHz", "Agent rate", "Hz", 10, 240, 120, 5, 0,
-             "Samples per second the game agent sends. Higher = smoother, a little more CPU in the game. The command line --hz overrides it for one run.", false},
+             "Samples per second from the game. Up = smoother, more game CPU.", false},
             {Id::ItemMinPx, "ItemMinPx", "Item marker size", "px", 2, 24, 6, 1, 0,
-             "Smallest size an item is drawn at, so far-away items stay visible instead of disappearing.", false},
+             "Smallest size an item is drawn at; keeps far items visible.", false},
             {Id::PlayerMinPx, "PlayerMinPx", "Player box minimum", "px", 0, 12, 2, 1, 0,
-             "Smallest width/height of a player box. Far players are drawn at this size instead of vanishing. 0 = true size.", false},
+             "Smallest player box (far players grow to it). 0 = true size.", false},
             {Id::LabelDist, "MaxLabelDist", "Label distance", "m", 10, 510, 510, 10, 0,
-             "Names and distances are hidden beyond this. The top of the slider is Unlimited.", true},
+             "Names and distances hide beyond this. Far right = Unlimited.", true},
         };
         static_assert(sizeof kTable / sizeof kTable[0] == static_cast<size_t>(Id::Count), "one Def per Id");
     } // namespace
@@ -89,6 +89,22 @@ namespace tunables
         if (d.maxIsUnlimited && v >= d.max) return "Unlimited";
         char b[48];
         std::snprintf(b, sizeof b, "%.*f %s", d.decimals, v, d.unit);
+        return b;
+    }
+
+    double AngleToPx(double deg, int heightPx, double fovYDeg)
+    {
+        if (heightPx <= 0 || !(fovYDeg > 1.0 && fovYDeg < 179.0) || !std::isfinite(deg)) return 0.0;
+        const double rad = 3.14159265358979323846 / 180.0;
+        return std::tan(deg * rad) * (heightPx * 0.5) / std::tan(fovYDeg * rad * 0.5);
+    }
+
+    std::string DescribeError(const SmootherStats& st, int heightPx, double fovYDeg)
+    {
+        if (st.samples < 5) return "Prediction error: no camera data yet (move the view).";
+        char b[160];
+        std::snprintf(b, sizeof b, "Prediction error: %.2f deg = %.1f px, %.4f blocks", st.camAngErrDeg, AngleToPx(st.camAngErrDeg, heightPx, fovYDeg),
+                      st.camPosErr);
         return b;
     }
 

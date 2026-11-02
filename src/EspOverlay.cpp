@@ -639,6 +639,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         cam.Update();
     }
     ui_.SetCameraInfo(camInfo);
+    ui_.SetLive(smoother_.Stats(), h, cam.fovYDeg);
 
     // ---- 3. draw into the off-screen surface ----
     // While the config window is open the whole surface is given alpha 1/255: invisible, but hit-testable,

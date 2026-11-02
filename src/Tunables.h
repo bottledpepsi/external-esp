@@ -46,4 +46,11 @@ namespace tunables
     std::string Format(const Def& d, double v); // "12 ms", "Unlimited", "2.5 px"
 
     SmootherTuning ToSmoother(const Settings& s); // for Smoother::SetTuning
+
+    // ---- live readout (ADVANCED tab) ----
+    // An angle on the screen, in pixels: the window is `heightPx` tall and shows `fovYDeg` degrees vertically (the pinhole model the overlay itself
+    // uses: pixels per radian at the screen centre = (h/2) / tan(fov/2)).
+    double AngleToPx(double deg, int heightPx, double fovYDeg);
+    // Two short lines for the tab: how far each new camera sample was from the prediction, in degrees and pixels, and what to do with the number.
+    std::string DescribeError(const SmootherStats& st, int heightPx, double fovYDeg);
 } // namespace tunables

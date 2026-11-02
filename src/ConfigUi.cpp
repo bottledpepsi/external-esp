@@ -13,8 +13,8 @@ namespace
     constexpr float kW = 480.f, kTabH = 24.f, kTitleH = 28.f, kRowH = 24.f, kSectH = 20.f, kPad = 10.f, kContentH =
                         400.f;
     constexpr float kValueCol = 300.f; // x offset of the value column
-    const char* const kTabs[7] = {"GENERAL", "PLAYERS", "TRACERS", "ITEMS", "MINIMAP", "PROFILES", "HOTKEYS"};
-    constexpr int kTabCount = 7;
+    const char* const kTabs[8] = {"GENERAL", "PLAYERS", "TRACERS", "ITEMS", "MINIMAP", "PROFILES", "HOTKEYS", "ADVANCED"};
+    constexpr int kTabCount = 8;
 
     // ---- theme: deep slate with violet accent + teal values (the C# tool used a different palette) ----
     const Col kPanelBg{0.070f, 0.078f, 0.102f, 0.96f};
@@ -378,6 +378,87 @@ void ConfigUi::TabHotkeys()
     InfoRow("Hotkeys work while Minecraft is focused (they are polled globally).");
 }
 
+bool ConfigUi::SliderRow(tunables::Id id)
+{
+    const tunables::Def& d = tunables::Get(id);
+    const double v = tunables::Value(s_, id);
+    const float lx = px_ + kPad, rowW = kW - 2 * kPad + 2;
+    const float tx = px_ + 176.f, tw = 150.f; // the track
+    UiNav::Act act;
+    NavStop(lx - 2, rowW, kRowH - 2, act);
+    const bool hotRow = Hot(lx - 2, y_, rowW, kRowH);
+    if (hotRow) g_->FillRRect(lx - 2, y_, rowW, kRowH - 2, 4.f, kHover);
+    g_->Text(d.label, lx + 4, y_ + 4, Font::Ui, hotRow ? kSectionText : kText);
+
+    const double frac = std::clamp((v - d.min) / (d.max - d.min), 0.0, 1.0);
+    const float cy = y_ + kRowH * 0.5f - 1.f;
+    g_->FillRRect(tx, cy - 2.f, tw, 4.f, 2.f, kOff);
+    g_->FillRRect(tx, cy - 2.f, std::max(4.f, tw * static_cast<float>(frac)), 4.f, 2.f, kAccent);
+    g_->FillCircle(tx + tw * static_cast<float>(frac), cy, 6.f, Col{1, 1, 1, 1});
+    g_->Text(tunables::Format(d, v), tx + tw + 14.f, y_ + 4, Font::Ui, tunables::IsDefault(s_, id) ? kValue : kRebind);
+
+    bool changed = false;
+    // mouse: press on the track starts a drag, which follows the cursor until the button is released (even outside the track)
+    if (Hot(tx - 8.f, y_, tw + 16.f, kRowH) && in_->pressed) sliderDrag_ = static_cast<int>(id);
+    if (sliderDrag_ == static_cast<int>(id))
+    {
+        if (in_->down)
+        {
+            const double f = std::clamp((in_->mx - tx) / tw, 0.f, 1.f);
+            if (tunables::Set(s_, id, d.min + f * (d.max - d.min)) != v) changed = true;
+        }
+        else sliderDrag_ = -1;
+    }
+    // keyboard: Left / Right = one step, Delete = default
+    if (act == UiNav::Act::Prev) changed = tunables::Set(s_, id, v - d.step) != v || changed;
+    else if (act == UiNav::Act::Next) changed = tunables::Set(s_, id, v + d.step) != v || changed;
+    else if (act == UiNav::Act::Reset && !tunables::IsDefault(s_, id))
+    {
+        tunables::Reset(s_, id);
+        changed = true;
+    }
+    if (!tunables::IsDefault(s_, id) && Button("RESET", px_ + kW - kPad - 50.f, 46.f, 18.f))
+    {
+        tunables::Reset(s_, id);
+        changed = true;
+    }
+    y_ += kRowH;
+    InfoRow(d.help); // what it does, one line
+    if (changed) Save();
+    return changed;
+}
+
+void ConfigUi::TabAdvanced()
+{
+    using tunables::Id;
+    Section("SMOOTHING  -  change one at a time");
+    for (Id id : {Id::SmootherBaselineMs, Id::SmootherBlendTauMs, Id::SmootherMaxAheadMs, Id::SmootherTickMs}) SliderRow(id);
+    InfoRow(tunables::DescribeError(liveStats_, liveH_, liveFov_)); // live: watch it while you move a slider
+    InfoRow("Lower is better. It averages ~20 samples: wait a second after a change.");
+    y_ += 6;
+    Section("AGENT");
+    SliderRow(Id::AgentHz);
+    y_ += 6;
+    Section("MARKERS AND LABELS");
+    SliderRow(Id::ItemMinPx);
+    SliderRow(Id::PlayerMinPx);
+    SliderRow(Id::LabelDist);
+    y_ += 6;
+    const float lx = px_ + kPad;
+    bool any = false;
+    for (int i = 0; i < tunables::Count(); ++i) any = any || !tunables::IsDefault(s_, static_cast<Id>(i));
+    if (any)
+    {
+        if (Button("RESET ALL TO DEFAULTS", lx, 200.f, 20.f))
+        {
+            for (int i = 0; i < tunables::Count(); ++i) tunables::Reset(s_, static_cast<Id>(i));
+            Save();
+        }
+        y_ += kRowH;
+    }
+    else InfoRow("Everything on this tab is at its default.");
+}
+
 // ---------------------------------------------------------------------------------------------- frame
 
 void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
@@ -470,8 +551,8 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
                 py_ + 8, Font::Hint, kDim);
 
     // ---- tabs ----
-    const float tabW = kW / 7.f;
-    for (int t = 0; t < 7; ++t)
+    const float tabW = kW / static_cast<float>(kTabCount);
+    for (int t = 0; t < kTabCount; ++t)
     {
         const float tx = px_ + t * tabW, ty = py_ + kTitleH;
         const bool hot = Hot(tx, ty, tabW, kTabH);
@@ -512,6 +593,8 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
     case 5: TabProfiles();
         break;
     case 6: TabHotkeys();
+        break;
+    case 7: TabAdvanced();
         break;
     }
     contentH_[tab_] = y_ - startY + kPad;

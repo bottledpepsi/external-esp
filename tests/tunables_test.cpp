@@ -6,6 +6,7 @@
 #include "Tunables.h"
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 using namespace tunables;
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL line %d: %s\n", __LINE__, #c); ++fails; } } while (0)
@@ -22,6 +23,7 @@ int main()
         CHECK(Quantize(d, d.min) == d.min);
         CHECK(Find(d.key) == &d);
         CHECK(d.help && *d.help && d.label && *d.label && d.unit);
+        CHECK(std::strlen(d.help) <= 72 && std::strlen(d.label) <= 22); // must fit the 480 px window on one line
         // every key is a key of the settings file (a spec in the schema, or MaxLabelDist's own)
         CHECK(configschema::IsKnownKey(d.key));
         // ... and a range in the schema agrees with the table (the schema reads this very table)
@@ -96,6 +98,20 @@ int main()
         CHECK(old.Warnings() == 0 && old.cfg.AgentHz == 120 && old.cfg.SmootherTickMs == 50);
         const auto bad = configschema::LoadText(R"({"AgentHz":9000,"SmootherTickMs":"fast","ItemMinPx":-3,"PlayerMinPx":99})");
         CHECK(bad.Warnings() == 4 && bad.cfg.AgentHz == 240 && bad.cfg.SmootherTickMs == 50 && bad.cfg.ItemMinPx == 2 && bad.cfg.PlayerMinPx == 12);
+    }
+
+    // ---- the live readout: degrees on the screen ----
+    {
+        CHECK(std::fabs(AngleToPx(1.0, 1080, 70.0) - 13.46) < 0.05);          // 1 deg at 1080p / 70 deg FOV
+        CHECK(std::fabs(AngleToPx(1.0, 2160, 70.0) - 26.92) < 0.1);           // twice the pixels at 4K
+        CHECK(AngleToPx(0.0, 1080, 70.0) == 0.0);
+        CHECK(AngleToPx(1.0, 0, 70.0) == 0.0 && AngleToPx(1.0, 1080, 0.0) == 0.0 && AngleToPx(std::nan(""), 1080, 70.0) == 0.0);
+        SmootherStats st;
+        CHECK(DescribeError(st, 1080, 70).find("no camera data") != std::string::npos);
+        st.samples = 50; st.camAngErrDeg = 0.31; st.camPosErr = 0.003;
+        const std::string line = DescribeError(st, 1080, 70);
+        CHECK(line == "Prediction error: 0.31 deg = 4.2 px, 0.0030 blocks");
+        CHECK(line.size() <= 72);
     }
 
     if (fails) std::printf("%d failure(s)\n", fails); else std::puts("tunables_test: all passed");

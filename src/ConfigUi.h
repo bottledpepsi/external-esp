@@ -3,11 +3,13 @@
 // Immediate-mode: every frame Draw() lays the rows out top to bottom and the same call that draws a
 // widget also hit-tests it against this frame's input, so layout and click handling can never
 // disagree (the C# tool kept two parallel code paths that had to be edited in lock-step).
-// Layout is the original's: 480 px panel, title bar (drag to move), 7 tabs
-// GENERAL | PLAYERS | TRACERS | ITEMS | MINIMAP | PROFILES | HOTKEYS, 24 px rows, value column at +300.
+// Layout is the original's: 480 px panel, title bar (drag to move), 8 tabs
+// GENERAL | PLAYERS | TRACERS | ITEMS | MINIMAP | PROFILES | HOTKEYS | ADVANCED, 24 px rows, value column at +300.
 #pragma once
 #include "EspConfig.h"
 #include "Gfx.h"
+#include "Smoother.h"
+#include "Tunables.h"
 #include "UiNav.h"
 #include <functional>
 #include <string>
@@ -34,6 +36,13 @@ public:
 
     void Draw(Gfx& g, const UiInput& in, int winW, int winH);
     void SetCameraInfo(const std::string& s) { cameraInfo_ = s; }
+    // numbers for the ADVANCED tab's live readout (set every frame by the overlay)
+    void SetLive(const SmootherStats& st, int screenH, double fovYDeg)
+    {
+        liveStats_ = st;
+        liveH_ = screenH;
+        liveFov_ = fovYDeg;
+    }
     // "Copy diagnostics" (GENERAL tab): the handler builds the report, puts it on the clipboard and returns the one-line result to show.
     void SetDiagnosticsHandler(std::function<std::string()> h) { diagnostics_ = std::move(h); }
     // shown in GENERAL (exact / reconstructed, FOV, perspective)
@@ -50,6 +59,7 @@ public:
     {
         friendFocus_ = profileFocus_ = rebindActive_ = false;
         dragging_ = false;
+        sliderDrag_ = -1;
         nav_.OnMouse();
     }
 
@@ -72,6 +82,9 @@ private:
     void TabMinimap();
     void TabProfiles();
     void TabHotkeys();
+    void TabAdvanced();
+    // one row of the ADVANCED tab: label, slider, value, RESET (only when changed) and the help line. Returns true when the value changed.
+    bool SliderRow(tunables::Id id);
     void HotkeyRow(const std::string& label, int& vk, int slot);
     void Save() { s_.RequestSave(); } // written by the overlay loop once the changes stop (EspConfig.h)
 
@@ -88,8 +101,12 @@ private:
     float lastMx_ = -1, lastMy_ = -1;
     bool closeRequested_ = false;
     int tab_ = 0;
-    float scroll_[7] = {0, 0, 0, 0, 0, 0, 0};
-    float contentH_[7] = {0, 0, 0, 0, 0, 0, 0};
+    float scroll_[8] = {};
+    float contentH_[8] = {};
+    int sliderDrag_ = -1; // tunables::Id being dragged with the mouse, -1 none
+    SmootherStats liveStats_;
+    int liveH_ = 0;
+    double liveFov_ = 70;
     bool dragging_ = false;
     float dragOffX_ = 0, dragOffY_ = 0;
 
