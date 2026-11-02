@@ -9,11 +9,13 @@
 #include "EspConfig.h"
 #include "EspRenderer.h"
 #include "Gfx.h"
+#include "Hotkeys.h"
 #include "Recorder.h"
 #include "Replay.h"
 #include "RateApply.h"
 #include "Smoother.h"
 #include "UdpListener.h"
+#include <array>
 #include <chrono>
 #include <unordered_map>
 
@@ -83,6 +85,8 @@ private:
     Clock::time_point exitHoldStart_{};
     bool exitHolding_ = false;
     std::unordered_map<int, bool> prevKeys_;
+    std::array<bool, hotkeys::kActionCount> prevDown_{}; // edge detection per hotkey action
+    void Perform(hotkeys::Action a);
 
     unsigned lastGeneration_ = 0;   // AgentSupervisor::Generation() when the data on screen was received
     uint64_t lastSessions_ = 0;     // StreamIngest::Link().sessions

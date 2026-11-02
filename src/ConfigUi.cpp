@@ -353,29 +353,41 @@ void ConfigUi::TabProfiles()
     }
 }
 
-void ConfigUi::HotkeyRow(const std::string& label, int& vk, int slot)
+void ConfigUi::HotkeyRow(hotkeys::Action a)
 {
-    const float col = px_ + kValueCol;
-    g_->Text(label, px_ + kPad + 4, y_ + 4, Font::Ui, kText);
+    const hotkeys::ActionDef& d = hotkeys::Def(a);
+    const hotkeys::Binding& cur = s_.hotkey[static_cast<size_t>(a)];
+    const float col = px_ + kValueCol - 60.f;
+    g_->Text(d.label, px_ + kPad + 4, y_ + 4, Font::Ui, kText);
+    const int slot = static_cast<int>(a) + 1;
     const bool rebinding = rebindActive_ && rebindSlot_ == slot;
     const Col pulse = kRebind.with(0.65f + 0.35f * std::sin(static_cast<float>(frame_) * 0.15f));
-    if (Button(rebinding ? "PRESS KEY..." : presets::VkToName(vk), col, 120, 20, rebinding ? &pulse : nullptr))
+    const std::string shown = rebinding ? "PRESS KEYS..." : (cur.Bound() ? hotkeys::Format(cur) : "(not set)");
+    if (Button(shown, col, 160, 20, rebinding ? &pulse : nullptr))
     {
         rebindActive_ = true;
         rebindSlot_ = slot;
         friendFocus_ = profileFocus_ = false;
+        hotkeyNote_.clear();
+    }
+    if (!d.required && cur.Bound() && !rebinding && Button("CLEAR", col + 168.f, 52, 20))
+    {
+        s_.hotkey[static_cast<size_t>(a)] = hotkeys::Binding{};
+        hotkeyNote_.clear();
+        Save();
     }
     y_ += kRowH;
 }
 
 void ConfigUi::TabHotkeys()
 {
-    Section("HOTKEYS  -  click a button, then press the new key (Esc cancels)");
-    HotkeyRow("Toggle overlay", s_.vkToggle, 1);
-    HotkeyRow("Open config", s_.vkConfig, 2);
-    HotkeyRow("Hold to exit (3 s)", s_.vkExit, 3);
+    Section("HOTKEYS  -  select a button, press the keys (Esc cancels)");
+    for (int i = 0; i < hotkeys::kActionCount; ++i) HotkeyRow(hotkeys::ActionAt(i));
     y_ += 6;
+    if (!hotkeyNote_.empty()) InfoRow(hotkeyNote_, true);
+    InfoRow("Hold Ctrl / Shift / Alt while you press the key to add it: Ctrl+Shift+F5.");
     InfoRow("Hotkeys work while Minecraft is focused (they are polled globally).");
+    InfoRow("Toggles change the setting itself, so they are saved like a click.");
 }
 
 bool ConfigUi::SliderRow(tunables::Id id)
@@ -521,11 +533,25 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
     {
         for (int vk : in.keys)
         {
-            if (vk == VK_SHIFT || vk == VK_CONTROL || vk == VK_MENU || vk == VK_LBUTTON || vk == VK_RBUTTON) continue;
+            if (vk == VK_SHIFT || vk == VK_CONTROL || vk == VK_MENU || vk == VK_LBUTTON || vk == VK_RBUTTON || vk == VK_LSHIFT || vk == VK_RSHIFT ||
+                vk == VK_LCONTROL || vk == VK_RCONTROL || vk == VK_LMENU || vk == VK_RMENU || vk == VK_LWIN || vk == VK_RWIN)
+                continue; // a modifier alone: wait for the key it goes with
             if (vk != VK_ESCAPE)
             {
-                (rebindSlot_ == 1 ? s_.vkToggle : rebindSlot_ == 2 ? s_.vkConfig : s_.vkExit) = vk;
-                Save();
+                const hotkeys::Action a = hotkeys::ActionAt(rebindSlot_ - 1);
+                hotkeys::Binding nb;
+                nb.vk = vk;
+                nb.mods = (in.ctrl ? hotkeys::kCtrl : 0u) | (in.shift ? hotkeys::kShift : 0u) | (in.alt ? hotkeys::kAlt : 0u) | (in.win ? hotkeys::kWin : 0u);
+                const std::string problem = hotkeys::Problem(nb);
+                const hotkeys::Action other = hotkeys::UsedBy(s_.hotkey, nb, a);
+                if (!problem.empty()) hotkeyNote_ = hotkeys::Format(nb) + ": " + problem + ".";
+                else if (other != hotkeys::Action::Count) hotkeyNote_ = hotkeys::Format(nb) + " is already used by \"" + hotkeys::Def(other).label + "\".";
+                else
+                {
+                    s_.hotkey[static_cast<size_t>(a)] = nb;
+                    hotkeyNote_.clear();
+                    Save();
+                }
             }
             rebindActive_ = false;
             break;

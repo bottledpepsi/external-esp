@@ -267,30 +267,69 @@ void EspOverlay::HandleReplayKeys()
     if (KeyEdge(VK_F9)) replayDriver_.SetSpeed(replayDriver_.Speed() * 2.0);
 }
 
+namespace
+{
+    unsigned HeldMods()
+    {
+        auto down = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
+        return (down(VK_CONTROL) ? hotkeys::kCtrl : 0u) | (down(VK_SHIFT) ? hotkeys::kShift : 0u) | (down(VK_MENU) ? hotkeys::kAlt : 0u) |
+            ((down(VK_LWIN) || down(VK_RWIN)) ? hotkeys::kWin : 0u);
+    }
+    // the key is down and exactly the binding's modifiers are held (Ctrl+Delete is not "Delete")
+    bool BindingDown(const hotkeys::Binding& b) { return b.Bound() && (GetAsyncKeyState(b.vk) & 0x8000) != 0 && HeldMods() == b.mods; }
+} // namespace
+
+void EspOverlay::Perform(hotkeys::Action a)
+{
+    using hotkeys::Action;
+    switch (a)
+    {
+    case Action::ToggleOverlay:
+        visible_ = !visible_;
+        LOG_INFO("ESP %s", visible_ ? "shown" : "hidden");
+        break;
+    case Action::OpenConfig:
+        if (configOpen_) CloseConfig();
+        else OpenConfig();
+        break;
+    case Action::TogglePlayers: settings_.showPlayers = !settings_.showPlayers; LOG_INFO("Players %s (hotkey)", settings_.showPlayers ? "on" : "off"); settings_.RequestSave(); break;
+    case Action::ToggleItems: settings_.showItems = !settings_.showItems; LOG_INFO("Items %s (hotkey)", settings_.showItems ? "on" : "off"); settings_.RequestSave(); break;
+    case Action::ToggleTracers: settings_.showTracers = !settings_.showTracers; LOG_INFO("Tracers %s (hotkey)", settings_.showTracers ? "on" : "off"); settings_.RequestSave(); break;
+    case Action::ToggleMinimap: settings_.showMinimap = !settings_.showMinimap; LOG_INFO("Minimap %s (hotkey)", settings_.showMinimap ? "on" : "off"); settings_.RequestSave(); break;
+    case Action::NextProfile:
+    {
+        ProfileManager::Refresh();
+        const std::string next = ProfileManager::CycleName(ProfileManager::ProfileNames(), ProfileManager::Active(), +1);
+        if (!next.empty() && ProfileManager::Activate(next, settings_)) LOG_INFO("Profile '%s' (hotkey)", next.c_str());
+        break;
+    }
+    default: break;
+    }
+}
+
 void EspOverlay::HandleHotkeys(bool focused)
 {
+    using hotkeys::Action;
     if (!focused || ui_.CapturingKeys())
     {
         // global hotkeys only act while the game/overlay has focus
         exitHolding_ = false;
         // keep edge state fresh so a key held while unfocused does not fire on return
-        KeyEdge(settings_.vkToggle);
-        KeyEdge(settings_.vkConfig);
+        for (int i = 0; i < hotkeys::kActionCount; ++i) prevDown_[static_cast<size_t>(i)] = BindingDown(settings_.hotkey[static_cast<size_t>(i)]);
         return;
     }
     if (replayMode_) HandleReplayKeys();
-    if (KeyEdge(settings_.vkToggle))
+    for (int i = 0; i < hotkeys::kActionCount; ++i)
     {
-        visible_ = !visible_;
-        LOG_INFO("ESP %s", visible_ ? "shown" : "hidden");
-    }
-    if (KeyEdge(settings_.vkConfig))
-    {
-        if (configOpen_) CloseConfig();
-        else OpenConfig();
+        const hotkeys::ActionDef& d = hotkeys::Def(hotkeys::ActionAt(i));
+        if (d.hold) continue;
+        const bool down = BindingDown(settings_.hotkey[static_cast<size_t>(i)]);
+        const bool edge = down && !prevDown_[static_cast<size_t>(i)];
+        prevDown_[static_cast<size_t>(i)] = down;
+        if (edge) Perform(hotkeys::ActionAt(i));
     }
 
-    const bool exitDown = (GetAsyncKeyState(settings_.vkExit) & 0x8000) != 0;
+    const bool exitDown = BindingDown(settings_.hotkey[static_cast<size_t>(Action::HoldExit)]);
     if (exitDown)
     {
         if (!exitHolding_)
@@ -771,6 +810,8 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         UiInput in = pend_;
         in.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
         in.ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        in.alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
+        in.win = ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000) != 0;
         pend_.pressed = pend_.released = pend_.rpressed = false; // edges are one-frame events
         pend_.wheel = 0;
         pend_.chars.clear();

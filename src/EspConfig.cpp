@@ -21,11 +21,29 @@ namespace
     std::string N(double v) { return json::Number(v); }
 } // namespace
 
+std::string& EspConfig::HotkeyText(hotkeys::Action a)
+{
+    using hotkeys::Action;
+    switch (a)
+    {
+    case Action::ToggleOverlay: return HotkeyToggle;
+    case Action::OpenConfig: return HotkeyConfig;
+    case Action::HoldExit: return HotkeyExit;
+    case Action::TogglePlayers: return HotkeyTogglePlayers;
+    case Action::ToggleItems: return HotkeyToggleItems;
+    case Action::ToggleTracers: return HotkeyToggleTracers;
+    case Action::ToggleMinimap: return HotkeyToggleMinimap;
+    default: return HotkeyNextProfile;
+    }
+}
+
 std::string EspConfig::ToJson() const
 {
     std::string j = "{\n";
     j += Kv("Version", std::to_string(configschema::kCurrentVersion));
     j += Kv("HotkeyToggle", S(HotkeyToggle)) + Kv("HotkeyConfig", S(HotkeyConfig)) + Kv("HotkeyExit", S(HotkeyExit));
+    j += Kv("HotkeyTogglePlayers", S(HotkeyTogglePlayers)) + Kv("HotkeyToggleItems", S(HotkeyToggleItems)) +
+        Kv("HotkeyToggleTracers", S(HotkeyToggleTracers)) + Kv("HotkeyToggleMinimap", S(HotkeyToggleMinimap)) + Kv("HotkeyNextProfile", S(HotkeyNextProfile));
     j += Kv("DistanceFormat", S(DistanceFormat)) + Kv("MaxLabelDist", N(MaxLabelDist)) +
         Kv("TextShadow", B(TextShadow));
     j += Kv("ShowPlayers", B(ShowPlayers)) + Kv("ShowPlayerNames", B(ShowPlayerNames)) + Kv("BoxStyle", S(BoxStyle)) +
@@ -57,6 +75,11 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HotkeyToggle = GetString(o, "HotkeyToggle", c.HotkeyToggle);
     c.HotkeyConfig = GetString(o, "HotkeyConfig", c.HotkeyConfig);
     c.HotkeyExit = GetString(o, "HotkeyExit", c.HotkeyExit);
+    c.HotkeyTogglePlayers = GetString(o, "HotkeyTogglePlayers", c.HotkeyTogglePlayers);
+    c.HotkeyToggleItems = GetString(o, "HotkeyToggleItems", c.HotkeyToggleItems);
+    c.HotkeyToggleTracers = GetString(o, "HotkeyToggleTracers", c.HotkeyToggleTracers);
+    c.HotkeyToggleMinimap = GetString(o, "HotkeyToggleMinimap", c.HotkeyToggleMinimap);
+    c.HotkeyNextProfile = GetString(o, "HotkeyNextProfile", c.HotkeyNextProfile);
     c.DistanceFormat = GetString(o, "DistanceFormat", c.DistanceFormat);
     c.MaxLabelDist = static_cast<int>(GetNumber(o, "MaxLabelDist", c.MaxLabelDist));
     c.TextShadow = GetBool(o, "TextShadow", c.TextShadow);
@@ -111,9 +134,12 @@ EspConfig EspConfig::FromJson(const json::Object& o)
 void Settings::Apply(const EspConfig& c)
 {
     using namespace presets;
-    vkToggle = NameToVk(c.HotkeyToggle);
-    vkConfig = NameToVk(c.HotkeyConfig);
-    vkExit = NameToVk(c.HotkeyExit);
+    {
+        EspConfig tmp = c; // HotkeyText is non-const
+        for (int i = 0; i < hotkeys::kActionCount; ++i)
+            if (!hotkeys::Parse(tmp.HotkeyText(hotkeys::ActionAt(i)), hotkey[static_cast<size_t>(i)])) // the schema has reported it; here: the default
+                hotkeys::Parse(hotkeys::Def(hotkeys::ActionAt(i)).defaultText, hotkey[static_cast<size_t>(i)]);
+    }
 
     distFmtIdx = c.DistanceFormat == "Kilometers" ? 1 : c.DistanceFormat == "Off" ? 2 : 0;
     labelDist = c.MaxLabelDist < 0 ? kUnlimited : static_cast<float>(c.MaxLabelDist); // any distance now, not only the old presets
@@ -174,9 +200,7 @@ EspConfig Settings::Build() const
 {
     using namespace presets;
     EspConfig c;
-    c.HotkeyToggle = VkToName(vkToggle);
-    c.HotkeyConfig = VkToName(vkConfig);
-    c.HotkeyExit = VkToName(vkExit);
+    for (int i = 0; i < hotkeys::kActionCount; ++i) c.HotkeyText(hotkeys::ActionAt(i)) = hotkeys::Format(hotkey[static_cast<size_t>(i)]);
     c.DistanceFormat = DistFormatLabels[distFmtIdx];
     c.MaxLabelDist = labelDist >= kUnlimited ? -1 : static_cast<int>(labelDist);
     c.TextShadow = textShadow;

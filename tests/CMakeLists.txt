@@ -39,7 +39,7 @@ find_package(Threads REQUIRED)
 
 # The part of src/ that has no Windows dependency (Paths.h falls back to the current directory off Windows).
 add_library(esp_core STATIC
-  ${ESP_SRC}/Json.cpp ${ESP_SRC}/Tunables.cpp ${ESP_SRC}/ConfigStore.cpp ${ESP_SRC}/ConfigSchema.cpp ${ESP_SRC}/LegacyImport.cpp ${ESP_SRC}/Presets.cpp ${ESP_SRC}/EspConfig.cpp ${ESP_SRC}/FriendList.cpp
+  ${ESP_SRC}/Json.cpp ${ESP_SRC}/Hotkeys.cpp ${ESP_SRC}/Tunables.cpp ${ESP_SRC}/ConfigStore.cpp ${ESP_SRC}/ConfigSchema.cpp ${ESP_SRC}/LegacyImport.cpp ${ESP_SRC}/Presets.cpp ${ESP_SRC}/EspConfig.cpp ${ESP_SRC}/FriendList.cpp
   ${ESP_SRC}/ProfileManager.cpp ${ESP_SRC}/Wire.cpp ${ESP_SRC}/Logger.cpp ${ESP_SRC}/EspRec.cpp
   ${ESP_SRC}/StreamIngest.cpp ${ESP_SRC}/Recorder.cpp ${ESP_SRC}/Replay.cpp ${ESP_SRC}/Token.cpp ${ESP_SRC}/Diagnostics.cpp ${ESP_SRC}/DiagnosticsApp.cpp ${ESP_SRC}/SysInfo.cpp ${ESP_SRC}/Clipboard.cpp)
 target_include_directories(esp_core PUBLIC ${ESP_SRC})
@@ -74,6 +74,7 @@ esp_add_test(tunables_test tunables_test.cpp)
 esp_add_test(player_cull_test player_cull_test.cpp)
 esp_add_test(ui_nav_test ui_nav_test.cpp)
 esp_add_test(rate_apply_test rate_apply_test.cpp)
+esp_add_test(hotkeys_test hotkeys_test.cpp)
 esp_add_test(esprec_test esprec_test.cpp)
 esp_add_test(ingest_test ingest_test.cpp)
 esp_add_test(recorder_test recorder_test.cpp)

@@ -6,6 +6,7 @@
 // Settings   : the same values as preset INDICES (cycle rows in the UI step through the presets),
 //              with Apply(EspConfig) / Build() converting between the two, like ApplyConfig/BuildConfig.
 #pragma once
+#include "Hotkeys.h"
 #include "Json.h"
 #include <chrono>
 #include <filesystem>
@@ -16,7 +17,10 @@
 struct EspConfig
 {
     // Hotkeys
+    // A hotkey is a key, optionally with Ctrl / Shift / Alt / Win: "F6", "Ctrl+Shift+F5". "" = not bound (allowed except for the first two).
     std::string HotkeyToggle = "Delete", HotkeyConfig = "Insert", HotkeyExit = "End";
+    std::string HotkeyTogglePlayers, HotkeyToggleItems, HotkeyToggleTracers, HotkeyToggleMinimap, HotkeyNextProfile;
+    std::string& HotkeyText(hotkeys::Action a); // the field of an action
     // GENERAL
     std::string DistanceFormat = "Meters"; // Meters | Kilometers | Off
     int MaxLabelDist = -1; // -1 = Unlimited
@@ -76,7 +80,7 @@ struct EspConfig
 
 struct Settings
 {
-    int vkToggle = 0x2E, vkConfig = 0x2D, vkExit = 0x23;
+    hotkeys::Table hotkey = hotkeys::Defaults(); // indexed by hotkeys::Action
     // GENERAL
     int distFmtIdx = 0;
     float labelDist = 3.4028235e38f; // meters; FLT_MAX = unlimited (presets::kUnlimited)

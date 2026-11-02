@@ -1,0 +1,24 @@
+# Hotkeys
+
+A hotkey is a key, optionally with **Ctrl, Shift, Alt, Win**: `F6`, `Ctrl+Shift+F5`. In `esp_config.json` it is a string (`"HotkeyToggle": "Ctrl+Shift+F5"`); in the HOTKEYS tab, select a button and press the keys (hold the modifiers while you press the key). `Esc` cancels. A modifier alone cannot be a hotkey.
+
+| Action | Key in the file | Default |
+|---|---|---|
+| Toggle overlay | `HotkeyToggle` | Delete |
+| Open config | `HotkeyConfig` | Insert |
+| Hold to exit (3 s) | `HotkeyExit` | End |
+| Toggle players | `HotkeyTogglePlayers` | not set |
+| Toggle items | `HotkeyToggleItems` | not set |
+| Toggle tracers | `HotkeyToggleTracers` | not set |
+| Toggle minimap | `HotkeyToggleMinimap` | not set |
+| Next profile | `HotkeyNextProfile` | not set |
+
+The new actions have no default key on purpose: any key we pick could be one the game or a server uses. Bind them in the HOTKEYS tab (CLEAR unbinds). The two that open and hide the overlay cannot be left empty. The category toggles change the setting itself, so they are saved like a click in the window; "Next profile" works like NEXT in the PROFILES tab.
+
+## Rules
+
+- **A key can only do one thing.** Binding a key that another action uses is refused in the tab ("already used by ..."); a file that has the same key twice is read with the earlier action keeping it, a warning in the log, and the later optional action unbound (a required one goes back to its default).
+- **Windows' own combinations are refused** (Alt+F4, Alt+Tab, Alt+Esc, Alt+Space, Ctrl+Alt+Delete, Win+L, Ctrl+Esc).
+- Modifiers must match exactly: `Delete` does not fire while Ctrl is held; `Ctrl+Delete` does not fire without it.
+- Key names: `A`-`Z`, `0`-`9`, `F1`-`F24`, `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown`, `Space`, `Tab`, `Enter`, `Backspace`, `Left`/`Up`/`Right`/`Down`, `Numpad0`-`Numpad9`, `NumpadAdd`..., `Tilde`, `[`, `]`, ... or any virtual-key code as `0xNN`.
+- Hotkeys only act while Minecraft (or the overlay) has focus.

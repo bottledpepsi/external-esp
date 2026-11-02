@@ -1,4 +1,5 @@
 #include "ConfigSchema.h"
+#include "Hotkeys.h"
 #include "Presets.h"
 #include "Tunables.h"
 #include <algorithm>
@@ -9,7 +10,7 @@ namespace configschema
 {
     namespace
     {
-        enum class Kind { Bool, Int, Float, Word, KeyName };
+        enum class Kind { Bool, Int, Float, Word, Hotkey };
 
         struct Spec
         {
@@ -29,8 +30,7 @@ namespace configschema
                 auto I = [&](const char* k, double lo, double hi) { s.push_back({k, Kind::Int, lo, hi, {}}); };
                 auto F = [&](const char* k, double lo, double hi) { s.push_back({k, Kind::Float, lo, hi, {}}); };
                 auto W = [&](const char* k, std::vector<std::string> w) { s.push_back({k, Kind::Word, 0, 0, std::move(w)}); };
-                auto K = [&](const char* k) { s.push_back({k, Kind::KeyName, 0, 0, {}}); };
-                K("HotkeyToggle"); K("HotkeyConfig"); K("HotkeyExit");
+                for (int i = 0; i < hotkeys::kActionCount; ++i) s.push_back({hotkeys::Def(hotkeys::ActionAt(i)).key, Kind::Hotkey, 0, 0, {}});
                 W("DistanceFormat", {"Meters", "Kilometers", "Off"});
                 I("MaxLabelDist", -1, 100000);
                 B("TextShadow");
@@ -150,13 +150,20 @@ namespace configschema
                     }
                     break;
                 }
-            case Kind::KeyName:
+            case Kind::Hotkey:
                 {
-                    const bool ok = v.type == json::Value::Type::String && presets::IsKnownKeyName(v.s);
-                    if (!ok)
+                    hotkeys::Binding bind;
+                    std::string why;
+                    bool required = false;
+                    for (int i = 0; i < hotkeys::kActionCount; ++i)
+                        if (key == hotkeys::Def(hotkeys::ActionAt(i)).key) required = hotkeys::Def(hotkeys::ActionAt(i)).required;
+                    if (v.type != json::Value::Type::String) why = std::string("expected text such as F6 or Ctrl+Shift+F5, found ") + TypeName(v.type);
+                    else if (!hotkeys::Parse(v.s, bind, &why)) {}
+                    else if (!bind.Bound() && required) why = "this hotkey cannot be left empty";
+                    else if (const std::string p = hotkeys::Problem(bind); !p.empty()) why = p;
+                    if (!why.empty())
                     {
-                        const std::string shown = v.type == json::Value::Type::String ? "'" + v.s + "'" : std::string(TypeName(v.type));
-                        Warn(out, key, key + ": " + shown + " is not a key name (examples: Delete, F6, Q, 0x2D) - using " + DefaultText(key));
+                        Warn(out, key, key + ": " + why + " - using " + (DefaultText(key).empty() ? std::string("no key") : DefaultText(key)));
                         o.erase(it);
                     }
                     break;
@@ -231,6 +238,39 @@ namespace configschema
 
         for (const Spec& sp : Table()) Check(o, sp, r.issues);
         r.cfg = EspConfig::FromJson(o); // reads the checked keys, collects the unknown ones
+
+        // two actions on the same key would both fire, or the second would never register: the earlier action keeps it
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            hotkeys::Table t{};
+            for (int i = 0; i < hotkeys::kActionCount; ++i) hotkeys::Parse(r.cfg.HotkeyText(hotkeys::ActionAt(i)), t[static_cast<size_t>(i)]);
+            const auto conflicts = hotkeys::FindConflicts(t);
+            if (conflicts.empty()) break;
+            const hotkeys::Conflict c = conflicts.front();
+            const auto& d1 = hotkeys::Def(c.first);
+            const auto& d2 = hotkeys::Def(c.second);
+            std::string& second = r.cfg.HotkeyText(c.second);
+            const std::string shown = second;
+            hotkeys::Binding def2;
+            hotkeys::Parse(d2.defaultText, def2);
+            if (d2.required && def2 == t[static_cast<size_t>(c.first)])
+            {
+                // the second one's own default is what the first one was set to: both go back to their defaults
+                r.cfg.HotkeyText(c.first) = d1.defaultText;
+                second = d2.defaultText;
+                Warn(r.issues, d2.key, std::string(d1.key) + " and " + d2.key + " both wanted " + shown + " - both use their defaults");
+            }
+            else if (d2.required)
+            {
+                second = d2.defaultText; // the second needs a key: it takes its default
+                Warn(r.issues, d2.key, std::string(d2.key) + ": " + shown + " is also used by " + d1.key + " - using " + d2.defaultText);
+            }
+            else
+            {
+                second.clear();
+                Warn(r.issues, d2.key, std::string(d2.key) + ": " + shown + " is also used by " + d1.key + " - " + d2.key + " is left unbound");
+            }
+        }
 
         // an unknown key is only kept when its text can be written back as valid JSON
         for (auto it = r.cfg.Unknown.begin(); it != r.cfg.Unknown.end();)

@@ -87,6 +87,12 @@ namespace presets
                 {0x70, "F1"}, {0x71, "F2"}, {0x72, "F3"}, {0x73, "F4"}, {0x74, "F5"}, {0x75, "F6"},
                 {0x76, "F7"}, {0x77, "F8"}, {0x78, "F9"}, {0x79, "F10"}, {0x7A, "F11"}, {0x7B, "F12"},
                 {0xC0, "Tilde"}, {0xDB, "["}, {0xDD, "]"}, {0xDC, "\\"}, {0xBA, ";"}, {0xDE, "'"},
+                {0x20, "Space"}, {0x09, "Tab"}, {0x0D, "Enter"}, {0x1B, "Esc"}, {0x08, "Backspace"}, {0x25, "Left"}, {0x26, "Up"}, {0x27, "Right"}, {0x28, "Down"},
+                {0x13, "Pause"}, {0x2C, "PrintScreen"}, {0x91, "ScrollLock"}, {0x90, "NumLock"}, {0x14, "CapsLock"},
+                {0x60, "Numpad0"}, {0x61, "Numpad1"}, {0x62, "Numpad2"}, {0x63, "Numpad3"}, {0x64, "Numpad4"}, {0x65, "Numpad5"}, {0x66, "Numpad6"},
+                {0x67, "Numpad7"}, {0x68, "Numpad8"}, {0x69, "Numpad9"}, {0x6A, "NumpadMultiply"}, {0x6B, "NumpadAdd"}, {0x6D, "NumpadSubtract"}, {0x6E, "NumpadDecimal"}, {0x6F, "NumpadDivide"},
+                {0x7C, "F13"}, {0x7D, "F14"}, {0x7E, "F15"}, {0x7F, "F16"}, {0x80, "F17"}, {0x81, "F18"}, {0x82, "F19"}, {0x83, "F20"}, {0x84, "F21"}, {0x85, "F22"},
+                {0x86, "F23"}, {0x87, "F24"},
                 {0xBC, ","}, {0xBE, "."}, {0xBF, "/"}, {0xBD, "-"}, {0xBB, "="}
             };
             return m;

@@ -24,7 +24,7 @@ struct UiInput
     float wheel = 0; // notches this frame (+ = up)
     std::string chars; // typed printable ASCII this frame
     std::vector<int> keys; // virtual-key presses this frame (WM_KEYDOWN)
-    bool shift = false, ctrl = false; // modifier state when the frame was built
+    bool shift = false, ctrl = false, alt = false, win = false; // modifier state when the frame was built
 };
 
 class ConfigUi
@@ -91,7 +91,7 @@ private:
     void TabAdvanced();
     // one row of the ADVANCED tab: label, slider, value, RESET (only when changed) and the help line. Returns true when the value changed.
     bool SliderRow(tunables::Id id);
-    void HotkeyRow(const std::string& label, int& vk, int slot);
+    void HotkeyRow(hotkeys::Action a);
     void Save() { s_.RequestSave(); } // written by the overlay loop once the changes stop (EspConfig.h)
 
     Settings& s_;
@@ -109,6 +109,7 @@ private:
     int tab_ = 0;
     float scroll_[8] = {};
     float contentH_[8] = {};
+    std::string hotkeyNote_; // why the last rebind was refused (in use, reserved by Windows)
     std::string rateNote_;
     bool rateWarn_ = false;
     int sliderDrag_ = -1; // tunables::Id being dragged with the mouse, -1 none
@@ -124,6 +125,6 @@ private:
     std::string friendInput_, profileInput_;
     bool friendFocus_ = false, profileFocus_ = false;
     bool rebindActive_ = false;
-    int rebindSlot_ = 0; // 1 toggle, 2 config, 3 exit
+    int rebindSlot_ = 0; // hotkeys::Action + 1
     long long frame_ = 0;
 };
