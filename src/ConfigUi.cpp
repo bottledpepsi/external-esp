@@ -255,6 +255,18 @@ void ConfigUi::TabMinimap()
 void ConfigUi::TabProfiles()
 {
     const float lx = px_ + kPad, inputW = kW - kPad * 2 - 78;
+    Section("ACTIVE PROFILE");
+    {
+        const std::string active = ProfileManager::Active();
+        g_->Text(active.empty() ? "(none - settings are your own)" : active, lx + 4, y_ + 3, Font::Ui, active.empty() ? kDim : kText);
+        if (Button("NEXT", px_ + kW - 136 - kPad, 60, 18))
+        {
+            const std::string next = ProfileManager::CycleName(ProfileManager::ProfileNames(), active, +1);
+            if (!next.empty()) ProfileManager::Activate(next, s_);
+        }
+        if (Button("UPDATE", px_ + kW - 70 - kPad, 64, 18) && !active.empty()) ProfileManager::SaveAs(active, s_.Build(), true); // overwrite the active profile with what is set now
+        y_ += kRowH + 6;
+    }
     Section("SAVE PROFILE");
     auto submit = [&]()
     {
@@ -285,14 +297,10 @@ void ConfigUi::TabProfiles()
     }
     for (const std::string& name : names)
     {
-        g_->Text(name, lx + 4, y_ + 3, Font::Ui, kText);
+        g_->Text(name == ProfileManager::Active() ? name + "  (active)" : name, lx + 4, y_ + 3, Font::Ui, kText);
         if (Button("LOAD", px_ + kW - 120 - kPad, 54, 18))
         {
-            if (auto cfg = ProfileManager::Load(name))
-            {
-                s_.Apply(*cfg);
-                Save();
-            }
+            ProfileManager::Activate(name, s_); // applies, marks active, asks for a save
         }
         if (Button("DEL", px_ + kW - 60 - kPad, 54, 18)) ProfileManager::Delete(name);
         y_ += kRowH;

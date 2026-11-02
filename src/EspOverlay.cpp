@@ -348,6 +348,12 @@ void EspOverlay::Pace(Clock::time_point frameStart)
 int EspOverlay::Run()
 {
     settings_.Load();
+    if (!opt_.profile.empty())
+    {
+        const std::string name = ProfileManager::Find(opt_.profile);
+        if (!name.empty() && ProfileManager::Activate(name, settings_)) LOG_INFO("Started with profile '%s' (--profile).", name.c_str());
+        else LOG_WARN("--profile '%s' could not be loaded: %s", opt_.profile.c_str(), ProfileManager::LastError().c_str());
+    }
     gfx_.SetAdapterPreference(opt_.adapter);
     if (!gfx_.Init(!opt_.legacyGfx))
     {

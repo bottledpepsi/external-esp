@@ -15,6 +15,7 @@ struct AppOptions
     std::filesystem::path jarPath; // esp-agent.jar (default: next to the exe)
     int agentHz = 120; // snapshot rate requested from the agent (1..240); higher = less extrapolation = smoother boxes
     bool screenOverlay = false; // cover the whole primary monitor instead of tracking the game window
+    std::string profile; // --profile NAME: start with this saved profile (made the current settings)
     bool openConfig = false; // open the config window as soon as the overlay is visible
     std::string token; // session token (wire v5): generated at start-up unless --token / --no-auth
     bool verbose = false; // --verbose: DEBUG logging in the overlay and (option verbose=1) in the agent

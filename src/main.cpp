@@ -3,7 +3,7 @@
 //   Minecraft JVM <--(JVM Attach API)-- esp-agent.jar --UDP 127.0.0.1:47615--> UdpListener --> EspOverlay (D2D layered window)
 //
 // Usage:
-//   mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--title T] [--exe E] [--selftest [S]] [--dump-structure] [--list] [--record FILE]
+//   mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--profile NAME] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--title T] [--exe E] [--selftest [S]] [--dump-structure] [--list] [--record FILE]
 //   Insert = config window, Delete = toggle ESP, hold End = exit (all rebindable in the HOTKEYS tab).
 //
 // Scope: written for single-player / LAN worlds you control (two accounts on your own machine) -
@@ -38,7 +38,7 @@ namespace
     {
         std::puts(
             "external-esp (C++)\n"
-            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]] [--token T | --no-auth] [--verbose] [--diagnostics [FILE]]\n"
+            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--profile NAME] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]] [--token T | --no-auth] [--verbose] [--diagnostics [FILE]]\n"
             "\n"
             "  --demo       synthetic players (test the overlay/config UI without Minecraft)\n"
             "  --pid N      attach to this java(w).exe PID (two Minecraft clients on one PC)\n"
@@ -48,6 +48,7 @@ namespace
             "  --no-inject  do not attach automatically (the exact -javaagent line, with the session token, is printed at start-up)\n"
             "  --open-config  open the config window right away\n"
             "  --screen     cover the whole primary monitor instead of tracking the game window\n"
+            "  --profile N  start with the saved profile N (made the current settings; see the PROFILES tab)\n"
             "  --hz N       agent snapshot rate, 1-240 (default 120; more = smoother boxes, a little more CPU in the game)\n"
             "  --agent-pacer M  how the agent waits for its next tick: sleep (default) or hybrid (sleep + spin the last ~2 ms; precise, costs CPU in the game)\n"
             "  --pacing-report [S]  the agent writes esp_pacing.txt (achieved tick intervals) after S seconds (default 20); see docs/pacing.md\n"
@@ -105,6 +106,7 @@ int main(int argc, char** argv)
         else if (a == "--open-config") opt.openConfig = true;
         else if (a == "--screen") opt.screenOverlay = true;
         else if (a == "--gdi") opt.legacyGfx = true;
+        else if (a == "--profile" && i + 1 < argc) opt.profile = argv[++i];
         else if (a == "--hz" && i + 1 < argc) opt.agentHz = static_cast<int>(std::clamp(std::strtol(argv[++i], nullptr, 10), 1L, 240L));
         else if (a == "--agent-pacer" && i + 1 < argc)
         {
@@ -223,6 +225,20 @@ int main(int argc, char** argv)
     LOG_INFO("Config folder: %s", ConfigDir().string().c_str());
     FriendList::Load();
     ProfileManager::Refresh();
+    ProfileManager::SeedBuiltIns(); // default / testing / low-power, once
+    if (!opt.profile.empty())
+    {
+        const std::string found = ProfileManager::Find(opt.profile);
+        if (found.empty())
+        {
+            std::string all;
+            for (const std::string& n : ProfileManager::ProfileNames()) all += (all.empty() ? "" : ", ") + n;
+            std::printf("There is no profile named '%s'. Profiles: %s\n", opt.profile.c_str(), all.empty() ? "(none)" : all.c_str());
+            LOG_ERROR("--profile '%s' does not exist.", opt.profile.c_str());
+            return 2;
+        }
+        opt.profile = found;
+    }
     LOG_INFO("Mode: %s | UDP port %u | agent jar: %s", opt.demo ? "DEMO" : "agent", static_cast<unsigned>(opt.port),
              opt.jarPath.string().c_str());
     LOG_INFO("DPI awareness: %s", dpiLevel.c_str());

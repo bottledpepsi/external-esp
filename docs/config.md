@@ -54,3 +54,17 @@ A file that exists but cannot be opened (locked, no permission) is left alone an
 The same applies to `friends.json`. Profiles are written atomically but have no `.bak`.
 
 The settings window does not write on every click: changes are collected and written once they stop for 0.4 s (at the latest 3 s after the first), when the window closes, and on exit.
+
+## Profiles
+
+A profile is a saved copy of all settings: `profiles\<name>.json` (same format and checks as `esp_config.json`). The PROFILES tab saves, loads, deletes and shows the **active** profile - the one most recently loaded or saved (kept in `active_profile.txt`; it is shown, and is what UPDATE overwrites). NEXT switches to the next profile in the list.
+
+The first start creates three profiles in an empty `profiles\` folder, once (`.builtins-seeded` stops them coming back if you delete them; an existing profile of the same name is never overwritten):
+
+| Profile | What it is |
+|---|---|
+| `default` | the program's defaults |
+| `testing` | everything visible and described: item tags, enchants, health, minimap, tracers; no distance limits, junk not hidden |
+| `low-power` | 60 fps cap, vsync, no minimap or tracers, no text shadow, no item extras |
+
+Start with a profile: `mcesp --profile low-power`. It becomes the current settings (written to `esp_config.json`). An unknown name prints the list of profiles and exits with code 2.

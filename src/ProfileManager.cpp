@@ -3,6 +3,7 @@
 #include "ConfigStore.h"
 #include "Logger.h"
 #include "Paths.h"
+#include "Presets.h"
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -63,6 +64,11 @@ namespace ProfileManager
 
     bool Save(const std::string& name, const EspConfig& cfg)
     {
+        return SaveAs(name, cfg, true);
+    }
+
+    bool SaveAs(const std::string& name, const EspConfig& cfg, bool makeActive)
+    {
         g_lastError.clear();
         // Same rule as the C# tool: letters, digits, '_', '-', ' ' only.
         std::string safe;
@@ -89,6 +95,7 @@ namespace ProfileManager
         }
         LOG_INFO("ProfileManager.Save: saved profile '%s'.", safe.c_str());
         Refresh();
+        if (makeActive) SetActive(safe);
         return true;
     }
 
@@ -145,6 +152,117 @@ namespace ProfileManager
         }
         LOG_INFO("ProfileManager.Delete: deleted profile '%s'.", name.c_str());
         Refresh();
+        return true;
+    }
+
+    // ---------------- built-ins ----------------
+    const std::vector<std::string>& BuiltInNames()
+    {
+        static const std::vector<std::string> n = {"default", "testing", "low-power"};
+        return n;
+    }
+
+    EspConfig BuiltIn(const std::string& name)
+    {
+        EspConfig c; // "default"
+        if (name == "testing")
+        {
+            // everything visible and described, nothing hidden by distance: to check that the overlay sees what the game sees
+            c.ShowPlayers = c.ShowPlayerNames = c.ShowHealth = true;
+            c.ShowItems = c.ShowItemNames = c.ShowItemCount = c.ShowItemEnchants = c.ShowItemTags = true;
+            c.HideJunk = false;
+            c.ShowTracers = true;
+            c.ShowMinimap = true;
+            c.MaxLabelDist = -1; // -1 = unlimited
+            c.MaxPlayerDist = -1;
+        }
+        else if (name == "low-power")
+        {
+            // a laptop on battery: fewer frames, fewer layers, vsync instead of spinning
+            c.FpsCap = 60;
+            c.VSync = true;
+            c.ShowMinimap = false;
+            c.ShowTracers = false;
+            c.TextShadow = false;
+            c.ShowItemEnchants = false;
+            c.ShowItemTags = false;
+        }
+        return c;
+    }
+
+    int SeedBuiltIns()
+    {
+        std::error_code ec;
+        if (!EnsureDir()) return 0;
+        const auto marker = Dir() / ".builtins-seeded";
+        if (std::filesystem::exists(marker, ec)) return 0;
+        int written = 0;
+        for (const std::string& n : BuiltInNames())
+        {
+            if (std::filesystem::exists(PathFor(n), ec)) continue; // never overwrite a profile of the same name
+            std::string err;
+            configstore::WriteOptions o;
+            o.keepBackup = false;
+            if (configstore::WriteAtomic(PathFor(n), BuiltIn(n).ToJson(), &err, o)) ++written;
+            else LOG_WARN("ProfileManager.SeedBuiltIns: %s: %s", n.c_str(), err.c_str());
+        }
+        std::string err;
+        configstore::WriteOptions o;
+        o.keepBackup = false;
+        configstore::WriteAtomic(marker, "The built-in profiles were created once. Delete this file to create the missing ones again.\n", &err, o);
+        if (written) LOG_INFO("ProfileManager: created %d built-in profile(s).", written);
+        Refresh();
+        return written;
+    }
+
+    // ---------------- active profile ----------------
+    namespace
+    {
+        std::filesystem::path ActiveFile() { return ConfigDir() / "active_profile.txt"; }
+    }
+
+    std::string Find(const std::string& name)
+    {
+        auto lower = [](std::string s) { for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); return s; };
+        const std::string want = lower(name);
+        for (const std::string& n : g_names) if (lower(n) == want) return n;
+        return {};
+    }
+
+    std::string Active()
+    {
+        std::ifstream in(ActiveFile());
+        std::string n;
+        std::getline(in, n);
+        while (!n.empty() && (n.back() == '\r' || n.back() == ' ')) n.pop_back();
+        return Find(n); // a deleted profile is no longer active
+    }
+
+    void SetActive(const std::string& name)
+    {
+        std::string err;
+        configstore::WriteOptions o;
+        o.keepBackup = false;
+        if (!configstore::WriteAtomic(ActiveFile(), name + "\n", &err, o)) LOG_WARN("ProfileManager.SetActive: %s", err.c_str());
+    }
+
+    std::string CycleName(const std::vector<std::string>& names, const std::string& current, int dir)
+    {
+        if (names.empty()) return {};
+        const auto it = std::find(names.begin(), names.end(), current);
+        const int n = static_cast<int>(names.size());
+        if (it == names.end()) return dir >= 0 ? names.front() : names.back();
+        const int i = static_cast<int>(it - names.begin());
+        return names[static_cast<size_t>(((i + (dir >= 0 ? 1 : -1)) % n + n) % n)];
+    }
+
+    bool Activate(const std::string& name, Settings& s)
+    {
+        auto cfg = Load(name);
+        if (!cfg) return false;
+        s.Apply(*cfg);
+        SetActive(name);
+        s.RequestSave();
         return true;
     }
 } // namespace ProfileManager
