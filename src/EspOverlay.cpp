@@ -8,6 +8,8 @@
 #include "Logger.h"
 #include "Presets.h"
 #include "ProfileManager.h"
+#include "CliSpec.h"
+#include "ExitCodes.h"
 #include "SingleInstance.h"
 #include "Tunables.h"
 #include "SkinCache.h"
@@ -484,7 +486,14 @@ int EspOverlay::Run()
     {
         udp_.Ingest().SetAuth(opt_.requireAuth, opt_.token);
         if (!opt_.requireAuth) LOG_WARN("Session token check is OFF (--no-auth): any program that can reach 127.0.0.1:%d can feed this overlay.", static_cast<int>(opt_.port));
-        if (!udp_.Start()) LOG_ERROR("Agent data will not be received (UDP listener failed).");
+        if (!udp_.Start())
+        {
+            // nothing can reach the overlay without its port: stop with the reason and what to do, instead of running blind
+            const std::string why = cli::DescribePortError(opt_.port, udp_.LastError());
+            LOG_ERROR("Agent data cannot be received: %s", why.c_str());
+            std::fprintf(stderr, "%s\n", why.c_str());
+            return exitcode::kPortInUse;
+        }
     }
     SkinCache::Start(); // friend avatars (background downloads)
     timeBeginPeriod(1); // 1 ms sleep granularity for the frame limiter

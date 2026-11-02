@@ -32,6 +32,9 @@ public:
     UdpListener& operator=(const UdpListener&) = delete;
 
     bool Start(); // WSAStartup + bind + spawn thread; false (and logged) if the port is taken
+    // Can this port be bound right now? (binds and closes again; for the check before any window exists). 0 = yes, else the WSA error.
+    static int Probe(uint16_t port);
+    int LastError() const { return lastError_; } // WSAGetLastError() of a failed bind, else 0
     void Stop();
     bool Ok() const { return running_.load(); }
 
@@ -48,6 +51,7 @@ private:
 
     uint16_t port_;
     uintptr_t sock_ = ~uintptr_t{0};
+    int lastError_ = 0;
     bool wsa_ = false;
     std::atomic<bool> running_{false};
     StreamIngest ingest_;

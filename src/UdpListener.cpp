@@ -4,6 +4,26 @@
 #include "Wire.h"
 #include <vector>
 
+int UdpListener::Probe(uint16_t port)
+{
+    WSADATA wsa{};
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return WSAGetLastError() ? WSAGetLastError() : 1;
+    int err = 0;
+    SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (s == INVALID_SOCKET) err = WSAGetLastError();
+    else
+    {
+        sockaddr_in a{};
+        a.sin_family = AF_INET;
+        a.sin_port = htons(port);
+        a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (bind(s, reinterpret_cast<sockaddr*>(&a), sizeof a) == SOCKET_ERROR) err = WSAGetLastError();
+        closesocket(s);
+    }
+    WSACleanup();
+    return err;
+}
+
 bool UdpListener::Start()
 {
     if (running_) return true;
@@ -27,8 +47,9 @@ bool UdpListener::Start()
     a.sin_addr.s_addr = htonl(INADDR_LOOPBACK); // loopback only - never reachable from the network
     if (bind(s, reinterpret_cast<sockaddr*>(&a), sizeof a) == SOCKET_ERROR)
     {
+        lastError_ = WSAGetLastError();
         LOG_ERROR("Cannot listen on 127.0.0.1:%u (error %d). Is another instance running? Use --port.",
-                  static_cast<unsigned>(port_), WSAGetLastError());
+                  static_cast<unsigned>(port_), lastError_);
         closesocket(s);
         return false;
     }

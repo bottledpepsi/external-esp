@@ -16,9 +16,11 @@
 #include "EspOverlay.h"
 #include "FriendList.h"
 #include "AgentJarWin.h"
+#include "CliSpec.h"
 #include "ExitCodes.h"
 #include "LegacyImport.h"
 #include "SingleInstance.h"
+#include "UdpListener.h"
 #include "Logger.h"
 #include "DiagnosticsApp.h"
 #include "Paths.h"
@@ -37,48 +39,26 @@
 
 namespace
 {
-    void PrintUsage()
-    {
-        std::puts(
-            "external-esp (C++)\n"
-            "  mcesp [--demo] [--pid N] [--port N] [--java PATH] [--jar PATH] [--no-inject] [--open-config] [--profile NAME] [--screen] [--gdi] [--hz N] [--agent-pacer sleep|hybrid] [--pacing-report [S]] [--list] [--record FILE] [--replay FILE [--replay-speed X] [--replay-loop]] [--token T | --no-auth] [--verbose] [--diagnostics [FILE]]\n"
-            "\n"
-            "  --demo       synthetic players (test the overlay/config UI without Minecraft)\n"
-            "  --pid N      attach to this java(w).exe PID (two Minecraft clients on one PC)\n"
-            "  --port N     UDP port for the agent stream (default 47615)\n"
-            "  --java PATH  java.exe of a JDK to run the attach helper (default: the game's own JRE, JAVA_HOME, PATH)\n"
-            "  --jar PATH   agent jar (default: the one inside the exe; else esp-agent.jar next to it)\n"
-            "  --no-inject  do not attach automatically (the exact -javaagent line, with the session token, is printed at start-up)\n"
-            "  --open-config  open the config window right away\n"
-            "  --screen     cover the whole primary monitor instead of tracking the game window\n"
-            "  --profile N  start with the saved profile N (made the current settings; see the PROFILES tab)\n"
-            "  --hz N       agent snapshot rate, 1-240 (default 120; more = smoother boxes, a little more CPU in the game)\n"
-            "  --agent-pacer M  how the agent waits for its next tick: sleep (default) or hybrid (sleep + spin the last ~2 ms; precise, costs CPU in the game)\n"
-            "  --pacing-report [S]  the agent writes esp_pacing.txt (achieved tick intervals) after S seconds (default 20); see docs/pacing.md\n"
-            "  --title T    pick the Minecraft client whose window title contains T (several clients, or a custom client whose title is not \"Minecraft...\")\n"
-            "  --exe E      ... whose program name contains E (javaw.exe, java.exe); combines with --title; --pid N names the process directly (docs/launchers.md)\n"
-            "  --pacing-test [S]  measure Sleep(1), the high-resolution timer and the overlay's frame pacing on this Windows (S s per case, default 2) -> esp_pacing_overlay.txt\n"
-            "  --selftest [S]  attach, watch S seconds (default 20: look around, drop an item), print what works and exit with a code (docs/selftest.md)\n"
-            "  --adapter X  GPU for the overlay: its number or part of its name (default: automatic; the log lists every adapter and says why one was chosen)\n"
-            "  --simulate-device-loss[=persistent]  test aid: F10 injects a GPU device loss (persistent: recovery fails too, so the GDI fallback must follow)\n"
-            "  --dump-structure  the agent also writes esp_structure.json (class structure only, for bug reports; docs/fixtures.md)\n"
-            "  --gdi        use the legacy CPU renderer (layered window) instead of the GPU swap chain\n"
-            "  --record F   also save the raw agent datagrams + arrival times to F (.esprec) for --replay / tests / bug reports\n"
-            "  --replay F   play back an .esprec recording over the whole screen instead of attaching to Minecraft\n"
-            "               (F6 pause/resume, F7 step while paused, F8 slower, F9 faster); --replay-speed X, --replay-loop\n"
-            "  --diagnostics [F]  print (or write to F) a REDACTED report for bug reports: versions, settings, log tails; then exit\n"
-            "  --verbose    also log DEBUG lines (the log is esp_log.txt, capped at 1 MiB + one backup esp_log.1.txt)\n"
-            "  --token T    use this session token instead of a random one (16-64 letters/digits; for --no-inject: pass the same to the agent)\n"
-            "  --no-auth    accept datagrams without / with any session token (not recommended)\n"
-            "  --list       list running Minecraft/java processes and exit\n"
-            "\nKeys: Insert config | Delete toggle | hold End exit");
-    }
+    void PrintUsage() { std::fputs(cli::Help().c_str(), stdout); }
 } // namespace
 
 int main(int argc, char** argv)
 {
     const std::string dpiLevel = dpi::Enable(); // overlay pixels must equal game-window pixels, on every monitor whatever its scale (logged once the logger is up)
     elog::Init();
+
+    // the whole command line is checked first, against the table in CliSpec.cpp: a typo or a bad number stops here with a sentence, not later with a log line
+    const cli::Check pre = cli::Preflight(argc, argv);
+    if (pre.result == cli::Check::Result::Help)
+    {
+        PrintUsage();
+        return exitcode::kOk;
+    }
+    if (pre.result == cli::Check::Result::Error)
+    {
+        std::fprintf(stderr, "%s\nTry:  mcesp --help\n", pre.message.c_str());
+        return exitcode::kUsage;
+    }
 
     AppOptions opt;
     std::filesystem::path explicitJar; // --jar
@@ -120,7 +100,7 @@ int main(int argc, char** argv)
             if (opt.agentPacer != "sleep" && opt.agentPacer != "hybrid")
             {
                 std::fprintf(stderr, "--agent-pacer takes sleep or hybrid\n");
-                return 2;
+                return exitcode::kUsage;
             }
         }
         else if (a == "--pacing-report")
@@ -156,8 +136,8 @@ int main(int argc, char** argv)
         else if (a == "--jar" && i + 1 < argc) explicitJar = argv[++i];
         else
         {
-            PrintUsage();
-            return 1;
+            PrintUsage(); // unreachable while the table and this list agree (tests/cli_spec_test.cpp)
+            return exitcode::kUsage;
         }
     }
 
@@ -172,6 +152,21 @@ int main(int argc, char** argv)
                      j.how == agentjar::Extracted::How::Created ? " (extracted now)" : j.how == agentjar::Extracted::How::Repaired ? " (rewritten: the copy was damaged)" : "");
         else if (j.source == S::CommandLine) LOG_INFO("Agent jar: %s (--jar)", j.jar.string().c_str());
         else LOG_INFO("Agent jar: %s (next to the exe; this build has no embedded jar%s)", j.jar.string().c_str(), j.problem.empty() ? "" : " that could be used");
+    }
+
+    // a mode that attaches or starts the agent needs the jar: say so now, with what to do, instead of a failed injection later
+    if (!list && !diagnostics && pacingTest == 0 && !opt.demo && opt.replayPath.empty())
+    {
+        std::error_code jec;
+        if (!std::filesystem::exists(opt.jarPath, jec))
+        {
+            std::printf("There is no agent jar: %s\n"
+                        "  This exe has none embedded and there is no esp-agent.jar next to it.\n"
+                        "  Build the agent (agent\\build.bat, needs a JDK) and then the exe again, or pass  --jar <path to esp-agent.jar>.\n",
+                        opt.jarPath.string().c_str());
+            LOG_ERROR("No agent jar at %s", opt.jarPath.string().c_str());
+            return exitcode::kNoAgentJar;
+        }
     }
 
     if (diagnostics)
@@ -256,7 +251,7 @@ int main(int argc, char** argv)
             for (const std::string& n : ProfileManager::ProfileNames()) all += (all.empty() ? "" : ", ") + n;
             std::printf("There is no profile named '%s'. Profiles: %s\n", opt.profile.c_str(), all.empty() ? "(none)" : all.c_str());
             LOG_ERROR("--profile '%s' does not exist.", opt.profile.c_str());
-            return 2;
+            return exitcode::kUsage;
         }
         opt.profile = found;
     }
@@ -278,6 +273,14 @@ int main(int argc, char** argv)
         LOG_ERROR("Another mcesp is already running on port %u%s.", static_cast<unsigned>(opt.port), who);
         return exitcode::kAlreadyRunning;
     }
+    if (!opt.demo && opt.replayPath.empty())
+        if (const int perr = UdpListener::Probe(opt.port); perr != 0)
+        {
+            const std::string why = cli::DescribePortError(opt.port, perr);
+            std::printf("%s\n", why.c_str());
+            LOG_ERROR("%s", why.c_str());
+            return exitcode::kPortInUse;
+        }
     EspOverlay overlay(opt);
     return overlay.Run();
 }
