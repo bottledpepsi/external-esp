@@ -1,4 +1,5 @@
 #include "FriendList.h"
+#include "ConfigStore.h"
 #include "Json.h"
 #include "Logger.h"
 #include "Paths.h"
@@ -40,56 +41,37 @@ namespace FriendList
     void Load()
     {
         std::lock_guard<std::mutex> lk(g_mtx);
-        std::error_code ec;
-        if (!std::filesystem::exists(FilePath(), ec))
+        const configstore::ReadResult rr = configstore::Read(FilePath(), configstore::IsJsonStringArray);
+        switch (rr.status)
         {
+        case configstore::ReadStatus::Missing:
             LOG_INFO("FriendList: friends.json not found - starting empty.");
             return;
-        }
-        std::ifstream in(FilePath());
-        std::stringstream ss;
-        ss << in.rdbuf();
-        const std::string text = ss.str();
-        if (text.find_first_not_of(" \t\r\n") == std::string::npos)
-        {
-            LOG_WARN("FriendList: friends.json is empty - starting empty.");
+        case configstore::ReadStatus::Unreadable:
+        case configstore::ReadStatus::Damaged:
+            LOG_ERROR("FriendList: %s", rr.note.c_str());
             return;
+        case configstore::ReadStatus::RestoredFromBackup: LOG_WARN("FriendList: %s", rr.note.c_str());
+            break;
+        case configstore::ReadStatus::Ok: break;
         }
-        std::string err;
-        auto list = json::ParseStringArray(text, &err);
-        if (!list)
-        {
-            LOG_ERROR("FriendList: malformed JSON in friends.json - %s", err.c_str());
-            return;
-        }
+        auto list = json::ParseStringArray(rr.text);
+        if (!list) return; // cannot happen: the validator accepted it
         g_names = std::set<std::string, CiLess>(list->begin(), list->end());
         LOG_INFO("FriendList: loaded %llu friend(s).", static_cast<unsigned long long>(g_names.size()));
     }
 
     static void SaveLocked()
     {
-        auto tmp = FilePath();
-        tmp += ".tmp";
-        try
-        {
-            std::filesystem::create_directories(FilePath().parent_path()); // %APPDATA%\\external-esp does not exist before the first save
-            {
-                std::ofstream out(tmp, std::ios::trunc);
-                out << "[\n";
-                size_t i = 0;
-                for (const auto& n : g_names) out << "  " << json::Escape(n) << (++i < g_names.size() ? ",\n" : "\n");
-                out << "]\n";
-                if (!out) throw std::runtime_error("write failed");
-            }
-            std::filesystem::rename(tmp, FilePath());
-            LOG_INFO("FriendList: saved %llu friend(s).", static_cast<unsigned long long>(g_names.size()));
-        }
-        catch (const std::exception& e)
-        {
-            LOG_ERROR("FriendList: saving friends.json failed - %s", e.what());
-            std::error_code ec;
-            std::filesystem::remove(tmp, ec);
-        }
+        std::string text = "[\n";
+        size_t i = 0;
+        for (const auto& n : g_names) text += "  " + json::Escape(n) + (++i < g_names.size() ? ",\n" : "\n");
+        text += "]\n";
+        std::string err;
+        configstore::WriteOptions o;
+        o.validPrevious = configstore::IsJsonStringArray;
+        if (configstore::WriteAtomic(FilePath(), text, &err, o)) LOG_INFO("FriendList: saved %llu friend(s).", static_cast<unsigned long long>(g_names.size()));
+        else LOG_ERROR("FriendList: saving friends.json failed - %s", err.c_str());
     }
 
     void Save()

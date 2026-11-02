@@ -204,6 +204,7 @@ void EspOverlay::OpenConfig()
 void EspOverlay::CloseConfig()
 {
     configOpen_ = false;
+    settings_.Flush(); // changes made in the window are on the disk by the time it closes
     ui_.ResetFocus();
     SetClickThrough(true);
     pend_ = UiInput{};
@@ -439,6 +440,7 @@ int EspOverlay::Run()
         const bool gameFocused = opt_.demo || opt_.screenOverlay || (mc && fg == mc);
         const bool overlayFocused = fg == hwnd_;
         HandleHotkeys(gameFocused || overlayFocused);
+        settings_.SaveIfDue(frameStart); // debounced: a burst of UI changes is one write
 
         // User clicked away from the config window (e.g. back into the game): close it so the overlay
         // does not keep swallowing the mouse.
@@ -464,6 +466,7 @@ int EspOverlay::Run()
         Pace(frameStart);
     }
     timeEndPeriod(1);
+    settings_.Flush();
     SkinCache::Stop();
     replayDriver_.Stop();
     if (!replayMode_)

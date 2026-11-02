@@ -61,7 +61,7 @@ private:
     void TabProfiles();
     void TabHotkeys();
     void HotkeyRow(const std::string& label, int& vk, int slot);
-    void Save() { s_.Save(); }
+    void Save() { s_.RequestSave(); } // written by the overlay loop once the changes stop (EspConfig.h)
 
     Settings& s_;
     Gfx* g_ = nullptr;

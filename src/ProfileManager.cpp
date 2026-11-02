@@ -1,5 +1,6 @@
 #include "ProfileManager.h"
 #include "ConfigSchema.h"
+#include "ConfigStore.h"
 #include "Logger.h"
 #include "Paths.h"
 #include <algorithm>
@@ -77,29 +78,18 @@ namespace ProfileManager
         }
         if (!EnsureDir()) return false;
 
-        auto path = PathFor(safe);
-        auto tmp = path;
-        tmp += ".tmp";
-        try
+        std::string err;
+        configstore::WriteOptions o;
+        o.keepBackup = false; // a profile is one click away from being saved again
+        if (!configstore::WriteAtomic(PathFor(safe), cfg.ToJson(), &err, o))
         {
-            {
-                std::ofstream out(tmp, std::ios::trunc);
-                out << cfg.ToJson();
-                if (!out) throw std::runtime_error("write failed");
-            }
-            std::filesystem::rename(tmp, path);
-            LOG_INFO("ProfileManager.Save: saved profile '%s'.", safe.c_str());
-            Refresh();
-            return true;
-        }
-        catch (const std::exception& e)
-        {
-            g_lastError = std::string("IO error writing profile: ") + e.what();
+            g_lastError = "IO error writing profile: " + err;
             LOG_ERROR("ProfileManager.Save: %s", g_lastError.c_str());
-            std::error_code ec;
-            std::filesystem::remove(tmp, ec);
             return false;
         }
+        LOG_INFO("ProfileManager.Save: saved profile '%s'.", safe.c_str());
+        Refresh();
+        return true;
     }
 
     std::optional<EspConfig> Load(const std::string& name)

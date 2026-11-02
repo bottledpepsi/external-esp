@@ -1,5 +1,6 @@
 #include "EspConfig.h"
 #include "ConfigSchema.h"
+#include "ConfigStore.h"
 #include "Logger.h"
 #include "Paths.h"
 #include "Presets.h"
@@ -206,66 +207,72 @@ std::filesystem::path Settings::ConfigPath() { return ConfigDir() / "esp_config.
 void Settings::Load()
 {
     const auto path = ConfigPath();
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
+    loadNotes.clear();
+    const configstore::ReadResult rr = configstore::Read(path, configstore::IsJsonObject);
+    switch (rr.status)
     {
+    case configstore::ReadStatus::Missing:
         LOG_INFO("LoadConfig: esp_config.json not found - using defaults.");
         return;
-    }
-    try
-    {
-        std::ifstream in(path);
-        std::stringstream ss;
-        ss << in.rdbuf();
-        const std::string text = ss.str();
-        if (text.find_first_not_of(" \t\r\n") == std::string::npos)
-        {
-            LOG_WARN("LoadConfig: esp_config.json is empty - using defaults.");
-            return;
-        }
-        bool parsed = false;
-        const configschema::LoadResult r = configschema::LoadText(text, &parsed);
-        loadNotes.clear();
-        for (const auto& i : r.issues)
-        {
-            if (i.level == configschema::Issue::Level::Warning) loadNotes.push_back(i.message);
-            if (i.level == configschema::Issue::Level::Warning) LOG_WARN("LoadConfig: %s", i.message.c_str());
-            else LOG_INFO("LoadConfig: %s", i.message.c_str());
-        }
-        if (!parsed)
-        {
-            LOG_ERROR("LoadConfig: esp_config.json is not valid JSON - using defaults.");
-            return;
-        }
-        Apply(r.cfg);
-        LOG_INFO("LoadConfig: config loaded (%s).", r.Summary().c_str());
+    case configstore::ReadStatus::Unreadable:
+        LOG_ERROR("LoadConfig: %s", rr.note.c_str());
+        loadNotes.push_back(rr.note);
         return;
+    case configstore::ReadStatus::Damaged:
+        LOG_ERROR("LoadConfig: %s", rr.note.c_str());
+        loadNotes.push_back(rr.note);
+        return;
+    case configstore::ReadStatus::RestoredFromBackup:
+        LOG_WARN("LoadConfig: %s", rr.note.c_str());
+        loadNotes.push_back(rr.note);
+        break;
+    case configstore::ReadStatus::Ok: break;
     }
-    catch (const std::exception& e)
+    const configschema::LoadResult r = configschema::LoadText(rr.text);
+    for (const auto& i : r.issues)
     {
-        LOG_ERROR("LoadConfig: unexpected error - %s. Using defaults.", e.what());
+        if (i.level == configschema::Issue::Level::Warning)
+        {
+            loadNotes.push_back(i.message);
+            LOG_WARN("LoadConfig: %s", i.message.c_str());
+        }
+        else LOG_INFO("LoadConfig: %s", i.message.c_str());
     }
+    Apply(r.cfg);
+    LOG_INFO("LoadConfig: config loaded (%s).", r.Summary().c_str());
 }
 
-void Settings::Save() const
+bool Settings::Save() const
 {
-    const auto path = ConfigPath();
-    auto tmp = path;
-    tmp += ".tmp";
-    try
+    std::string err;
+    configstore::WriteOptions o;
+    o.validPrevious = configstore::IsJsonObject;
+    if (!configstore::WriteAtomic(ConfigPath(), Build().ToJson(), &err, o))
     {
-        std::filesystem::create_directories(path.parent_path()); // %APPDATA%\\external-esp does not exist before the first save
-        {
-            std::ofstream out(tmp, std::ios::trunc);
-            out << Build().ToJson();
-            if (!out) throw std::runtime_error("write failed");
-        }
-        std::filesystem::rename(tmp, path); // replaces an existing file
+        LOG_ERROR("SaveConfig: %s", err.c_str());
+        return false;
     }
-    catch (const std::exception& e)
-    {
-        LOG_ERROR("SaveConfig: %s", e.what());
-        std::error_code ec;
-        std::filesystem::remove(tmp, ec);
-    }
+    return true;
+}
+
+void Settings::RequestSave()
+{
+    if (!saveDirty_) saveRequestedAt_ = std::chrono::steady_clock::now();
+    saveDirty_ = true;
+    lastChangeAt_ = std::chrono::steady_clock::now();
+}
+
+bool Settings::SaveIfDue(std::chrono::steady_clock::time_point now, std::chrono::milliseconds quiet)
+{
+    // write when the changes have stopped for `quiet` (a slider being dragged is one save, not sixty), but never keep a change unsaved for over 3 s
+    if (!saveDirty_) return false;
+    if (now - lastChangeAt_ < quiet && now - saveRequestedAt_ < std::chrono::seconds(3)) return false;
+    return Flush();
+}
+
+bool Settings::Flush()
+{
+    if (!saveDirty_) return true;
+    saveDirty_ = false;
+    return Save();
 }

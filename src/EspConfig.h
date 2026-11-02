@@ -7,6 +7,7 @@
 //              with Apply(EspConfig) / Build() converting between the two, like ApplyConfig/BuildConfig.
 #pragma once
 #include "Json.h"
+#include <chrono>
 #include <filesystem>
 #include <map>
 #include <string>
@@ -104,8 +105,19 @@ struct Settings
     std::map<std::string, std::string> unknownKeys;
     std::vector<std::string> loadNotes; // one line per warning of the last Load(); empty = the file was fine
 
-    // esp_config.json in ConfigDir() (%APPDATA%\external-esp). Save() is atomic (temp file + rename) and never throws.
+    // esp_config.json in ConfigDir() (%APPDATA%\external-esp). Load() recovers from a damaged file (ConfigStore.h); Save() is crash-safe
+    // (temp file + flush + replace, last good copy kept as esp_config.json.bak), never throws, and returns false when the disk refused.
     void Load();
-    void Save() const;
+    bool Save() const;
+    // For the UI: "something changed". The file is written once the changes stop for `quiet` (a slider drag is one save), at the latest 3 s
+    // after the first unsaved change; Flush() writes now (closing the config window, exit).
+    void RequestSave();
+    bool SaveIfDue(std::chrono::steady_clock::time_point now, std::chrono::milliseconds quiet = std::chrono::milliseconds(400));
+    bool Flush();
+    bool SavePending() const { return saveDirty_; }
     static std::filesystem::path ConfigPath();
+
+private:
+    bool saveDirty_ = false;
+    std::chrono::steady_clock::time_point saveRequestedAt_{}, lastChangeAt_{};
 };

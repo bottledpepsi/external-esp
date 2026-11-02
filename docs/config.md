@@ -40,3 +40,17 @@ A value between two of the UI's steps (for example `"MinimapSize": 175`) is not 
 `configschema::kCurrentVersion` is the layout version. A file without `"Version"` (the C# tool's, or a build before this one) is version 0 and goes through the same migration path as any later upgrade: `Migrate()` runs one function per step, `0 -> 1`, `1 -> 2`, ... in order, then the keys are checked. The current table has one step (`0 -> 1`; the keys mean the same, so it only records that the file was unversioned).
 
 When you rename, remove or change the meaning of a key: bump `kCurrentVersion` and add the step to `Steps()` in `ConfigSchema.cpp`. Adding a key with a default needs no bump. `tests/config_schema_test.cpp` fails if a key is added to `EspConfig` without a spec, or if a step is missing from the chain.
+
+## Saving and recovery
+
+Every settings file is written the same way (`src/ConfigStore.cpp`): the new text goes to `<file>.tmp` and is flushed to the disk, the previous file - if it is valid - is copied to `<file>.bak`, and then `<file>.tmp` replaces `<file>` in one step (`MoveFileEx`, retried briefly if a virus scanner holds the file). A crash or power loss leaves either the complete old file or the complete new one.
+
+On load, a file that is missing is a first run (defaults). A file that is empty, cut off, not JSON, or not the right kind is **not trusted**: it is renamed to `esp_config.corrupt-<date>-<time>.json` (the newest three are kept), `esp_config.json.bak` is restored if it is valid, and the log says which happened:
+
+    esp_config.json was damaged (not valid JSON); kept as esp_config.corrupt-20261031-011318.json; the last good copy was restored
+
+A file that exists but cannot be opened (locked, no permission) is left alone and the defaults are used for that run.
+
+The same applies to `friends.json`. Profiles are written atomically but have no `.bak`.
+
+The settings window does not write on every click: changes are collected and written once they stop for 0.4 s (at the latest 3 s after the first), when the window closes, and on exit.
