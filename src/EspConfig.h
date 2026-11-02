@@ -8,7 +8,9 @@
 #pragma once
 #include "Json.h"
 #include <filesystem>
+#include <map>
 #include <string>
+#include <vector>
 
 struct EspConfig
 {
@@ -56,8 +58,14 @@ struct EspConfig
     bool ShowItemEnchants = true; // list enchantments under an item's name
     bool ShowItemTags = false; // list the stack's raw tags (NBT / components) under the name
 
-    std::string ToJson() const;
-    static EspConfig FromJson(const json::Object& o); // missing keys keep their defaults
+    // Keys of the file that this build does not know, as their raw JSON text (key -> value). Kept through load -> edit -> save, so a file written
+    // by a newer build (or annotated by hand) does not lose them. See ConfigSchema.h.
+    std::map<std::string, std::string> Unknown;
+
+    std::string ToJson() const; // writes "Version" first and the unknown keys last
+    // Reads the keys it knows (missing or wrong-typed ones keep their defaults) and collects the others into Unknown. It does not validate:
+    // configschema::Load() migrates and checks first, and is what the settings and profile loaders call.
+    static EspConfig FromJson(const json::Object& o);
 };
 
 struct Settings
@@ -91,6 +99,10 @@ struct Settings
 
     void Apply(const EspConfig& c);
     EspConfig Build() const;
+
+    // Keys of the loaded file this build does not know (kept so the next Save writes them back), and what Load() had to correct or migrate.
+    std::map<std::string, std::string> unknownKeys;
+    std::vector<std::string> loadNotes; // one line per warning of the last Load(); empty = the file was fine
 
     // esp_config.json in ConfigDir() (%APPDATA%\external-esp). Save() is atomic (temp file + rename) and never throws.
     void Load();

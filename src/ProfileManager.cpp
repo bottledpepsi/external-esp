@@ -1,4 +1,5 @@
 #include "ProfileManager.h"
+#include "ConfigSchema.h"
 #include "Logger.h"
 #include "Paths.h"
 #include <algorithm>
@@ -116,16 +117,18 @@ namespace ProfileManager
             std::ifstream in(PathFor(name));
             std::stringstream ss;
             ss << in.rdbuf();
-            std::string err;
-            auto obj = json::ParseObject(ss.str(), &err);
-            if (!obj)
+            bool parsed = false;
+            const configschema::LoadResult r = configschema::LoadText(ss.str(), &parsed);
+            if (!parsed)
             {
-                g_lastError = "Profile '" + name + "' contains malformed JSON: " + err;
+                g_lastError = "Profile '" + name + "' contains malformed JSON: " + (r.issues.empty() ? std::string() : r.issues.front().message);
                 LOG_ERROR("ProfileManager.Load: %s", g_lastError.c_str());
                 return std::nullopt;
             }
-            LOG_INFO("ProfileManager.Load: loaded profile '%s'.", name.c_str());
-            return EspConfig::FromJson(*obj); // unknown keys ignored, missing keys default -> old profiles keep working
+            for (const auto& i : r.issues)
+                if (i.level == configschema::Issue::Level::Warning) LOG_WARN("ProfileManager.Load('%s'): %s", name.c_str(), i.message.c_str());
+            LOG_INFO("ProfileManager.Load: loaded profile '%s' (%s).", name.c_str(), r.Summary().c_str());
+            return r.cfg; // missing keys default, unknown keys are kept -> old profiles keep working
         }
         catch (const std::exception& e)
         {

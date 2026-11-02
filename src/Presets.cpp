@@ -123,6 +123,24 @@ namespace presets
         return 0x2E;
     }
 
+    bool IsKnownKeyName(const std::string& name)
+    {
+        for (const auto& kv : VkNames())
+            if (Lower(kv.second) == Lower(name)) return true;
+        if (name.size() == 1)
+        {
+            const char c = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
+            return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+        }
+        if (name.size() > 2 && name[0] == '0' && (name[1] == 'x' || name[1] == 'X'))
+        {
+            char* end = nullptr;
+            const long v = std::strtol(name.c_str() + 2, &end, 16);
+            return end && *end == 0 && v > 0 && v < 256;
+        }
+        return false;
+    }
+
     int NearestIdx(const std::vector<float>& a, float target)
     {
         int best = 0;

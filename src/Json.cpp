@@ -1,4 +1,5 @@
 #include "Json.h"
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -149,6 +150,15 @@ namespace json
             bool value(Value& v)
             {
                 ws();
+                const size_t start = i;
+                if (!valueImpl(v)) return false;
+                v.raw.assign(t.substr(start, i - start));
+                return true;
+            }
+
+            bool valueImpl(Value& v)
+            {
+                ws();
                 if (i >= t.size()) return fail("unexpected end");
                 char c = t[i];
                 if (c == '"')
@@ -188,7 +198,9 @@ namespace json
                     v.n = std::strtod(tmp.c_str(), &end);
                     if (end == tmp.c_str()) return fail("bad number");
                     i += static_cast<size_t>(end - tmp.c_str());
-                    v.type = Value::Type::Number;
+                    // "-inf", "-nan" and "1e999" are accepted by strtod but are no numbers: the value becomes Null (the key then counts as
+                    // "not a number" and the caller reports it), instead of an infinity that turns into undefined behaviour at the first int cast
+                    v.type = std::isfinite(v.n) ? Value::Type::Number : Value::Type::Null;
                     return true;
                 }
                 return fail("unexpected character");
@@ -258,6 +270,122 @@ namespace json
             if (error) *error = "expected ',' or ']'";
             return std::nullopt;
         }
+    }
+
+    namespace
+    {
+        struct Strict
+        {
+            std::string_view t;
+            size_t i = 0;
+
+            void ws() { while (i < t.size() && (t[i] == ' ' || t[i] == '\t' || t[i] == '\n' || t[i] == '\r')) ++i; }
+            bool lit(const char* w)
+            {
+                const size_t n = std::char_traits<char>::length(w);
+                if (t.substr(i, n) != w) return false;
+                i += n;
+                return true;
+            }
+            static bool digit(char c) { return c >= '0' && c <= '9'; }
+            bool number()
+            {
+                if (i < t.size() && t[i] == '-') ++i;
+                if (i >= t.size() || !digit(t[i])) return false;
+                if (t[i] == '0') ++i;
+                else while (i < t.size() && digit(t[i])) ++i;
+                if (i < t.size() && t[i] == '.')
+                {
+                    ++i;
+                    if (i >= t.size() || !digit(t[i])) return false;
+                    while (i < t.size() && digit(t[i])) ++i;
+                }
+                if (i < t.size() && (t[i] == 'e' || t[i] == 'E'))
+                {
+                    ++i;
+                    if (i < t.size() && (t[i] == '+' || t[i] == '-')) ++i;
+                    if (i >= t.size() || !digit(t[i])) return false;
+                    while (i < t.size() && digit(t[i])) ++i;
+                }
+                return true;
+            }
+            bool string()
+            {
+                if (i >= t.size() || t[i] != '"') return false;
+                ++i;
+                while (i < t.size())
+                {
+                    const unsigned char c = static_cast<unsigned char>(t[i++]);
+                    if (c == '"') return true;
+                    if (c < 0x20) return false;
+                    if (c != '\\') continue;
+                    if (i >= t.size()) return false;
+                    const char e = t[i++];
+                    if (e == 'u')
+                    {
+                        for (int k = 0; k < 4; ++k, ++i)
+                            if (i >= t.size() || !std::isxdigit(static_cast<unsigned char>(t[i]))) return false;
+                    }
+                    else if (std::string_view("\"\\/bfnrt").find(e) == std::string_view::npos) return false;
+                }
+                return false;
+            }
+            bool value(int depth)
+            {
+                if (depth > 64) return false;
+                ws();
+                if (i >= t.size()) return false;
+                const char c = t[i];
+                if (c == '"') return string();
+                if (c == '{')
+                {
+                    ++i;
+                    ws();
+                    if (i < t.size() && t[i] == '}') { ++i; return true; }
+                    for (;;)
+                    {
+                        ws();
+                        if (!string()) return false;
+                        ws();
+                        if (i >= t.size() || t[i++] != ':') return false;
+                        if (!value(depth + 1)) return false;
+                        ws();
+                        if (i >= t.size()) return false;
+                        if (t[i] == ',') { ++i; continue; }
+                        if (t[i] == '}') { ++i; return true; }
+                        return false;
+                    }
+                }
+                if (c == '[')
+                {
+                    ++i;
+                    ws();
+                    if (i < t.size() && t[i] == ']') { ++i; return true; }
+                    for (;;)
+                    {
+                        if (!value(depth + 1)) return false;
+                        ws();
+                        if (i >= t.size()) return false;
+                        if (t[i] == ',') { ++i; continue; }
+                        if (t[i] == ']') { ++i; return true; }
+                        return false;
+                    }
+                }
+                if (c == 't') return lit("true");
+                if (c == 'f') return lit("false");
+                if (c == 'n') return lit("null");
+                return number();
+            }
+        };
+    } // namespace
+
+    bool IsValid(std::string_view text)
+    {
+        Strict s;
+        s.t = text;
+        if (!s.value(0)) return false;
+        s.ws();
+        return s.i == text.size();
     }
 
     std::string Escape(std::string_view s)

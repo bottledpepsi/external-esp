@@ -1,4 +1,5 @@
 #include "EspConfig.h"
+#include "ConfigSchema.h"
 #include "Logger.h"
 #include "Paths.h"
 #include "Presets.h"
@@ -22,6 +23,7 @@ namespace
 std::string EspConfig::ToJson() const
 {
     std::string j = "{\n";
+    j += Kv("Version", std::to_string(configschema::kCurrentVersion));
     j += Kv("HotkeyToggle", S(HotkeyToggle)) + Kv("HotkeyConfig", S(HotkeyConfig)) + Kv("HotkeyExit", S(HotkeyExit));
     j += Kv("DistanceFormat", S(DistanceFormat)) + Kv("MaxLabelDist", N(MaxLabelDist)) +
         Kv("TextShadow", B(TextShadow));
@@ -39,7 +41,9 @@ std::string EspConfig::ToJson() const
     j += Kv("OverlayOpacity", N(OverlayOpacity)) + Kv("FpsCap", N(FpsCap));
     j += Kv("ConfigX", N(ConfigX)) + Kv("ConfigY", N(ConfigY));
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
-        Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags), true);
+        Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags), Unknown.empty());
+    size_t i = 0;
+    for (const auto& kv : Unknown) j += "  " + json::Escape(kv.first) + ": " + kv.second + (++i == Unknown.size() ? "\n" : ",\n");
     return j + "}\n";
 }
 
@@ -87,6 +91,8 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.ShowHealth = GetBool(o, "ShowHealth", c.ShowHealth);
     c.ShowItemEnchants = GetBool(o, "ShowItemEnchants", c.ShowItemEnchants);
     c.ShowItemTags = GetBool(o, "ShowItemTags", c.ShowItemTags);
+    for (const auto& kv : o)
+        if (!configschema::IsKnownKey(kv.first) && !kv.second.raw.empty()) c.Unknown[kv.first] = kv.second.raw;
     return c;
 }
 
@@ -144,6 +150,7 @@ void Settings::Apply(const EspConfig& c)
     showHealth = c.ShowHealth;
     showItemEnchants = c.ShowItemEnchants;
     showItemTags = c.ShowItemTags;
+    unknownKeys = c.Unknown;
 }
 
 EspConfig Settings::Build() const
@@ -190,6 +197,7 @@ EspConfig Settings::Build() const
     c.ShowHealth = showHealth;
     c.ShowItemEnchants = showItemEnchants;
     c.ShowItemTags = showItemTags;
+    c.Unknown = unknownKeys;
     return c;
 }
 
@@ -215,15 +223,23 @@ void Settings::Load()
             LOG_WARN("LoadConfig: esp_config.json is empty - using defaults.");
             return;
         }
-        std::string err;
-        auto obj = json::ParseObject(text, &err);
-        if (!obj)
+        bool parsed = false;
+        const configschema::LoadResult r = configschema::LoadText(text, &parsed);
+        loadNotes.clear();
+        for (const auto& i : r.issues)
         {
-            LOG_ERROR("LoadConfig: malformed JSON - %s. Using defaults.", err.c_str());
+            if (i.level == configschema::Issue::Level::Warning) loadNotes.push_back(i.message);
+            if (i.level == configschema::Issue::Level::Warning) LOG_WARN("LoadConfig: %s", i.message.c_str());
+            else LOG_INFO("LoadConfig: %s", i.message.c_str());
+        }
+        if (!parsed)
+        {
+            LOG_ERROR("LoadConfig: esp_config.json is not valid JSON - using defaults.");
             return;
         }
-        Apply(EspConfig::FromJson(*obj));
-        LOG_INFO("LoadConfig: config loaded successfully.");
+        Apply(r.cfg);
+        LOG_INFO("LoadConfig: config loaded (%s).", r.Summary().c_str());
+        return;
     }
     catch (const std::exception& e)
     {

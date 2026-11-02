@@ -17,6 +17,9 @@ namespace json
         bool b = false;
         double n = 0.0;
         std::string s;
+        // The value exactly as it was written in the file (a string with its quotes, a nested object/array in full). ParseObject fills it for
+        // every value, so a caller can write back a key it does not understand unchanged.
+        std::string raw;
     };
 
     using Object = std::map<std::string, Value>;
@@ -25,6 +28,10 @@ namespace json
     std::optional<Object> ParseObject(std::string_view text, std::string* error = nullptr);
     // Parses a top-level array of strings (non-string elements are skipped).
     std::optional<std::vector<std::string>> ParseStringArray(std::string_view text, std::string* error = nullptr);
+
+    // True when `text` is exactly one well-formed JSON value (RFC 8259: strict numbers, escapes, no trailing text; nesting depth <= 64).
+    // ParseObject is lenient about what it skips; this is what decides whether a skipped value may be written back out.
+    bool IsValid(std::string_view text);
 
     std::string Escape(std::string_view s);
     std::string Number(double v); // 2 -> "2", 0.75 -> "0.75" (no trailing zeros)

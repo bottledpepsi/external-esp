@@ -51,6 +51,7 @@ namespace presets
 
     std::string VkToName(int vk);
     int NameToVk(const std::string& name); // unknown -> 0x2E (Delete), like the C# tool
+    bool IsKnownKeyName(const std::string& name); // true when NameToVk(name) understands it (a table name, one letter/digit, or 0xNN)
 
     int NearestIdx(const std::vector<float>& arr, float target);
     int NearestIdx(const std::vector<int>& arr, int target);
