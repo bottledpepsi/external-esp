@@ -8,6 +8,7 @@
 #pragma once
 #include "EspConfig.h"
 #include "Gfx.h"
+#include "HotkeyRegistry.h"
 #include "Smoother.h"
 #include "Tunables.h"
 #include "UiNav.h"
@@ -37,6 +38,8 @@ public:
     void Draw(Gfx& g, const UiInput& in, int winW, int winH);
     void SetCameraInfo(const std::string& s) { cameraInfo_ = s; }
     // one line under the agent-rate slider (what happened to the last change), set every frame by the overlay
+    // the registry that says which hotkeys could not be registered with the system (read while drawing the HOTKEYS tab)
+    void SetHotkeyRegistry(const hotkeys::Registry* r) { hkRegistry_ = r; }
     void SetRateNote(const std::string& s, bool warn)
     {
         rateNote_ = s;
@@ -109,6 +112,7 @@ private:
     int tab_ = 0;
     float scroll_[8] = {};
     float contentH_[8] = {};
+    const hotkeys::Registry* hkRegistry_ = nullptr;
     std::string hotkeyNote_; // why the last rebind was refused (in use, reserved by Windows)
     std::string rateNote_;
     bool rateWarn_ = false;

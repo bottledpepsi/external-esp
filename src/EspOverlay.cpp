@@ -138,6 +138,9 @@ LRESULT EspOverlay::OnMessage(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_SYSKEYDOWN:
         if (configOpen_) pend_.keys.push_back(static_cast<int>(w));
         return 0;
+    case WM_HOTKEY: // a registered system hotkey (HotkeyRegistry); w = the action index
+        if (hotkeyEvents_.size() < 16) hotkeyEvents_.push_back(static_cast<int>(w));
+        return 0;
     case WM_CLOSE: DestroyWindow(h);
         return 0;
     case WM_DESTROY:
@@ -279,6 +282,20 @@ namespace
     bool BindingDown(const hotkeys::Binding& b) { return b.Bound() && (GetAsyncKeyState(b.vk) & 0x8000) != 0 && HeldMods() == b.mods; }
 } // namespace
 
+int EspOverlay::Win32Registrar::Register(int id, const hotkeys::Binding& b)
+{
+    if (!hwnd) return ERROR_INVALID_WINDOW_HANDLE;
+    // MOD_NOREPEAT: holding the key fires once. The hotkeys:: modifier bits are the Win32 MOD_* values.
+    if (RegisterHotKey(hwnd, id, b.mods | MOD_NOREPEAT, static_cast<UINT>(b.vk))) return 0;
+    const DWORD e = GetLastError();
+    return e ? static_cast<int>(e) : ERROR_INVALID_PARAMETER;
+}
+
+void EspOverlay::Win32Registrar::Unregister(int id)
+{
+    if (hwnd) UnregisterHotKey(hwnd, id);
+}
+
 void EspOverlay::Perform(hotkeys::Action a)
 {
     using hotkeys::Action;
@@ -310,9 +327,20 @@ void EspOverlay::Perform(hotkeys::Action a)
 void EspOverlay::HandleHotkeys(bool focused)
 {
     using hotkeys::Action;
-    if (!focused || ui_.CapturingKeys())
+    // System hotkeys exist only while the game or the overlay has focus and no key rebind is waiting: a registered key is taken from every
+    // program, so it is released the moment focus goes (HotkeyRegistry.h).
+    const bool active = focused && !ui_.CapturingKeys();
+    hkRegistry_.Sync(settings_.hotkey, active, Clock::now());
+    for (const auto& f : hkRegistry_.TakeNewFailures()) LOG_WARN("Hotkey \"%s\": %s", hotkeys::Def(f.action).label, f.text.c_str());
+    std::vector<int> events;
+    events.swap(hotkeyEvents_);
+    if (active)
+        for (int id : events)
+            if (id >= 0 && id < hotkeys::kActionCount) Perform(hotkeys::ActionAt(id));
+
+    if (!active)
     {
-        // global hotkeys only act while the game/overlay has focus
+        // nothing acts while unfocused
         exitHolding_ = false;
         // keep edge state fresh so a key held while unfocused does not fire on return
         for (int i = 0; i < hotkeys::kActionCount; ++i) prevDown_[static_cast<size_t>(i)] = BindingDown(settings_.hotkey[static_cast<size_t>(i)]);
@@ -323,6 +351,7 @@ void EspOverlay::HandleHotkeys(bool focused)
     {
         const hotkeys::ActionDef& d = hotkeys::Def(hotkeys::ActionAt(i));
         if (d.hold) continue;
+        if (!hkRegistry_.NeedsPolling(settings_.hotkey, hotkeys::ActionAt(i))) continue; // registered: WM_HOTKEY delivers it
         const bool down = BindingDown(settings_.hotkey[static_cast<size_t>(i)]);
         const bool edge = down && !prevDown_[static_cast<size_t>(i)];
         prevDown_[static_cast<size_t>(i)] = down;
@@ -521,6 +550,7 @@ int EspOverlay::Run()
         Pace(frameStart);
     }
     timeEndPeriod(1);
+    hkRegistry_.Shutdown(); // give the keys back before the window goes
     settings_.Flush();
     SkinCache::Stop();
     replayDriver_.Stop();
@@ -720,6 +750,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     }
     ui_.SetCameraInfo(camInfo);
     ui_.SetLive(smoother_.Stats(), h, cam.fovYDeg);
+    ui_.SetHotkeyRegistry(&hkRegistry_);
     UpdateAgentRate(now, !stale);
 
     // ---- 3. draw into the off-screen surface ----

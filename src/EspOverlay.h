@@ -9,6 +9,7 @@
 #include "EspConfig.h"
 #include "EspRenderer.h"
 #include "Gfx.h"
+#include "HotkeyRegistry.h"
 #include "Hotkeys.h"
 #include "Recorder.h"
 #include "Replay.h"
@@ -18,6 +19,7 @@
 #include <array>
 #include <chrono>
 #include <unordered_map>
+#include <vector>
 
 class EspOverlay
 {
@@ -77,6 +79,16 @@ private:
     DemoSource demo_;
 
     HWND hwnd_ = nullptr;
+    // system hotkeys (RegisterHotKey) for the window above; see HotkeyRegistry.h. Declared after hwnd_: it unregisters through it when destroyed.
+    struct Win32Registrar : hotkeys::Registrar
+    {
+        explicit Win32Registrar(HWND& h) : hwnd(h) {}
+        int Register(int id, const hotkeys::Binding& b) override;
+        void Unregister(int id) override;
+        HWND& hwnd;
+    } hkRegistrar_{hwnd_};
+    hotkeys::Registry hkRegistry_{hkRegistrar_};
+    std::vector<int> hotkeyEvents_; // WM_HOTKEY ids since the last loop pass (UI thread only)
     bool shown_ = false, clickThrough_ = true;
     bool visible_ = true; // ESP drawing on/off (toggle hotkey)
     bool configOpen_ = false, quit_ = false, openedAtStart_ = false;

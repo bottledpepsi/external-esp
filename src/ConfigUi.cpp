@@ -385,8 +385,11 @@ void ConfigUi::TabHotkeys()
     for (int i = 0; i < hotkeys::kActionCount; ++i) HotkeyRow(hotkeys::ActionAt(i));
     y_ += 6;
     if (!hotkeyNote_.empty()) InfoRow(hotkeyNote_, true);
+    if (hkRegistry_)
+        for (int i = 0; i < hotkeys::kActionCount; ++i)
+            if (const std::string& st = hkRegistry_->Status(hotkeys::ActionAt(i)); !st.empty()) InfoRow(st, true); // e.g. "Delete is already taken by another program ..."
     InfoRow("Hold Ctrl / Shift / Alt while you press the key to add it: Ctrl+Shift+F5.");
-    InfoRow("Hotkeys work while Minecraft is focused (they are polled globally).");
+    InfoRow("Keys are taken from other programs only while Minecraft is focused.");
     InfoRow("Toggles change the setting itself, so they are saved like a click.");
 }
 

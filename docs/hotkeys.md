@@ -22,3 +22,12 @@ The new actions have no default key on purpose: any key we pick could be one the
 - Modifiers must match exactly: `Delete` does not fire while Ctrl is held; `Ctrl+Delete` does not fire without it.
 - Key names: `A`-`Z`, `0`-`9`, `F1`-`F24`, `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown`, `Space`, `Tab`, `Enter`, `Backspace`, `Left`/`Up`/`Right`/`Down`, `Numpad0`-`Numpad9`, `NumpadAdd`..., `Tilde`, `[`, `]`, ... or any virtual-key code as `0xNN`.
 - Hotkeys only act while Minecraft (or the overlay) has focus.
+
+## System hotkeys, and what they take from other programs
+
+Hotkeys are registered with Windows (`RegisterHotKey`), so a press is never missed during a slow frame and the key does not also reach the game. The price is that **a registered key is taken from every program**. Therefore:
+
+- keys are registered **only while Minecraft or the overlay has focus**, and released the moment focus goes (alt-tab to a browser and Delete is the browser's again);
+- while the HOTKEYS tab is waiting for a key (rebinding), nothing is registered, so every key reaches the window;
+- the "hold to exit" key is never registered (it needs "held for 3 s"); it is polled and also reaches the game;
+- if another program already owns a combination, Windows refuses it. You get a line in the HOTKEYS tab (`Delete: taken by another program, polled instead`) and in `esp_log.txt` (once), and that action works by polling the key instead - the game then also sees the key. The registration is retried every 5 s and on each focus change.
