@@ -76,7 +76,7 @@ Base URLs can be overridden with `ESP_MOJANG_API`, `ESP_CRAFATAR`, `ESP_SESSION_
 `MCRADAR 3 / S status / C x y z yaw pitch fov mode / L|P name x y z yaw pitch health w h uuid / I x y z w h count key ench tags` (free text percent-encoded, `-` = unknown). v1 and v2 packets still parse.
 
 ## Config & persistence
-`esp_config.json`, `friends.json`, `profiles/<name>.json` next to the exe; files from the C# tool load unchanged. Added keys: `Fov` (fallback), `VSync`, `Smoothing`, `ShowHealth`, `ShowItemEnchants`, `ShowItemTags`.
+`esp_config.json`, `friends.json`, `profiles/<name>.json` in `%APPDATA%\external-esp` (older builds kept them next to the exe; they are copied over once, see docs/config.md); files from the C# tool load unchanged. Added keys: `Fov` (fallback), `VSync`, `Smoothing`, `ShowHealth`, `ShowItemEnchants`, `ShowItemTags`.
 Tabs: GENERAL · PLAYERS (+friends) · TRACERS · ITEMS · MINIMAP · PROFILES · HOTKEYS. Left-click cycles a preset, right-click goes back, the title bar drags, the wheel scrolls.
 
 ## Tests performed (and what was NOT)

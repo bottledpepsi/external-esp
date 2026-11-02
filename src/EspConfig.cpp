@@ -193,7 +193,7 @@ EspConfig Settings::Build() const
     return c;
 }
 
-std::filesystem::path Settings::ConfigPath() { return AppDir() / "esp_config.json"; }
+std::filesystem::path Settings::ConfigPath() { return ConfigDir() / "esp_config.json"; }
 
 void Settings::Load()
 {
@@ -238,6 +238,7 @@ void Settings::Save() const
     tmp += ".tmp";
     try
     {
+        std::filesystem::create_directories(path.parent_path()); // %APPDATA%\\external-esp does not exist before the first save
         {
             std::ofstream out(tmp, std::ios::trunc);
             out << Build().ToJson();

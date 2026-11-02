@@ -17,6 +17,7 @@ namespace diag
         red.AddName(sys.hostName, "<host>");
         red.AddPathPrefix(sys.userProfile, "%USERPROFILE%");
         red.AddPathPrefix(AppDir().string(), "<exe dir>");
+        red.AddPathPrefix(ConfigDir().string(), "<config dir>");
         if (!ctx.agentLog.empty()) red.AddPathPrefix(ctx.agentLog.parent_path().string(), "<export dir>");
         red.AddSecret(ctx.token);
         red.AddName(ctx.localName, "<local>");

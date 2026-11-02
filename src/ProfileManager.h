@@ -1,4 +1,4 @@
-// ProfileManager.h - port of ProfileManager.cs: named config presets in profiles/<name>.json next to the exe.
+// ProfileManager.h - port of ProfileManager.cs: named config presets in profiles/<name>.json in ConfigDir() (%APPDATA%\external-esp).
 // Non-throwing; errors go to the log and to LastError() (shown in the UI).
 #pragma once
 #include "EspConfig.h"

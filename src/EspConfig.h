@@ -92,7 +92,7 @@ struct Settings
     void Apply(const EspConfig& c);
     EspConfig Build() const;
 
-    // esp_config.json next to the exe. Save() is atomic (temp file + rename) and never throws.
+    // esp_config.json in ConfigDir() (%APPDATA%\external-esp). Save() is atomic (temp file + rename) and never throws.
     void Load();
     void Save() const;
     static std::filesystem::path ConfigPath();

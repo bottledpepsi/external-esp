@@ -15,6 +15,7 @@
 #include "SelfTestApp.h"
 #include "EspOverlay.h"
 #include "FriendList.h"
+#include "LegacyImport.h"
 #include "Logger.h"
 #include "DiagnosticsApp.h"
 #include "Paths.h"
@@ -217,6 +218,9 @@ int main(int argc, char** argv)
     if (!opt.autoInject && !opt.demo && opt.replayPath.empty())
         std::printf("Start the game with:  -javaagent:esp-agent.jar=port=%d;hz=%d;wire=%d%s%s%s%s\n", static_cast<int>(opt.port), opt.agentHz, wire::kMaxVersion,
                     opt.token.empty() ? "" : ";token=", opt.token.c_str(), opt.verbose ? ";verbose=1" : "", opt.agentExtraOptions().c_str());
+    // settings live in %APPDATA%\external-esp; the first start after an update copies what older builds kept next to the exe
+    legacy::ImportFromExeFolder(AppDir(), ConfigDir());
+    LOG_INFO("Config folder: %s", ConfigDir().string().c_str());
     FriendList::Load();
     ProfileManager::Refresh();
     LOG_INFO("Mode: %s | UDP port %u | agent jar: %s", opt.demo ? "DEMO" : "agent", static_cast<unsigned>(opt.port),

@@ -28,7 +28,7 @@ namespace FriendList
         std::mutex g_mtx;
         // Contains() is called from the render path, Add/Remove from the UI path (same thread today; cheap insurance)
         std::set<std::string, CiLess> g_names;
-        std::filesystem::path FilePath() { return AppDir() / "friends.json"; }
+        std::filesystem::path FilePath() { return ConfigDir() / "friends.json"; }
 
         std::string Trim(const std::string& s)
         {
@@ -72,6 +72,7 @@ namespace FriendList
         tmp += ".tmp";
         try
         {
+            std::filesystem::create_directories(FilePath().parent_path()); // %APPDATA%\\external-esp does not exist before the first save
             {
                 std::ofstream out(tmp, std::ios::trunc);
                 out << "[\n";

@@ -12,7 +12,7 @@ namespace ProfileManager
     {
         std::vector<std::string> g_names;
         std::string g_lastError;
-        std::filesystem::path Dir() { return AppDir() / "profiles"; }
+        std::filesystem::path Dir() { return ConfigDir() / "profiles"; }
         std::filesystem::path PathFor(const std::string& n) { return Dir() / (n + ".json"); }
 
         bool EnsureDir()
