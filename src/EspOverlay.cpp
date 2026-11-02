@@ -8,6 +8,7 @@
 #include "Logger.h"
 #include "Presets.h"
 #include "ProfileManager.h"
+#include "SingleInstance.h"
 #include "Tunables.h"
 #include "SkinCache.h"
 #include <dwmapi.h>
@@ -65,7 +66,7 @@ bool EspOverlay::CreateOverlayWindow()
     //                             DirectComposition swap chain instead of UpdateLayeredWindow
     DWORD exStyle = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
     if (gfx_.IsGpu()) exStyle |= WS_EX_NOREDIRECTIONBITMAP;
-    hwnd_ = CreateWindowExW(exStyle, kClass, L"external-esp", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, wc.hInstance,
+    hwnd_ = CreateWindowExW(exStyle, kClass, SingleInstance::WindowTitle(opt_.port).c_str(), WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, wc.hInstance,
                             this);
     if (!hwnd_)
     {

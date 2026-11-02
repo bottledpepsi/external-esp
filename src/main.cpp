@@ -16,7 +16,9 @@
 #include "EspOverlay.h"
 #include "FriendList.h"
 #include "AgentJarWin.h"
+#include "ExitCodes.h"
 #include "LegacyImport.h"
+#include "SingleInstance.h"
 #include "Logger.h"
 #include "DiagnosticsApp.h"
 #include "Paths.h"
@@ -263,6 +265,19 @@ int main(int argc, char** argv)
     LOG_INFO("DPI awareness: %s", dpiLevel.c_str());
     LOG_INFO("Monitors: %s", dpi::DescribeMonitors().c_str());
 
+    // one overlay per port: a second one could not receive anything (the port is taken) - say so now, and who has it
+    SingleInstance single;
+    if (!opt.demo && opt.replayPath.empty() && !single.Acquire(opt.port))
+    {
+        char who[64] = "";
+        if (single.OtherPid()) std::snprintf(who, sizeof who, " (process %lu)", static_cast<unsigned long>(single.OtherPid()));
+        std::printf("mcesp is already running%s on port %u.\n"
+                    "  - Close it first (hold the exit hotkey, or close its console), or\n"
+                    "  - to run a second client on this PC, start this one with  --port <another port> --pid <the game's process id>.\n",
+                    who, static_cast<unsigned>(opt.port));
+        LOG_ERROR("Another mcesp is already running on port %u%s.", static_cast<unsigned>(opt.port), who);
+        return exitcode::kAlreadyRunning;
+    }
     EspOverlay overlay(opt);
     return overlay.Run();
 }
