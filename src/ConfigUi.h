@@ -36,6 +36,12 @@ public:
 
     void Draw(Gfx& g, const UiInput& in, int winW, int winH);
     void SetCameraInfo(const std::string& s) { cameraInfo_ = s; }
+    // one line under the agent-rate slider (what happened to the last change), set every frame by the overlay
+    void SetRateNote(const std::string& s, bool warn)
+    {
+        rateNote_ = s;
+        rateWarn_ = warn;
+    }
     // numbers for the ADVANCED tab's live readout (set every frame by the overlay)
     void SetLive(const SmootherStats& st, int screenH, double fovYDeg)
     {
@@ -103,6 +109,8 @@ private:
     int tab_ = 0;
     float scroll_[8] = {};
     float contentH_[8] = {};
+    std::string rateNote_;
+    bool rateWarn_ = false;
     int sliderDrag_ = -1; // tunables::Id being dragged with the mouse, -1 none
     SmootherStats liveStats_;
     int liveH_ = 0;

@@ -355,6 +355,10 @@ int EspOverlay::Run()
         if (!name.empty() && ProfileManager::Activate(name, settings_)) LOG_INFO("Started with profile '%s' (--profile).", name.c_str());
         else LOG_WARN("--profile '%s' could not be loaded: %s", opt_.profile.c_str(), ProfileManager::LastError().c_str());
     }
+    // the agent rate: the setting (a profile may have changed it) unless --hz was given; what the next injection asks for
+    if (!opt_.agentHzFromCli) injector_.SetHz(settings_.agentHz);
+    rate_.SetRunning(injector_.Hz());
+    lastSeenHz_ = settings_.agentHz;
     gfx_.SetAdapterPreference(opt_.adapter);
     if (!gfx_.Init(!opt_.legacyGfx))
     {
@@ -496,7 +500,12 @@ int EspOverlay::Run()
 void EspOverlay::CheckSession()
 {
     if (opt_.demo || replayMode_) return;
-    if (sup_.Generation() != lastGeneration_) { lastGeneration_ = sup_.Generation(); ResetSession("the Minecraft process changed"); }
+    if (sup_.Generation() != lastGeneration_)
+    {
+        lastGeneration_ = sup_.Generation();
+        ResetSession("the Minecraft process changed");
+        rate_.SetRunning(injector_.Hz()); // a new game is injected with the current rate
+    }
     const uint64_t sessions = Src().Link().sessions;
     if (sessions != lastSessions_) { lastSessions_ = sessions; ResetSession("the agent restarted"); }
 }
@@ -550,6 +559,38 @@ void EspOverlay::SwitchToLegacy()
     }
     if (!wasClickThrough) SetClickThrough(false);   // the config window was open
     LOG_INFO("Renderer: legacy (DIB + UpdateLayeredWindow), after a GPU device loss.");
+}
+
+// The AgentHz setting changed while the game runs: wait until the slider rests, then re-attach with the new rate (RateApply.h).
+void EspOverlay::UpdateAgentRate(Clock::time_point now, bool agentLive)
+{
+    if (opt_.demo || replayMode_) return;
+    if (settings_.agentHz != lastSeenHz_)
+    {
+        lastSeenHz_ = settings_.agentHz;
+        injector_.SetHz(lastSeenHz_); // any injection from now on uses it
+        if (agentLive) rate_.Want(lastSeenHz_, now); // a running agent has to be told
+        else rate_.SetRunning(lastSeenHz_); // none is running: the next attach asks for it
+    }
+    switch (sup_.PollRateApply())
+    {
+    case AgentSupervisor::RateResult::Done:
+        rate_.Finished(true, now);
+        rate_.MarkShown();
+        break;
+    case AgentSupervisor::RateResult::Failed: rate_.Finished(false, now); break;
+    default: break;
+    }
+    RateApplier::Query q;
+    q.now = now;
+    q.canApply = sup_.CanApplyRate() && agentLive;
+    q.busy = sup_.Busy();
+    if (const int hz = rate_.Poll(q); hz > 0 && sup_.ApplyRate(hz)) rate_.Started(hz);
+
+    char buf[96];
+    bool warn = false;
+    RateApplier::Describe(rate_.CurrentNote(sup_.CanApplyRate()), rate_.Wanted(), buf, sizeof buf, &warn);
+    ui_.SetRateNote(buf, warn);
 }
 
 void EspOverlay::ResetSession(const char* why)
@@ -640,6 +681,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     }
     ui_.SetCameraInfo(camInfo);
     ui_.SetLive(smoother_.Stats(), h, cam.fovYDeg);
+    UpdateAgentRate(now, !stale);
 
     // ---- 3. draw into the off-screen surface ----
     // While the config window is open the whole surface is given alpha 1/255: invisible, but hit-testable,

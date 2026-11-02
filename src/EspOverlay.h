@@ -11,6 +11,7 @@
 #include "Gfx.h"
 #include "Recorder.h"
 #include "Replay.h"
+#include "RateApply.h"
 #include "Smoother.h"
 #include "UdpListener.h"
 #include <chrono>
@@ -45,6 +46,9 @@ private:
     void Pace(Clock::time_point frameStart);
 
     AppOptions opt_;
+    RateApplier rate_{120}; // sends a changed AgentHz to the running agent
+    int lastSeenHz_ = 120;
+    void UpdateAgentRate(Clock::time_point now, bool agentLive);
     bool closeConfigPending_ = false; // Esc in the config window
     Settings settings_;
     Gfx gfx_;

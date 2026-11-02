@@ -81,7 +81,7 @@ int AgentInjector::RunHelper(const fs::path& java, DWORD pid, std::stop_token st
     // wire=N: the newest wire protocol this overlay can read; the agent never sends a newer one (an agent without this option, or an older
     // overlay that does not pass it, means v4).
     const std::string extra = cfg_.extraOptions; // ASCII only (pacer name, seconds)
-    const std::wstring opts = L"port=" + std::to_wstring(cfg_.port) + L";hz=" + std::to_wstring(cfg_.agentHz) +
+    const std::wstring opts = L"port=" + std::to_wstring(cfg_.port) + L";hz=" + std::to_wstring(hz_.load()) +
         L";wire=" + std::to_wstring(wire::kMaxVersion) + (cfg_.token.empty() ? L"" : L";token=" + std::wstring(cfg_.token.begin(), cfg_.token.end())) +
         (cfg_.verbose ? L";verbose=1" : L"") + std::wstring(extra.begin(), extra.end()) + L";export=" + exportDir;
 

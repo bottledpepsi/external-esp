@@ -27,6 +27,14 @@ public:
     // Incremented whenever the target changes: a game was found, or it exited. The overlay drops everything it holds from the old game when this moves.
     unsigned Generation() const { return generation_; }
 
+    // Sending a new agent rate to the running game (see RateApply.h). CanApplyRate: a live game, auto-inject on (with it off the user manages the
+    // agent themselves), not a demo or replay. ApplyRate starts the attach helper with the new hz; PollRateApply reports how that went.
+    bool CanApplyRate() const;
+    bool Busy() const { return inj_.GetState() == AgentInjector::State::Running; }
+    bool ApplyRate(int hz);
+    enum class RateResult { None, Pending, Done, Failed };
+    RateResult PollRateApply(std::string* detail = nullptr);
+
 private:
     InjectPolicy policy_;
     unsigned generation_ = 0;
@@ -38,4 +46,5 @@ private:
     std::string status_ = "waiting for minecraft";
     Clock::time_point lastTick_{}, lastAttach_{}, attachedAt_{}, lastInject_{};
     DWORD injectedPid_ = 0;
+    bool rateApplying_ = false; // the injector is running because of ApplyRate, not because of the supervisor's own policy
 };

@@ -14,7 +14,7 @@ These settings live in `esp_config.json` (and in profiles) and are edited in the
 | `PlayerMinPx` | 2 px | 0-12 (1) | Smallest width/height of a player box; far players are drawn at least this big instead of vanishing. 0 = true size. |
 | `MaxLabelDist` | -1 (unlimited) | -1, or a distance in meters | Names and distances are hidden beyond this. In the ADVANCED tab the top of the slider (510) is Unlimited. The GENERAL tab still cycles 25 / 50 / 100 m / Unlimited. |
 
-`SmootherBaselineMs`, `SmootherBlendTauMs`, `SmootherMaxAheadMs` and `SmootherTickMs` are applied to the running overlay at once. `AgentHz` needs the agent to be told (see docs/launchers.md for the manual `-javaagent` option).
+`SmootherBaselineMs`, `SmootherBlendTauMs`, `SmootherMaxAheadMs` and `SmootherTickMs` are applied to the running overlay at once. `AgentHz` reaches the **running** game too: when the slider rests for 0.6 s the overlay runs the attach helper again with the new `hz`, and the agent (which supports being loaded a second time, `Agent.reload`) switches rate without restarting anything. The note under the slider says what happened. It retries a failed change after 5 s, at most three times, and then says so; moving the slider again starts over. With auto-inject off (`--no-inject`, you start the game with `-javaagent` yourself) nothing is attached for you: the note says to restart the game with `hz=N` (docs/launchers.md) or use `--hz N`. `--hz N` on the command line wins over the saved value for that run.
 
 Files written before these keys existed simply get the defaults; no migration is involved.
 

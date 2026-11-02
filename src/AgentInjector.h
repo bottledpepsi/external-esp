@@ -35,7 +35,7 @@ class AgentInjector
 public:
     enum class State { Idle, Running, Succeeded, Failed };
 
-    explicit AgentInjector(InjectorConfig cfg) : cfg_(std::move(cfg))
+    explicit AgentInjector(InjectorConfig cfg) : cfg_(std::move(cfg)), hz_(cfg_.agentHz)
     {
     }
 
@@ -44,6 +44,10 @@ public:
     AgentInjector& operator=(const AgentInjector&) = delete;
 
     void Start(const JavaProcess& target); // asynchronous; ignored while already running
+    // The rate the NEXT Start() asks the agent for. Starting again on a JVM that already runs the agent reloads it with the new options
+    // (Agent.reload), which is how the ADVANCED tab's rate reaches the running game.
+    void SetHz(int hz) { hz_ = hz; }
+    int Hz() const { return hz_; }
     void Reset(); // Succeeded/Failed -> Idle
     State GetState() const { return state_.load(); }
 
@@ -70,6 +74,7 @@ private:
     }
 
     InjectorConfig cfg_;
+    std::atomic<int> hz_;
     std::atomic<State> state_{State::Idle};
     std::atomic<int> progress_{0};
     mutable std::mutex mtx_;

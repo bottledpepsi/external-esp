@@ -96,3 +96,42 @@ void AgentSupervisor::Tick()
                        ? "waiting for agent data"
                        : "waiting for agent (auto-inject off: start the game with -javaagent)";
 }
+
+bool AgentSupervisor::CanApplyRate() const
+{
+    return !opt_.demo && opt_.replayPath.empty() && opt_.autoInject && pm_.IsAttached();
+}
+
+bool AgentSupervisor::ApplyRate(int hz)
+{
+    if (!CanApplyRate() || Busy()) return false;
+    inj_.Reset();
+    inj_.SetHz(hz);
+    inj_.Start(pm_.Target());
+    rateApplying_ = true;
+    LOG_INFO("Agent rate: asking the running agent for %d Hz (attach helper started).", hz);
+    return true;
+}
+
+AgentSupervisor::RateResult AgentSupervisor::PollRateApply(std::string* detail)
+{
+    if (!rateApplying_) return RateResult::None;
+    switch (inj_.GetState())
+    {
+    case AgentInjector::State::Running: return RateResult::Pending;
+    case AgentInjector::State::Succeeded:
+        rateApplying_ = false;
+        inj_.Reset();
+        LOG_INFO("Agent rate: the agent now runs at %d Hz.", inj_.Hz());
+        return RateResult::Done;
+    case AgentInjector::State::Failed:
+        rateApplying_ = false;
+        if (detail) *detail = inj_.Message();
+        LOG_WARN("Agent rate: could not change the running agent: %s", inj_.Message().c_str());
+        inj_.Reset();
+        return RateResult::Failed;
+    default: // Idle: the target changed and the supervisor reset the injector
+        rateApplying_ = false;
+        return RateResult::Failed;
+    }
+}

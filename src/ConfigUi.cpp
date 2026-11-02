@@ -438,6 +438,7 @@ void ConfigUi::TabAdvanced()
     y_ += 6;
     Section("AGENT");
     SliderRow(Id::AgentHz);
+    if (!rateNote_.empty()) InfoRow(rateNote_, rateWarn_);
     y_ += 6;
     Section("MARKERS AND LABELS");
     SliderRow(Id::ItemMinPx);
