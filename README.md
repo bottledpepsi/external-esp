@@ -111,6 +111,7 @@ Tabs: GENERAL · PLAYERS (+friends) · TRACERS · ITEMS · MINIMAP · PROFILES �
 | `waiting for minecraft` | game not running / window not titled "Minecraft": try `--list`, `--pid`, `--screen` |
 | `attach failed ... no Attach API` | install a JDK 17+ and pass `--java` |
 | `cam: reconstructed` | normal until you turn your head; if it never changes see `esp_layout.json` → `camera` |
+| `camera: reconstructing (look up or down once to calibrate)` | the agent has found a candidate camera but will not trust its pitch until you have looked up or down by a degree. Until then the overlay builds the camera from the player's own angles (accurate in first person). Boxes that sit a few degrees off *after* `Camera found` mean a wrong camera was chosen: the log line `Camera found. camera: ... yaw=... pitch=...` should name `Camera.yRot` / `Camera.xRot` (or the equivalent); send `esp_agent.log` if it names something else (`bodyRot`, `capeLean`, ...) |
 | `SkinCache: GET ... WinHTTP error 12029/12007` | no network / blocked; set `ESP_*` mirrors or accept placeholders |
 | `Cannot listen on 127.0.0.1:47615` | another instance is running; use `--port` |
 | `agent jar not found` | run `agent\build.bat` **before** building the exe (it is embedded at build time), or pass `--jar` |

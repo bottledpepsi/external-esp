@@ -14,6 +14,13 @@ import java.util.List;
  * the camera rotation is the partial-tick interpolated value, so a few degrees of slack is allowed). The decision
  * needs the player to actually turn the head a little (a field that never changes cannot be told apart).
  *
+ * Look-alikes: the game holds other objects that resemble a camera (the local player's render state has a position, a body yaw, a head-minus-body yaw
+ * and a pitch). They are told apart by EXACTNESS, not by closeness to a threshold: candidates are ranked by how closely their two angles follow the
+ * player's (the real camera is off by a fraction of a degree, a look-alike by several), the position only breaks ties. In third person the camera
+ * must also lie on the look axis through the eye (behind it, or in front of it in "front" view); something at the player's feet does not.
+ * And the pitch field is only trusted after it has moved: a field that stays put while the player does not look up or down cannot be told from a
+ * constant, so the scanner waits (the overlay reconstructs the camera from the player meanwhile) instead of taking the best of a bad lot.
+ *
  * FOV: the object holding the camera (the renderer) has a method taking (Camera, float partialTick, boolean) or
  * (float, boolean) and returning the field of view in degrees - the very method the game calls to build its
  * projection, so it already includes the FOV option, sprint/speed/bow effects, underwater and so on.
@@ -27,18 +34,20 @@ final class CameraScanner {
         final List<Probe.PosCand> pos;
         final List<Acc> floats;
         final double[] posErr; final double[] yawErr; final double[] pitchErr;
+        final double[] axisErr; final int[] axisN;      // per position candidate: how far off the look axis it lies when it is not at the eye
         final float[] fmin; final float[] fmax;
         int n;
         Cand(FieldPath path, List<Probe.PosCand> pos, List<Acc> floats) {
             this.path = path; this.pos = pos; this.floats = floats;
             posErr = new double[pos.size()];
+            axisErr = new double[pos.size()]; axisN = new int[pos.size()];
             yawErr = new double[floats.size()]; pitchErr = new double[floats.size()];
             fmin = new float[floats.size()]; fmax = new float[floats.size()];
             reset();
         }
         void reset() {
             n = 0;
-            for (int i = 0; i < posErr.length; i++) posErr[i] = 0;
+            for (int i = 0; i < posErr.length; i++) { posErr[i] = 0; axisErr[i] = 0; axisN[i] = 0; }
             for (int i = 0; i < yawErr.length; i++) { yawErr[i] = 0; pitchErr[i] = 0; fmin[i] = Float.MAX_VALUE; fmax[i] = -Float.MAX_VALUE; }
         }
     }
@@ -58,6 +67,8 @@ final class CameraScanner {
     private float lastFov = Float.NaN;
     private long lastFovAt;
     String describe = "camera: not found yet";
+    /** True while the best candidate is known but its pitch field has not moved yet: the player has to look up or down once. */
+    volatile boolean waitingForPitch;
 
     // Strategy chain. Camera: 0 strict value match (needs head movement, mean errors <= 5.5 blocks / 20 / 12 degrees); 1 the same with looser limits, tried
     // when the window has run RELAXED_AFTER_MS without a decision. FOV: 0 a method on the camera's holder, 1..n the same on its ancestors up to the root;
@@ -67,6 +78,8 @@ final class CameraScanner {
     private long lastFovSearch;
 
     CameraScanner(Probe p) { this.p = p; }
+
+    int cands() { return cands.size(); } // for tests: how many objects were accepted as candidates
 
     void init(List<FieldPath> paths) {
         cands.clear();
@@ -108,6 +121,13 @@ final class CameraScanner {
                 double e = 1e3;
                 if (c.pos.get(i).read(o, v)) e = Math.sqrt((v[0] - eye[0]) * (v[0] - eye[0]) + (v[1] - eye[1]) * (v[1] - eye[1]) + (v[2] - eye[2]) * (v[2] - eye[2]));
                 c.posErr[i] += Math.min(e, 1e3);
+                if (e > 0.8 && e < 12) {                          // not at the eye: a third-person camera lies on the look axis through the eye
+                    double yr = Math.toRadians(yaw), pr = Math.toRadians(pitch);
+                    double lx = -Math.sin(yr) * Math.cos(pr), ly = -Math.sin(pr), lz = Math.cos(yr) * Math.cos(pr);   // Minecraft: yaw 0 looks along +z
+                    double cos = ((v[0] - eye[0]) * lx + (v[1] - eye[1]) * ly + (v[2] - eye[2]) * lz) / e;
+                    c.axisErr[i] += 1.0 - Math.abs(cos);
+                    c.axisN[i]++;
+                }
             }
             for (int i = 0; i < c.floats.size(); i++) {
                 float f = c.floats.get(i).getFloat(o);
@@ -129,12 +149,14 @@ final class CameraScanner {
     private boolean decide(boolean relaxed) {
         final double maxPos = relaxed ? 8 : 5.5, maxYaw = relaxed ? 35 : 20, maxPitch = relaxed ? 20 : 12;
         final int minN = relaxed ? 100 : 45;
-        Cand best = null; int bp = -1, by = -1, bpi = -1; double bestScore = 1e18;
+        final double maxAxis = 0.12;                       // mean (1 - |cos|) of the angle to the look axis: ~28 degrees
+        Cand best = null; int bp = -1, by = -1, bpi = -1; boolean bestPitchMoved = false; double bestScore = 1e18;
         for (Cand c : cands) {
             if (c.n < minN) continue;
             int ip = -1; double mp = 1e18;
             for (int i = 0; i < c.posErr.length; i++) { double m = c.posErr[i] / c.n; if (m < mp) { mp = m; ip = i; } }
             if (ip < 0 || mp > maxPos) continue;       // first person ~0, third person ~4 (F5 distance)
+            if (c.axisN[ip] > c.n / 4 && c.axisErr[ip] / c.axisN[ip] > maxAxis) continue;    // away from the eye but not on the look axis: not a camera
             int iy = -1; double my = 1e18;
             for (int i = 0; i < c.floats.size(); i++) {
                 if (c.fmax[i] - c.fmin[i] < 3f) continue;                  // yaw must have moved to be distinguishable
@@ -142,17 +164,25 @@ final class CameraScanner {
                 if (m < my) { my = m; iy = i; }
             }
             if (iy < 0 || my > maxYaw) continue;
+            // the pitch field: the closest match among ALL other floats, moved or not; whether it moved is judged below (a constant that happens
+            // to sit near the current pitch must not be mistaken for it, and the real one must not be thrown out for not having moved yet)
             int ipi = -1; double mpi = 1e18;
             for (int i = 0; i < c.floats.size(); i++) {
-                if (i == iy || c.fmax[i] - c.fmin[i] < 1f) continue;
+                if (i == iy) continue;
                 double m = c.pitchErr[i] / c.n;
                 if (m < mpi) { mpi = m; ipi = i; }
             }
             if (ipi < 0 || mpi > maxPitch) continue;
-            double score = mp + my / 10.0 + mpi / 5.0;
-            if (score < bestScore) { bestScore = score; best = c; bp = ip; by = iy; bpi = ipi; }
+            double score = my + mpi + mp * 0.5;            // degrees of angle error dominate; the position only breaks ties
+            if (score < bestScore) { bestScore = score; best = c; bp = ip; by = iy; bpi = ipi; bestPitchMoved = c.fmax[ipi] - c.fmin[ipi] >= 1f; }
         }
         if (best == null) return false;
+        if (!bestPitchMoved) {                             // the leader's pitch is unproven: wait for the player to look up or down
+            if (!waitingForPitch) Log.info("Camera candidate found (" + best.path.describe() + "), waiting for the pitch to change: look up or down a little.");
+            waitingForPitch = true;
+            return false;
+        }
+        waitingForPitch = false;
         camPath = best.path; posAcc = best.pos.get(bp); yawAcc = best.floats.get(by); pitchAcc = best.floats.get(bpi);
         decided = true;
         matchStrategy = relaxed ? "value-match (relaxed)" : "value-match";
@@ -184,6 +214,27 @@ final class CameraScanner {
                     holderPath = hp;
                     fovStrategy = len == steps.length - 1 ? "holder" : "ancestor " + (steps.length - 1 - len) + " up";
                     return;
+                }
+            }
+            // Not on the holder or any ancestor: in newer versions the method that builds the projection lives on a SIBLING (the game object has both the
+            // entity-render dispatcher that holds the camera and the game renderer that computes the FOV). Try the objects one field below each ancestor.
+            int tried = 0;
+            for (int len = steps.length - 1; len >= 1 && tried < 80; len--) {
+                List<Acc> head = new ArrayList<Acc>();
+                for (int i = 0; i < len; i++) head.add(steps[i]);
+                Object holder = new FieldPath(head).follow();
+                if (holder == null) continue;
+                for (Acc a : p.refFieldsOf(holder.getClass())) {
+                    if (tried++ >= 80) break;
+                    Object sib = a.getObj(holder);
+                    if (sib == null || sib == cam || Probe.isJdkish(sib.getClass()) || Probe.isContainer(sib)) continue;
+                    if (searchFov(sib, cam)) {
+                        List<Acc> sp = new ArrayList<Acc>(head);
+                        sp.add(a);
+                        holderPath = new FieldPath(sp);
+                        fovStrategy = "sibling of ancestor " + (steps.length - 1 - len) + " up (" + a.f.getName() + ")";
+                        return;
+                    }
                 }
             }
         } catch (Throwable t) { Log.info("FOV method search failed: " + t); }
