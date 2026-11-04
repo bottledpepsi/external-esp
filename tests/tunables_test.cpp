@@ -100,6 +100,31 @@ int main()
         CHECK(bad.Warnings() == 4 && bad.cfg.AgentHz == 240 && bad.cfg.SmootherTickMs == 50 && bad.cfg.ItemMinPx == 2 && bad.cfg.PlayerMinPx == 12);
     }
 
+    // ---- label fade and declutter (P4-0001) ----
+    {
+        Settings s;
+        CHECK(s.labelFadePct == 30 && s.labelDeclutter);
+        CHECK(Value(s, Id::LabelFadePct) == 30);
+        CHECK(Set(s, Id::LabelFadePct, 47) == 45 && s.labelFadePct == 45);        // step 5
+        CHECK(Set(s, Id::LabelFadePct, 400) == 100 && Set(s, Id::LabelFadePct, -9) == 0);
+        CHECK(Set(s, Id::LabelFadePct, std::nan("")) == 30);                      // not a number -> the default
+        Settings d;
+        CHECK(IsDefault(d, Id::LabelFadePct));
+        d.labelFadePct = 80;
+        CHECK(!IsDefault(d, Id::LabelFadePct));
+        s.labelFadePct = 80;
+        s.labelDeclutter = false;
+        Settings t;
+        t.Apply(s.Build());                                                       // Build -> Apply keeps both
+        CHECK(t.labelFadePct == 80 && !t.labelDeclutter);
+        const auto back = configschema::LoadText(s.Build().ToJson());            // ... and so does the file
+        CHECK(back.Warnings() == 0 && back.cfg.LabelFadePct == 80 && !back.cfg.LabelDeclutter);
+        const auto old = configschema::LoadText(R"({"Version":1})");              // a file from before: the defaults
+        CHECK(old.Warnings() == 0 && old.cfg.LabelFadePct == 30 && old.cfg.LabelDeclutter);
+        const auto bad = configschema::LoadText(R"({"LabelFadePct":250,"LabelDeclutter":"yes"})");
+        CHECK(bad.Warnings() == 2 && bad.cfg.LabelFadePct == 100 && bad.cfg.LabelDeclutter);
+    }
+
     // ---- the live readout: degrees on the screen ----
     {
         CHECK(std::fabs(AngleToPx(1.0, 1080, 70.0) - 13.46) < 0.05);          // 1 deg at 1080p / 70 deg FOV

@@ -64,6 +64,8 @@ struct EspConfig
     bool ShowItemEnchants = true; // list enchantments under an item's name
     bool ShowItemTags = false; // list the stack's raw tags (NBT / components) under the name
     std::string HudMode = "Compact"; // the status text top-left: Off | Compact | Detailed (hud::Mode)
+    bool LabelDeclutter = true; // names and distances move out of each other's way (LabelLayout.h); false = the old, overlapping labels
+    double LabelFadePct = 30; // names fade out over the last N % of MaxLabelDist; 0 = hard cut (Tunables.h)
 
     // ADVANCED tab (see Tunables.h for the ranges): smoothing, agent rate, minimum marker sizes
     double SmootherBaselineMs = 12, SmootherBlendTauMs = 10, SmootherMaxAheadMs = 50, SmootherTickMs = 50;
@@ -118,6 +120,8 @@ struct Settings
     int agentHz = 120;
     float itemMinPx = 6, playerMinPx = 2;
     int hudMode = 1; // hud::Mode
+    bool labelDeclutter = true;
+    int labelFadePct = 30;
 
     // Keys of the loaded file this build does not know (kept so the next Save writes them back), and what Load() had to correct or migrate.
     std::map<std::string, std::string> unknownKeys;

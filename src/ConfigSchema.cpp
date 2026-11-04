@@ -49,6 +49,7 @@ namespace configschema
                 W("TracerTarget", {"Feet", "Center", "Head"});
                 B("TracerFade");
                 W("HudMode", {"Off", "Compact", "Detailed"});
+                B("LabelDeclutter");
                 B("ShowItems"); B("ShowItemNames"); B("ShowItemCount");
                 { const auto r = mm(presets::TraceOpacities); F("ItemOpacity", r.first, r.second); }
                 B("HideJunk");

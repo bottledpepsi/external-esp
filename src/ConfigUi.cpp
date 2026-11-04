@@ -182,6 +182,7 @@ void ConfigUi::TabGeneral()
         if (idx != before) s_.labelDist = LabelDist[idx];
     }
     ToggleRow("Text shadow", s_.textShadow);
+    ToggleRow("Label declutter", s_.labelDeclutter);
     CycleRow("Overlay opacity", s_.overlayOpacityIdx, static_cast<int>(OverlayOpacity.size()),
              OverlayOpacityLabels[s_.overlayOpacityIdx]);
     CycleRow("FPS cap", s_.fpsCap, static_cast<int>(FpsCaps.size()), FpsCapLabels[s_.fpsCap]);
@@ -465,6 +466,7 @@ void ConfigUi::TabAdvanced()
     SliderRow(Id::ItemMinPx);
     SliderRow(Id::PlayerMinPx);
     SliderRow(Id::LabelDist);
+    SliderRow(Id::LabelFadePct);
     y_ += 6;
     const float lx = px_ + kPad;
     bool any = false;

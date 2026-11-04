@@ -17,6 +17,7 @@ namespace tunables
         ItemMinPx,
         PlayerMinPx,
         LabelDist,
+        LabelFadePct,
         Count
     };
 

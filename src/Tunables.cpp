@@ -25,6 +25,8 @@ namespace tunables
              "Smallest player box (far players grow to it). 0 = true size.", false},
             {Id::LabelDist, "MaxLabelDist", "Label distance", "m", 10, 510, 510, 10, 0,
              "Names and distances hide beyond this. Far right = Unlimited.", true},
+            {Id::LabelFadePct, "LabelFadePct", "Label fade", "%", 0, 100, 30, 5, 0,
+             "Labels fade over the last part of the label distance. 0 = hard cut.", false},
         };
         static_assert(sizeof kTable / sizeof kTable[0] == static_cast<size_t>(Id::Count), "one Def per Id");
     } // namespace
@@ -58,6 +60,7 @@ namespace tunables
         case Id::ItemMinPx: return s.itemMinPx;
         case Id::PlayerMinPx: return s.playerMinPx;
         case Id::LabelDist: return s.labelDist >= presets::kUnlimited ? Get(Id::LabelDist).max : s.labelDist;
+        case Id::LabelFadePct: return s.labelFadePct;
         default: return 0;
         }
     }
@@ -76,6 +79,7 @@ namespace tunables
         case Id::ItemMinPx: s.itemMinPx = static_cast<float>(q); break;
         case Id::PlayerMinPx: s.playerMinPx = static_cast<float>(q); break;
         case Id::LabelDist: s.labelDist = q >= d.max ? presets::kUnlimited : static_cast<float>(q); break;
+        case Id::LabelFadePct: s.labelFadePct = static_cast<int>(q); break;
         default: break;
         }
         return q;

@@ -4,6 +4,7 @@
 #include "Logger.h"
 #include "Paths.h"
 #include "Presets.h"
+#include <cmath>
 #include <fstream>
 #include <sstream>
 
@@ -63,6 +64,7 @@ std::string EspConfig::ToJson() const
     j += Kv("ConfigX", N(ConfigX)) + Kv("ConfigY", N(ConfigY));
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
         Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags)) + Kv("HudMode", S(HudMode));
+    j += Kv("LabelDeclutter", B(LabelDeclutter)) + Kv("LabelFadePct", N(LabelFadePct));
     j += Kv("SmootherBaselineMs", N(SmootherBaselineMs)) + Kv("SmootherBlendTauMs", N(SmootherBlendTauMs)) + Kv("SmootherMaxAheadMs", N(SmootherMaxAheadMs)) +
         Kv("SmootherTickMs", N(SmootherTickMs)) + Kv("AgentHz", N(AgentHz)) + Kv("ItemMinPx", N(ItemMinPx)) + Kv("PlayerMinPx", N(PlayerMinPx), Unknown.empty());
     size_t i = 0;
@@ -84,6 +86,8 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HotkeyNextProfile = GetString(o, "HotkeyNextProfile", c.HotkeyNextProfile);
     c.HotkeyCycleHud = GetString(o, "HotkeyCycleHud", c.HotkeyCycleHud);
     c.HudMode = GetString(o, "HudMode", c.HudMode);
+    c.LabelDeclutter = GetBool(o, "LabelDeclutter", c.LabelDeclutter);
+    c.LabelFadePct = GetNumber(o, "LabelFadePct", c.LabelFadePct);
     c.DistanceFormat = GetString(o, "DistanceFormat", c.DistanceFormat);
     c.MaxLabelDist = static_cast<int>(GetNumber(o, "MaxLabelDist", c.MaxLabelDist));
     c.TextShadow = GetBool(o, "TextShadow", c.TextShadow);
@@ -200,6 +204,8 @@ void Settings::Apply(const EspConfig& c)
         hud::Parse(c.HudMode, m);
         hudMode = static_cast<int>(m);
     }
+    labelDeclutter = c.LabelDeclutter;
+    labelFadePct = static_cast<int>(std::lround(c.LabelFadePct));
     itemMinPx = static_cast<float>(c.ItemMinPx);
     playerMinPx = static_cast<float>(c.PlayerMinPx);
     unknownKeys = c.Unknown;
@@ -253,6 +259,8 @@ EspConfig Settings::Build() const
     c.SmootherTickMs = smTickMs;
     c.AgentHz = agentHz;
     c.HudMode = hud::Name(static_cast<hud::Mode>(hudMode));
+    c.LabelDeclutter = labelDeclutter;
+    c.LabelFadePct = labelFadePct;
     c.ItemMinPx = itemMinPx;
     c.PlayerMinPx = playerMinPx;
     c.Unknown = unknownKeys;

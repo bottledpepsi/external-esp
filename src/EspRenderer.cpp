@@ -23,6 +23,7 @@ namespace
     const Col kFriend{0.16f, 1.00f, 0.35f, 1.f};
     const Col kText{1, 1, 1, 1};
     const Col kDistText{0.85f, 0.88f, 0.95f, 0.9f};
+    constexpr float kDistLineH = 13.f; // the distance text under a box (Font::UiSmall, 11 px)
 
     Font NameFont(const Settings& s)
     {
@@ -40,39 +41,83 @@ namespace
     }
 } // namespace
 
-// Names above, distance below, friend avatar placeholder next to the name.
-void EspRenderer::DrawLabels(Gfx& g, const Settings& s, const PlayerState& p, float dist, bool isFriend,
-                             float cx, float top, float bottom)
+void EspRenderer::QueueLabels(const PlayerState& p, float dist, bool isFriend, float cx, float top, float bottom)
 {
-    const float maxLabel = s.labelDist;
-    if (dist > maxLabel) return;
+    if (nReq_ >= static_cast<int>(reqs_.size())) return; // more players than the wire can carry: the extra labels are not drawn
+    reqs_[static_cast<size_t>(nReq_++)] = LabelReq{&p, dist, cx, top, bottom, isFriend};
+}
+
+// Declutter on: nearest first, each label takes its place or is moved out of the way. Off: far first, near on top, as before.
+void EspRenderer::FlushLabels(Gfx& g, const Settings& s)
+{
+    if (s.labelDeclutter)
+        for (int i = nReq_ - 1; i >= 0; --i) DrawLabels(g, s, reqs_[static_cast<size_t>(i)]);
+    else
+        for (int i = 0; i < nReq_; ++i) DrawLabels(g, s, reqs_[static_cast<size_t>(i)]);
+    nReq_ = 0;
+}
+
+// Names above, distance below, friend avatar placeholder next to the name.
+void EspRenderer::DrawLabels(Gfx& g, const Settings& s, const LabelReq& r)
+{
+    const PlayerState& p = *r.p;
+    const float dist = r.dist, cx = r.cx;
+    const float alpha = labels::Fade(dist, s.labelDist, s.labelFadePct);
+    if (alpha < 0.03f) return; // beyond the label distance (or all but gone)
+    const bool isFriend = r.isFriend;
     if (s.showPlayerNames && !p.name.empty())
     {
         const Font f = NameFont(s);
         const float px = presets::NameSizes[s.nameSizeIdx];
-        const float y = top - px - 7.f;
-        g.TextCentered(p.name, cx, y, f, isFriend ? kFriend : kText, s.textShadow);
-        if (isFriend)
+        const float a = px + 2.f; // the avatar square, and the height of a name line
+        const float tw = g.TextWidth(p.name, f);
+        float y = r.top - px - 7.f;
+        bool draw = true;
+        if (s.labelDeclutter)
         {
-            // avatar placeholder (see Avatar.h)
-            const float tw = g.TextWidth(p.name, f);
-            const float a = px + 2.f, ax = cx - tw * 0.5f - a - 4.f;
-            SkinCache::Request(p.name, p.uuid); // idempotent; fetches the skin face in the background
-            if (auto img = SkinCache::Get(p.name))
+            // the friend avatar sits left of the name: it takes space too
+            const float extra = isFriend ? a + 4.f : 0.f;
+            labels::Rect box{cx - tw * 0.5f - extra, y, cx + tw * 0.5f, y + a};
+            draw = placer_.Place(box, -1, a, 3);
+            y = box.y0;
+        }
+        if (draw)
+        {
+            g.TextCentered(p.name, cx, y, f, (isFriend ? kFriend : kText).with(alpha), s.textShadow);
+            if (isFriend)
             {
-                g.DrawImage(*img, ax, y + 1, a, a);
-                g.Rect(ax - 0.5f, y + 0.5f, a + 1.f, a + 1.f, kFriend.with(0.8f), 1.f);
-            }
-            else
-            {
-                // loading / offline player: letter placeholder
-                const AvatarColor ac = AvatarColorFor(p.name);
-                g.FillRRect(ax, y + 1, a, a, 2.f, Col{ac.r, ac.g, ac.b, 0.9f});
-                g.TextCentered(AvatarInitial(p.name), ax + a * 0.5f, y + 1, Font::Hint, Col{1, 1, 1, 1});
+                // avatar placeholder (see Avatar.h)
+                const float ax = cx - tw * 0.5f - a - 4.f;
+                SkinCache::Request(p.name, p.uuid); // idempotent; fetches the skin face in the background
+                if (auto img = SkinCache::Get(p.name))
+                {
+                    g.DrawImage(*img, ax, y + 1, a, a, alpha);
+                    g.Rect(ax - 0.5f, y + 0.5f, a + 1.f, a + 1.f, kFriend.with(0.8f * alpha), 1.f);
+                }
+                else
+                {
+                    // loading / offline player: letter placeholder
+                    const AvatarColor ac = AvatarColorFor(p.name);
+                    g.FillRRect(ax, y + 1, a, a, 2.f, Col{ac.r, ac.g, ac.b, 0.9f * alpha});
+                    g.TextCentered(AvatarInitial(p.name), ax + a * 0.5f, y + 1, Font::Hint, Col{1, 1, 1, alpha});
+                }
             }
         }
     }
-    if (s.distFmtIdx < 2) g.TextCentered(DistText(s, dist), cx, bottom + 3.f, Font::UiSmall, kDistText, s.textShadow);
+    if (s.distFmtIdx < 2)
+    {
+        const std::string d = DistText(s, dist);
+        float y = r.bottom + 3.f;
+        bool draw = true;
+        if (s.labelDeclutter)
+        {
+            const float tw = g.TextWidth(d, Font::UiSmall);
+            labels::Rect box{r.cx - tw * 0.5f, y, r.cx + tw * 0.5f, y + kDistLineH};
+            draw = placer_.Place(box, +1, kDistLineH, 2);
+            y = box.y0;
+        }
+        if (draw) g.TextCentered(d, r.cx, y, Font::UiSmall, kDistText.with(kDistText.a * alpha), s.textShadow);
+    }
 }
 
 void EspRenderer::DrawTracer(Gfx& g, const Settings& s, const Camera& cam, const Vec3& target, float dist,
@@ -149,7 +194,7 @@ void EspRenderer::DrawSkeleton(Gfx& g, const Settings& s, const Camera& cam, con
     g.Line(hipL.x, hipL.y, footL.x, footL.y, c, sw);
     g.Line(hipR.x, hipR.y, footR.x, footR.y, c, sw);
 
-    DrawLabels(g, s, p, dist, isFriend, head.x, head.y - headR, std::max(footL.y, footR.y));
+    QueueLabels(p, dist, isFriend, head.x, head.y - headR, std::max(footL.y, footR.y));
 }
 
 void EspRenderer::DrawPlayer(Gfx& g, const Settings& s, const Camera& cam, const PlayerState& p, float dist,
@@ -212,7 +257,7 @@ void EspRenderer::DrawPlayer(Gfx& g, const Settings& s, const Camera& cam, const
         const float fh = bh * ratio;
         g.FillRect(barX, by + bh - fh, 3.f, fh, Col{1.f - ratio, ratio, 0.10f, 1.f});
     }
-    DrawLabels(g, s, p, dist, isFriend, bx + bw * 0.5f, by, by + bh);
+    QueueLabels(p, dist, isFriend, bx + bw * 0.5f, by, by + bh);
 }
 
 void EspRenderer::DrawItem(Gfx& g, const Settings& s, const Camera& cam, const ItemState& it, float dist)
@@ -225,7 +270,8 @@ void EspRenderer::DrawItem(Gfx& g, const Settings& s, const Camera& cam, const I
     const bool enchanted = !it.enchants.empty();
     const Col boxCol = enchanted ? Col{0.62f, 0.78f, 1.f, op} : Col{1, 1, 1, op};
     g.Rect(minX, minY, maxX - minX, maxY - minY, boxCol, 1.f);
-    if (dist > s.labelDist) return;
+    const float alpha = labels::Fade(dist, s.labelDist, s.labelFadePct);
+    if (alpha < 0.03f) return; // beyond the label distance (or all but gone)
 
     // Label, reading top to bottom: name xN / enchantments / tags. Drawn bottom-up so the last line sits on the box.
     struct Line
@@ -267,12 +313,28 @@ void EspRenderer::DrawItem(Gfx& g, const Settings& s, const Camera& cam, const I
                 Col{0.62f, 0.66f, 0.75f, op * 0.9f}, Font::Hint
             });
     }
-    float y = minY - 4.f;
+    if (lines.empty()) return;
+    const float cx = (minX + maxX) * 0.5f;
+    auto lineH = [](Font f) { return f == Font::Name13 ? 17.f : 14.f; };
+    float bottomY = minY - 4.f; // the block's lower edge: the last line sits on the box
+    if (s.labelDeclutter)
+    {
+        // the whole block is one rectangle; it moves up past other labels (players' labels are already placed)
+        float w = 0.f, h = 0.f;
+        for (const Line& ln : lines)
+        {
+            w = std::max(w, g.TextWidth(ln.text, ln.font));
+            h += lineH(ln.font);
+        }
+        labels::Rect box{cx - w * 0.5f, bottomY - h, cx + w * 0.5f, bottomY};
+        if (!placer_.Place(box, -1, 14.f, 4)) return;
+        bottomY = box.y1;
+    }
+    float y = bottomY;
     for (auto ln = lines.rbegin(); ln != lines.rend(); ++ln)
     {
-        const float lh = ln->font == Font::Name13 ? 17.f : 14.f;
-        y -= lh;
-        g.TextCentered(ln->text, (minX + maxX) * 0.5f, y, ln->font, ln->col, s.textShadow);
+        y -= lineH(ln->font);
+        g.TextCentered(ln->text, cx, y, ln->font, ln->col.with(ln->col.a * alpha), s.textShadow);
     }
 }
 
@@ -286,6 +348,8 @@ void EspRenderer::DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const 
         bool fr;
     };
     std::vector<E> list;
+    placer_.Reset();
+    nReq_ = 0;
     for (const auto& p : snap.players)
     {
         const float d = static_cast<float>(cam.Distance(p.pos));
@@ -308,6 +372,7 @@ void EspRenderer::DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const 
         }
     if (s.showPlayers)
         for (const auto& e : list) DrawPlayer(g, s, cam, *e.p, e.dist, e.fr);
+    FlushLabels(g, s); // names and distances, once all the boxes are down
 
     if (s.showItems)
         for (const auto& it : snap.items)
