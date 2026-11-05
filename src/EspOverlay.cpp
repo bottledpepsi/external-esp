@@ -331,6 +331,7 @@ void EspOverlay::Perform(hotkeys::Action a)
         LOG_INFO("Status text: %s (hotkey)", hud::Name(static_cast<hud::Mode>(settings_.hudMode)));
         settings_.RequestSave();
         break;
+    case Action::ToggleGraphs: settings_.showGraphs = !settings_.showGraphs; LOG_INFO("Performance graphs %s (hotkey)", settings_.showGraphs ? "on" : "off"); settings_.RequestSave(); break;
     case Action::CycleView:
         settings_.viewMode = (std::clamp(settings_.viewMode, 0, 2) + 1) % 3;
         LOG_INFO("View: %s (hotkey)", settings_.viewMode == 1 ? "Raw" : settings_.viewMode == 2 ? "Both" : "Smoothed");
@@ -338,6 +339,13 @@ void EspOverlay::Perform(hotkeys::Action a)
         break;
     default: break;
     }
+}
+
+void EspOverlay::ProbeJitter(const Camera& cam, const WorldSnapshot& snap)
+{
+    double x = 0, y = 0;
+    if (renderer_.ProbeNearestPlayer(settings_, cam, snap, x, y)) perfHist_.jitter.Push(x, y);
+    else perfHist_.jitter.PushMissing();
 }
 
 void EspOverlay::HandleHotkeys(bool focused)
@@ -798,6 +806,17 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     gfx_.SetOpacity(presets::OverlayOpacity[settings_.overlayOpacityIdx]);
     gfx_.SetVSync(settings_.vsync);
     gfx_.Begin(configOpen_ ? Col{0, 0, 0, 1.f / 255.f} : Col{0, 0, 0, 0});
+    // performance graphs: one value per frame while on, nothing at all while off (the history is dropped when they are switched off)
+    const bool graphs = settings_.showGraphs;
+    if (graphs)
+    {
+        if (lastFrameT_ != Clock::time_point{})
+            perfHist_.frameMs.Push(std::min(500.f, std::chrono::duration<float, std::milli>(now - lastFrameT_).count()));
+        if (smoother_.Stats().samples > 0) perfHist_.ageMs.Push(static_cast<float>(smoother_.Stats().ageNowMs));
+    }
+    else if (graphsWereOn_) perfHist_.Clear();
+    graphsWereOn_ = graphs;
+    lastFrameT_ = now;
     if (visible_ && haveCam)
     {
         // View: the smoothed picture (default), the agent's samples as they arrive (Raw, with a camera of their own), or both (the raw ones as
@@ -814,12 +833,14 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         {
             renderer_.DrawWorld(gfx_, settings_, rawCam, rawSnap_);
             if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, rawCam, rawSnap_, w);
+            if (graphs) ProbeJitter(rawCam, rawSnap_);
         }
         else
         {
             if (view == 2 && haveRaw) renderer_.DrawGhosts(gfx_, settings_, rawCam, rawSnap_);
             renderer_.DrawWorld(gfx_, settings_, cam, snap);
             if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, cam, snap, w);
+            if (graphs) ProbeJitter(cam, snap);
         }
     }
 
@@ -922,6 +943,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
             cachePrev_ = cc;
         }
         hudText_.Build(hudMode, f);
+        if (graphs) perfHist_.Refresh();
         lastStatus_ = status + (linkText.empty() ? std::string() : "  |  " + linkText); // for the diagnostics report
     }
     static const Col kHudMain{0.80f, 0.85f, 1.f, 0.95f}, kHudDim{0.62f, 0.67f, 0.80f, 0.9f}, kHudAlert{1.f, 0.6f, 0.4f, 1.f};
@@ -940,6 +962,9 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         if (haveCam && visible_ && snap.players.empty() && !opt_.demo) gfx_.Text(kNoPlayers, 10, extraY, Font::UiSmall, Col{0.55f, 0.6f, 0.72f, 0.8f}, true);
     }
 
+    if (graphs && !(visible_ && haveCam)) perfHist_.jitter.PushMissing(); // nothing was drawn: the chain of frames is broken
+    if (graphs && visible_) renderer_.DrawPerfPanel(gfx_, h, perfHist_);
+
     if (configOpen_)
     {
         UiInput in = pend_;
@@ -957,7 +982,9 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
 
     if (!gfx_.End()) return; // render target lost; Resize() rebuilds it next frame
     gfx_.Present(hwnd_, r.left, r.top, presets::OverlayOpacity[settings_.overlayOpacityIdx]);
-    cpuAccumMs_ += std::chrono::duration<float, std::milli>(Clock::now() - cpuStart).count();
+    const float cpuThis = std::chrono::duration<float, std::milli>(Clock::now() - cpuStart).count();
+    cpuAccumMs_ += cpuThis;
+    if (graphs) perfHist_.cpuMs.Push(cpuThis);
     // Legacy renderer: UpdateLayeredWindow has no swap interval, so wait for the compositor's next pass. The GPU
     // renderer is paced by Present() + the swap chain's frame-latency waitable object (Gfx::WaitFrame).
     if (settings_.vsync && !gfx_.IsGpu()) DwmFlush();

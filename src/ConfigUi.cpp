@@ -184,6 +184,7 @@ void ConfigUi::TabGeneral()
     }
     ToggleRow("Text shadow", s_.textShadow);
     ToggleRow("Label declutter", s_.labelDeclutter);
+    ToggleRow("Performance graphs", s_.showGraphs);
     CycleRow("Overlay opacity", s_.overlayOpacityIdx, static_cast<int>(OverlayOpacity.size()),
              OverlayOpacityLabels[s_.overlayOpacityIdx]);
     CycleRow("FPS cap", s_.fpsCap, static_cast<int>(FpsCaps.size()), FpsCapLabels[s_.fpsCap]);

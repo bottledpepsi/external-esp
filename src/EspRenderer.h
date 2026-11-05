@@ -6,6 +6,7 @@
 #include "Gfx.h"
 #include "ItemFilter.h"
 #include "LabelLayout.h"
+#include "PerfStats.h"
 #include "Types.h"
 #include <array>
 
@@ -17,6 +18,11 @@ public:
     // The "Both" view: the agent's samples exactly as they arrived, as thin magenta outlines (players) and small squares (items), drawn under
     // the normal picture. No labels, tracers or health. `cam` belongs to the same raw snapshot (CameraFromSnapshot).
     void DrawGhosts(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& raw);
+    // The performance graphs (bottom-left): frame time and data age as 240-frame line graphs with their summary text, and the jitter line.
+    void DrawPerfPanel(Gfx& g, int winH, const perf::PerfHistory& h);
+    // Where the nearest player's box centre is on the screen, for the jitter meter (the golden tests' "player" probe: in front by 1.5 m or more,
+    // inside the viewport plus 10 %). False when no player qualifies.
+    bool ProbeNearestPlayer(const Settings& s, const Camera& cam, const WorldSnapshot& snap, double& x, double& y) const;
     // Labels of the last DrawWorld() that found no free place (declutter on) - for the status text and the tests.
     int LabelsDropped() const { return placer_.Dropped(); }
     // Items of the last DrawWorld(): how many were drawn and how many the junk / tier / name filters hid (the HUD shows both).
@@ -24,6 +30,7 @@ public:
     int ItemsFiltered() const { return itemsFiltered_; }
 
 private:
+    void DrawGraph(Gfx& g, float x, float y, float w, float h, const perf::Ring<perf::PerfHistory::kN>& r, const std::string& caption);
     void DrawTracer(Gfx& g, const Settings& s, const Camera& cam, const Vec3& target, float dist, bool isFriend);
     void DrawPlayer(Gfx& g, const Settings& s, const Camera& cam, const PlayerState& p, float dist, bool isFriend);
     void DrawSkeleton(Gfx& g, const Settings& s, const Camera& cam, const PlayerState& p, float dist, bool isFriend);

@@ -18,6 +18,7 @@ namespace hotkeys
             {Action::NextProfile, "HotkeyNextProfile", "Next profile", "", false, false},
             {Action::CycleHud, "HotkeyCycleHud", "Cycle status text", "", false, false},
             {Action::CycleView, "HotkeyCycleView", "Cycle raw / smoothed view", "", false, false},
+            {Action::ToggleGraphs, "HotkeyToggleGraphs", "Toggle performance graphs", "", false, false},
         };
 
         std::string Lower(std::string s)

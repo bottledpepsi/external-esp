@@ -75,6 +75,7 @@ struct SmootherStats
     // difference of the last ~5 s; clock offset cancels out). 0 until measured.
     double ageMs = 0;
     double jitterMs = 0;
+    double ageNowMs = 0; // the same age without the averaging: this frame only (the latency graph)
 };
 
 class Smoother
@@ -191,6 +192,7 @@ public:
             const double age = std::max(0.0, (tn - lastSampleT_) * 1e3);
             ageEma_ = ageN_++ == 0 ? age : ageEma_ + 0.02 * (age - ageEma_);
             stats_.ageMs = ageEma_;
+            stats_.ageNowMs = age;
         }
 
         // entity positions: the game's own tick interpolation

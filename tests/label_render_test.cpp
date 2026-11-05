@@ -179,6 +179,44 @@ int main()
         CHECK(Find(g, "Alice") != nullptr);
     }
 
+    // ---- performance panel and the jitter probe ----
+    {
+        Settings s = Defaults();
+        s.maxPlayerDistIdx = 3;
+        EspRenderer r;
+        double x = 0, y = 0;
+        WorldSnapshot w;
+        CHECK(!r.ProbeNearestPlayer(s, cam, w, x, y)); // nobody
+        w.players = {Player("Far", 4, 40), Player("Near", 0, 12), Player("Behind", 0, -5), Player("TooClose", 0, 0.5)};
+        CHECK(r.ProbeNearestPlayer(s, cam, w, x, y) && std::fabs(x - 960.0) < 1.0 && y > 400 && y < 700); // the near one, in front, centred
+        w.players = {Player("Behind", 0, -5)};
+        CHECK(!r.ProbeNearestPlayer(s, cam, w, x, y));
+        w.players = {Player("Side", 40, 12)}; // far off to the side: outside the viewport + 10 %
+        CHECK(!r.ProbeNearestPlayer(s, cam, w, x, y));
+        s.maxPlayerDistIdx = 0; // 50 m
+        w.players = {Player("Far", 0, 80)};
+        CHECK(!r.ProbeNearestPlayer(s, cam, w, x, y));
+
+        perf::PerfHistory h;
+        for (int i = 0; i < 240; ++i)
+        {
+            h.frameMs.Push(8.f + static_cast<float>(i % 5));
+            h.ageMs.Push(6.f);
+        }
+        h.frameText = "frame 9.9 ms";
+        h.ageText = "data age 6.0 ms";
+        h.jitterText = "jitter: no player in view";
+        Gfx g;
+        r.DrawPerfPanel(g, 1080, h);
+        CHECK(g.lines >= 2 * 239 && g.lines <= 2 * 239 + 4); // one segment per step per graph, and the half-way lines
+        CHECK(Find(g, "frame 9.9 ms") && Find(g, "data age 6.0 ms") && Find(g, "jitter: no player in view") && Find(g, "16 ms") && Find(g, "8 ms"));
+        for (const TextCall& t : g.texts) CHECK(t.y > 700 && t.y < 1080); // bottom-left, on the screen
+        perf::PerfHistory empty;
+        Gfx g2;
+        r.DrawPerfPanel(g2, 1080, empty);
+        CHECK(g2.lines == 2 && g2.texts.size() == 2); // empty history: the frames, no curve, no captions (the two "N ms" tops)
+    }
+
     // ---- the raw "ghost" outlines ----
     {
         Settings s = Defaults();

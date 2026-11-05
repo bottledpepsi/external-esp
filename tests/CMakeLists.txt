@@ -85,6 +85,7 @@ esp_add_test(label_layout_test label_layout_test.cpp)
 esp_add_test(item_filter_test item_filter_test.cpp)
 esp_add_test(perf_stats_test perf_stats_test.cpp)
 esp_add_test(view_test view_test.cpp)
+target_link_libraries(perf_stats_test PRIVATE esp_golden) # the live jitter meter is checked against the golden metric
 
 # The renderer on a recording Gfx. EspRenderer.cpp/.h are copied next to tests/fake/Gfx.h and tests/fake/SkinCache.h: a quoted #include looks in
 # the including file's own directory first, so the copies see the fakes and everything else comes from src/. configure_file re-copies on change.

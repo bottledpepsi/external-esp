@@ -99,6 +99,23 @@ int main()
         CHECK(s.Build().ViewMode == "Smoothed");
     }
 
+    // ---- performance graphs setting and hotkey ----
+    {
+        Settings s;
+        CHECK(!s.showGraphs); // off by default: nothing is recorded
+        s.showGraphs = true;
+        const auto back = configschema::LoadText(s.Build().ToJson());
+        Settings t;
+        t.Apply(back.cfg);
+        CHECK(back.Warnings() == 0 && t.showGraphs);
+        CHECK(!configschema::LoadText(R"({"Version":1})").cfg.ShowGraphs);
+        CHECK(configschema::LoadText(R"({"ShowGraphs":"yes"})").Warnings() == 1);
+        using namespace hotkeys;
+        EspConfig c;
+        CHECK(std::string(Def(Action::ToggleGraphs).key) == "HotkeyToggleGraphs" && &c.HotkeyText(Action::ToggleGraphs) == &c.HotkeyToggleGraphs);
+        CHECK(&c.HotkeyText(Action::CycleView) == &c.HotkeyCycleView && !Defaults()[static_cast<size_t>(Action::ToggleGraphs)].Bound());
+    }
+
     // ---- the hotkey ----
     {
         using namespace hotkeys;

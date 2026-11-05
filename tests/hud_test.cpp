@@ -110,6 +110,11 @@ int main()
         t.Build(Mode::Compact, f);
         CHECK(t.Lines() == 1); // Compact stays one line
     }
+    // ---- Facts that were never filled in (empty string_views have a null data()) ----
+    {
+        Facts f;
+        for (Mode m : {Mode::Compact, Mode::Detailed}) { t.Build(m, f); CHECK(t.Lines() >= 1); }
+    }
     // ---- bounded: absurd input cannot overrun a line ----
     {
         std::string long1(2000, 'x');

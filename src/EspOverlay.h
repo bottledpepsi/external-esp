@@ -55,6 +55,9 @@ private:
     hud::Text hudText_;
     hud::Mode lastHudMode_ = hud::Mode::Compact;
     WorldSnapshot rawSnap_; // the "raw" view: a copy of the smoother's newest sample, kept so its vectors keep their capacity
+    perf::PerfHistory perfHist_; // the graphs' data; filled only while Settings::showGraphs is on
+    Clock::time_point lastFrameT_{};
+    bool graphsWereOn_ = false;
     perf::CacheCounters cachePrev_; // the text-cache counters at the last HUD refresh
     Clock::time_point nextHud_{}, hudWinStart_{};
     uint64_t hudPackets_ = 0, hudNumbered_ = 0, hudLost_ = 0;
@@ -112,6 +115,7 @@ private:
     unsigned lastGeneration_ = 0;   // AgentSupervisor::Generation() when the data on screen was received
     uint64_t lastSessions_ = 0;     // StreamIngest::Link().sessions
     void CheckSession();
+    void ProbeJitter(const Camera& cam, const WorldSnapshot& snap); // feeds the jitter meter with the nearest player's box centre
     void SwitchToLegacy();          // device loss that could not be recovered: new window, legacy renderer
     bool f10Down_ = false;
     void TrackGameWindow(bool shown);          // classification, advice and the z-order watchdog (every 250 ms)

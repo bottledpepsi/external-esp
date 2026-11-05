@@ -359,6 +359,70 @@ void EspRenderer::DrawGhosts(Gfx& g, const Settings& s, const Camera& cam, const
         }
 }
 
+bool EspRenderer::ProbeNearestPlayer(const Settings& s, const Camera& cam, const WorldSnapshot& snap, double& x, double& y) const
+{
+    // the nearest player whose box is really on the screen (in front of the camera, inside the viewport plus 10 %)
+    double bestD = 1e30;
+    bool found = false;
+    const double maxDist = presets::PlayerDist[s.maxPlayerDistIdx];
+    for (const PlayerState& p : snap.players)
+    {
+        const double d = cam.Distance(p.pos);
+        if (d < 1.5 || d > maxDist || d >= bestD) continue;
+        float cx, cy;
+        const double ph = p.sizeValid ? p.height : kPlayerH;
+        if (!cam.Project({p.pos.x, p.pos.y + ph * 0.5, p.pos.z}, cx, cy)) continue; // behind the camera: no position at all
+        ScreenBox sb;
+        const double pw = p.sizeValid ? p.width : kPlayerW;
+        if (!ProjectBox(cam, p.pos, pw, ph, s.playerMinPx, sb)) continue;
+        const double bx = (sb.x0 + sb.x1) * 0.5, by = (sb.y0 + sb.y1) * 0.5;
+        if (!(bx > -0.1 * cam.w && bx < 1.1 * cam.w && by > -0.1 * cam.h && by < 1.1 * cam.h)) continue;
+        bestD = d;
+        x = bx;
+        y = by;
+        found = true;
+    }
+    return found;
+}
+
+void EspRenderer::DrawGraph(Gfx& g, float x, float y, float w, float h, const perf::Ring<perf::PerfHistory::kN>& r, const std::string& caption)
+{
+    const float top = perf::NiceCeiling(r.Summarize().max * 1.1f); // ms at the top edge of the graph
+    g.FillRRect(x, y, w, h, 4.f, Col{0.04f, 0.05f, 0.08f, 0.72f});
+    g.Line(x, y + h * 0.5f, x + w, y + h * 0.5f, Col{1, 1, 1, 0.10f}, 1.f); // half way
+    char t[24];
+    std::snprintf(t, sizeof t, "%.0f ms", top); // a handful of distinct strings (4, 8, 16, 32 ...): the text cache keeps hitting
+    g.Text(t, x + 4, y + 1, Font::Hint, Col{0.7f, 0.75f, 0.85f, 0.7f});
+    const int n = r.Size();
+    if (n >= 2)
+    {
+        const float dx = w / static_cast<float>(perf::PerfHistory::kN - 1);
+        const float x0 = x + w - dx * static_cast<float>(n - 1); // the newest value sits at the right edge
+        float px = x0, py = y + h - std::min(r.At(0) / top, 1.f) * (h - 2.f) - 1.f;
+        for (int i = 1; i < n; ++i)
+        {
+            const float cx = x0 + dx * static_cast<float>(i), cy = y + h - std::min(r.At(i) / top, 1.f) * (h - 2.f) - 1.f;
+            g.Line(px, py, cx, cy, Col{0.35f, 0.85f, 1.f, 0.95f}, 1.f);
+            px = cx;
+            py = cy;
+        }
+    }
+    g.Rect(x, y, w, h, Col{1, 1, 1, 0.18f}, 1.f);
+    if (!caption.empty()) g.Text(caption, x, y + h + 2.f, Font::UiSmall, Col{0.62f, 0.67f, 0.80f, 0.95f}, true);
+}
+
+void EspRenderer::DrawPerfPanel(Gfx& g, int winH, const perf::PerfHistory& hst)
+{
+    constexpr float kW = 260.f, kH = 56.f, kGap = 22.f; // a graph, and the caption under it
+    const float x = 10.f;
+    float y = static_cast<float>(winH) - 10.f - 16.f /* jitter line */ - 2.f * (kH + kGap);
+    DrawGraph(g, x, y, kW, kH, hst.frameMs, hst.frameText);
+    y += kH + kGap;
+    DrawGraph(g, x, y, kW, kH, hst.ageMs, hst.ageText);
+    y += kH + kGap;
+    if (!hst.jitterText.empty()) g.Text(hst.jitterText, x, y - 4.f, Font::UiSmall, Col{0.62f, 0.67f, 0.80f, 0.95f}, true);
+}
+
 void EspRenderer::DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap)
 {
     const float maxDist = presets::PlayerDist[s.maxPlayerDistIdx];

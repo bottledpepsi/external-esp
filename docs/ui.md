@@ -65,3 +65,13 @@ The overlay normally draws the *smoothed* picture: the agent's samples, interpol
 * **Both**: the smoothed picture as usual, plus the raw sample as thin magenta outlines (players) and small squares (items) under it. Where the two drift apart is what the smoothing is making up. No labels, tracers or health for the raw ones.
 
 The status text says `RAW` or `RAW+SMOOTHED` while a raw view is on. The hotkey cycles Smoothed -> Raw -> Both and is not bound by default.
+
+## Performance graphs and the jitter meter (GENERAL tab "Performance graphs", hotkey `HotkeyToggleGraphs`)
+
+Off by default; while off nothing is recorded or drawn. On, the bottom-left corner shows two 240-frame graphs and a line of text:
+
+* **Frame time** - the time between two frames in ms (this includes the wait for the display, so with VSync on a steady 60 Hz is a flat line at 16.7). Under it: average, 95th percentile and worst frame of the window, and what the overlay itself spent per frame (`cpu`). A frame is clipped to 500 ms in the graph.
+* **Data age** - how old the newest agent sample was at the moment each frame was drawn, in ms: the latency of what you see. With a 20 Hz agent it is a sawtooth between 0 and 50.
+* **Jitter** - the same measure the golden tests use (tests/golden.h), on the box of the nearest player who is on the screen: the distance of each frame's position from the midpoint of the two neighbouring frames, in pixels, as RMS / 95th percentile / maximum over the last 240 frames. Smooth motion gives about 0; a box that vibrates around a smoothly moving target gives a large number. "no player in view" while nobody qualifies (in front of the camera, at least 1.5 m away, inside the screen plus 10 %).
+
+The scale of a graph steps through 4, 8, 16, 32 ... ms so it does not jump about with every frame; its top is written in the corner. The texts are rebuilt four times a second.

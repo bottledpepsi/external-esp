@@ -47,6 +47,7 @@ namespace hud
             void S(std::string_view s)
             {
                 const size_t take = std::min(s.size(), sizeof b - 1 - n);
+                if (take == 0) return; // a default-constructed string_view has a null data(): memcpy with it is undefined even for 0 bytes
                 std::memcpy(b + n, s.data(), take);
                 n += take;
             }
