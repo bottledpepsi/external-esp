@@ -29,6 +29,7 @@ namespace hotkeys
         ToggleMinimap,
         NextProfile,
         CycleHud,
+        CycleView,
         Count
     };
     inline constexpr int kActionCount = static_cast<int>(Action::Count);

@@ -80,6 +80,8 @@ namespace hud
         if (mode == Mode::Compact)
         {
             b.F("external-esp  |  %s  |  %.0f fps", state, f.fps);
+            if (f.view == 1) b.S("  |  RAW");
+            else if (f.view == 2) b.S("  |  RAW+SMOOTHED");
             if (!f.demo && f.agentLive)
             {
                 b.F("  |  %.0f Hz", f.sampleHz);
@@ -108,6 +110,8 @@ namespace hud
 
         // ---- Detailed ----
         b.F("external-esp  |  %s  |  %.0f fps  |  %.2f ms cpu  |  %s", state, f.fps, f.cpuMs, f.gpu ? "gpu" : "gdi");
+        if (f.view == 1) b.S("  |  RAW");
+        else if (f.view == 2) b.S("  |  RAW+SMOOTHED");
         Set(lines_++, b.b, b.n, false);
 
         Buf c; // what the supervisor / protocol / link say, then camera and the agent's own line, then the recorder

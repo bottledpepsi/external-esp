@@ -331,6 +331,11 @@ void EspOverlay::Perform(hotkeys::Action a)
         LOG_INFO("Status text: %s (hotkey)", hud::Name(static_cast<hud::Mode>(settings_.hudMode)));
         settings_.RequestSave();
         break;
+    case Action::CycleView:
+        settings_.viewMode = (std::clamp(settings_.viewMode, 0, 2) + 1) % 3;
+        LOG_INFO("View: %s (hotkey)", settings_.viewMode == 1 ? "Raw" : settings_.viewMode == 2 ? "Both" : "Smoothed");
+        settings_.RequestSave();
+        break;
     default: break;
     }
 }
@@ -795,8 +800,27 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     gfx_.Begin(configOpen_ ? Col{0, 0, 0, 1.f / 255.f} : Col{0, 0, 0, 0});
     if (visible_ && haveCam)
     {
-        renderer_.DrawWorld(gfx_, settings_, cam, snap);
-        if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, cam, snap, w);
+        // View: the smoothed picture (default), the agent's samples as they arrive (Raw, with a camera of their own), or both (the raw ones as
+        // magenta outlines under the smoothed picture). Raw falls back to the smoothed picture when the sample has no camera.
+        const int view = std::clamp(settings_.viewMode, 0, 2);
+        bool haveRaw = false;
+        Camera rawCam;
+        if (view != 0 && smoother_.HasData())
+        {
+            rawSnap_ = smoother_.Newest();
+            haveRaw = CameraFromSnapshot(rawSnap_, presets::Fovs[settings_.fovIdx], w, h, rawCam);
+        }
+        if (view == 1 && haveRaw)
+        {
+            renderer_.DrawWorld(gfx_, settings_, rawCam, rawSnap_);
+            if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, rawCam, rawSnap_, w);
+        }
+        else
+        {
+            if (view == 2 && haveRaw) renderer_.DrawGhosts(gfx_, settings_, rawCam, rawSnap_);
+            renderer_.DrawWorld(gfx_, settings_, cam, snap);
+            if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, cam, snap, w);
+        }
     }
 
     // HUD (top-left). The text is rebuilt four times a second (ten while the exit key is held), not every frame: the draw calls get the same
@@ -865,6 +889,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         f.visible = visible_;
         f.demo = opt_.demo;
         f.replay = replayMode_;
+        f.view = std::clamp(settings_.viewMode, 0, 2);
         f.gpu = gfx_.IsGpu();
         f.fps = fps_;
         f.cpuMs = cpuMs_;

@@ -14,6 +14,9 @@ class EspRenderer
 public:
     void DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap);
     void DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap, int winW);
+    // The "Both" view: the agent's samples exactly as they arrived, as thin magenta outlines (players) and small squares (items), drawn under
+    // the normal picture. No labels, tracers or health. `cam` belongs to the same raw snapshot (CameraFromSnapshot).
+    void DrawGhosts(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& raw);
     // Labels of the last DrawWorld() that found no free place (declutter on) - for the status text and the tests.
     int LabelsDropped() const { return placer_.Dropped(); }
     // Items of the last DrawWorld(): how many were drawn and how many the junk / tier / name filters hid (the HUD shows both).

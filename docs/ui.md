@@ -55,3 +55,13 @@ Three filters, all applied to the items the agent sends (so they cost nothing on
 * **Name filter**: **Off**, **Whitelist** (only items matching a pattern) or **Blacklist** (everything except those). Patterns are typed in the field under it and added with ADD or Enter; Remove deletes one. `*` matches any run of characters, `?` one character. Case, spaces and underscores are ignored (`Diamond Sword`, `diamond_sword` and the old `diamondSword` are the same name). A pattern containing `:` is compared with the whole id (`mymod:ruby*`), any other with the part after the namespace. An empty whitelist shows nothing; an empty blacklist hides nothing.
 
 File keys: `ItemMinTier` (0-3), `ItemFilterMode` (`Off`/`Whitelist`/`Blacklist`), `ItemFilterList` (text, comma separated, at most 512 characters and 64 patterns). The Detailed status text gets `items N shown, M filtered` when something is hidden.
+
+## Raw / smoothed view (GENERAL tab "View", hotkey `HotkeyCycleView`)
+
+The overlay normally draws the *smoothed* picture: the agent's samples, interpolated with the game's own tick timing and the camera extrapolated forward (see docs/tuning.md). To judge what the smoothing is doing, "View" can show the data underneath:
+
+* **Smoothed** (default): the normal picture.
+* **Raw**: the newest sample exactly as the agent sent it, projected with *its own* camera - no interpolation, no extrapolation, so every jump between samples is visible. Falls back to the smoothed picture while the sample has no camera. (With "Motion smoothing" off the two are the same.)
+* **Both**: the smoothed picture as usual, plus the raw sample as thin magenta outlines (players) and small squares (items) under it. Where the two drift apart is what the smoothing is making up. No labels, tracers or health for the raw ones.
+
+The status text says `RAW` or `RAW+SMOOTHED` while a raw view is on. The hotkey cycles Smoothed -> Raw -> Both and is not bound by default.

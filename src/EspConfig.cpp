@@ -37,7 +37,8 @@ std::string& EspConfig::HotkeyText(hotkeys::Action a)
     case Action::ToggleTracers: return HotkeyToggleTracers;
     case Action::ToggleMinimap: return HotkeyToggleMinimap;
     case Action::NextProfile: return HotkeyNextProfile;
-    default: return HotkeyCycleHud;
+    case Action::CycleHud: return HotkeyCycleHud;
+    default: return HotkeyCycleView;
     }
 }
 
@@ -48,7 +49,7 @@ std::string EspConfig::ToJson() const
     j += Kv("HotkeyToggle", S(HotkeyToggle)) + Kv("HotkeyConfig", S(HotkeyConfig)) + Kv("HotkeyExit", S(HotkeyExit));
     j += Kv("HotkeyTogglePlayers", S(HotkeyTogglePlayers)) + Kv("HotkeyToggleItems", S(HotkeyToggleItems)) +
         Kv("HotkeyToggleTracers", S(HotkeyToggleTracers)) + Kv("HotkeyToggleMinimap", S(HotkeyToggleMinimap)) + Kv("HotkeyNextProfile", S(HotkeyNextProfile)) +
-        Kv("HotkeyCycleHud", S(HotkeyCycleHud));
+        Kv("HotkeyCycleHud", S(HotkeyCycleHud)) + Kv("HotkeyCycleView", S(HotkeyCycleView));
     j += Kv("DistanceFormat", S(DistanceFormat)) + Kv("MaxLabelDist", N(MaxLabelDist)) +
         Kv("TextShadow", B(TextShadow));
     j += Kv("ShowPlayers", B(ShowPlayers)) + Kv("ShowPlayerNames", B(ShowPlayerNames)) + Kv("BoxStyle", S(BoxStyle)) +
@@ -66,6 +67,7 @@ std::string EspConfig::ToJson() const
     j += Kv("ConfigX", N(ConfigX)) + Kv("ConfigY", N(ConfigY));
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
         Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags)) + Kv("HudMode", S(HudMode));
+    j += Kv("ViewMode", S(ViewMode));
     j += Kv("ItemFilterMode", S(ItemFilterMode)) + Kv("ItemFilterList", S(ItemFilterList)) + Kv("ItemMinTier", N(ItemMinTier));
     j += Kv("LabelDeclutter", B(LabelDeclutter)) + Kv("LabelFadePct", N(LabelFadePct));
     j += Kv("SmootherBaselineMs", N(SmootherBaselineMs)) + Kv("SmootherBlendTauMs", N(SmootherBlendTauMs)) + Kv("SmootherMaxAheadMs", N(SmootherMaxAheadMs)) +
@@ -88,7 +90,9 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HotkeyToggleMinimap = GetString(o, "HotkeyToggleMinimap", c.HotkeyToggleMinimap);
     c.HotkeyNextProfile = GetString(o, "HotkeyNextProfile", c.HotkeyNextProfile);
     c.HotkeyCycleHud = GetString(o, "HotkeyCycleHud", c.HotkeyCycleHud);
+    c.HotkeyCycleView = GetString(o, "HotkeyCycleView", c.HotkeyCycleView);
     c.HudMode = GetString(o, "HudMode", c.HudMode);
+    c.ViewMode = GetString(o, "ViewMode", c.ViewMode);
     c.ItemFilterMode = GetString(o, "ItemFilterMode", c.ItemFilterMode);
     c.ItemFilterList = GetString(o, "ItemFilterList", c.ItemFilterList);
     c.ItemMinTier = static_cast<int>(GetNumber(o, "ItemMinTier", c.ItemMinTier));
@@ -216,6 +220,7 @@ void Settings::Apply(const EspConfig& c)
         itemFilterMode = static_cast<int>(m);
     }
     itemFilterList = c.ItemFilterList;
+    viewMode = c.ViewMode == "Raw" ? 1 : c.ViewMode == "Both" ? 2 : 0;
     itemMinTier = std::clamp(c.ItemMinTier, 0, 3);
     labelDeclutter = c.LabelDeclutter;
     labelFadePct = static_cast<int>(std::lround(c.LabelFadePct));
@@ -274,6 +279,7 @@ EspConfig Settings::Build() const
     c.HudMode = hud::Name(static_cast<hud::Mode>(hudMode));
     c.ItemFilterMode = itemfilter::Name(static_cast<itemfilter::Mode>(itemFilterMode));
     c.ItemFilterList = itemFilterList;
+    c.ViewMode = viewMode == 1 ? "Raw" : viewMode == 2 ? "Both" : "Smoothed";
     c.ItemMinTier = itemMinTier;
     c.LabelDeclutter = labelDeclutter;
     c.LabelFadePct = labelFadePct;

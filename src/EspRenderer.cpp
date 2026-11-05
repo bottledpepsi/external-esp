@@ -338,6 +338,27 @@ void EspRenderer::DrawItem(Gfx& g, const Settings& s, const Camera& cam, const I
     }
 }
 
+void EspRenderer::DrawGhosts(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& raw)
+{
+    const Col ghost{1.f, 0.2f, 0.9f, 0.85f};
+    const float maxDist = presets::PlayerDist[s.maxPlayerDistIdx];
+    if (s.showPlayers)
+        for (const PlayerState& p : raw.players)
+        {
+            if (static_cast<float>(cam.Distance(p.pos)) > maxDist) continue;
+            ScreenBox sb;
+            const double ph = p.sizeValid ? p.height : kPlayerH, pw = p.sizeValid ? p.width : kPlayerW;
+            if (ProjectBox(cam, p.pos, pw, ph, s.playerMinPx, sb)) g.Rect(sb.x0, sb.y0, sb.x1 - sb.x0, sb.y1 - sb.y0, ghost, 1.f);
+        }
+    if (s.showItems)
+        for (const ItemState& it : raw.items)
+        {
+            ScreenBox sb;
+            const double iw = it.sizeValid ? it.width : 0.25, ih = it.sizeValid ? it.height : 0.25;
+            if (ProjectBox(cam, it.pos, iw, ih, s.itemMinPx, sb)) g.Rect(sb.x0, sb.y0, sb.x1 - sb.x0, sb.y1 - sb.y0, ghost.with(0.6f), 1.f);
+        }
+}
+
 void EspRenderer::DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap)
 {
     const float maxDist = presets::PlayerDist[s.maxPlayerDistIdx];

@@ -76,3 +76,32 @@ struct Camera
         return std::sqrt(dx * dx + dy * dy + dz * dz);
     }
 };
+
+// The camera a snapshot describes, by the same rules the overlay uses for its main view: the game's own camera when the agent found it
+// (exact pose, and its FOV when it has one), else the local player's eye and angles with `fallbackFovDeg`. Returns false when the snapshot has
+// neither. `exact` (optional) says which of the two it was. Used for the "raw" view, which needs a camera of its own.
+inline bool CameraFromSnapshot(const WorldSnapshot& s, double fallbackFovDeg, int w, int h, Camera& out, bool* exact = nullptr)
+{
+    if (s.camera.valid)
+    {
+        const CameraState& c = s.camera;
+        out.eye = c.pos;
+        out.yawDeg = c.yawDeg;
+        out.pitchDeg = c.pitchDeg;
+        out.fovYDeg = c.fovValid ? c.fovDeg : fallbackFovDeg;
+        if (exact) *exact = true;
+    }
+    else if (s.localValid && s.local.yawValid && s.local.pitchValid)
+    {
+        out.eye = {s.local.pos.x, s.local.pos.y + Camera::kEyeHeight, s.local.pos.z};
+        out.yawDeg = s.local.yawDeg;
+        out.pitchDeg = s.local.pitchDeg;
+        out.fovYDeg = fallbackFovDeg;
+        if (exact) *exact = false;
+    }
+    else return false;
+    out.w = w;
+    out.h = h;
+    out.Update();
+    return true;
+}

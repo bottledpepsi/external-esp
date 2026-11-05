@@ -82,6 +82,8 @@ class Smoother
 public:
     using Clock = std::chrono::steady_clock;
 
+    // The newest sample exactly as the agent sent it: no extrapolation, no interpolation (the "raw" view). Valid when HasData().
+    const WorldSnapshot& Newest() const { return cur_; }
     void SetTuning(const SmootherTuning& t) { tune_ = t.Sanitized(); }
     const SmootherTuning& Tuning() const { return tune_; }
     const SmootherStats& Stats() const { return stats_; }

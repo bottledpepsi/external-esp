@@ -54,6 +54,7 @@ private:
     AppOptions opt_;
     hud::Text hudText_;
     hud::Mode lastHudMode_ = hud::Mode::Compact;
+    WorldSnapshot rawSnap_; // the "raw" view: a copy of the smoother's newest sample, kept so its vectors keep their capacity
     perf::CacheCounters cachePrev_; // the text-cache counters at the last HUD refresh
     Clock::time_point nextHud_{}, hudWinStart_{};
     uint64_t hudPackets_ = 0, hudNumbered_ = 0, hudLost_ = 0;

@@ -25,6 +25,7 @@ namespace hud
     {
         // the overlay
         bool visible = true, demo = false, replay = false, gpu = true;
+        int view = 0; // 0 smoothed (the normal picture), 1 raw, 2 both: shown in the first line when it is not 0
         float fps = 0, cpuMs = 0;
         bool exiting = false;
         float exitLeftS = 0;

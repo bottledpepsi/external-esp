@@ -20,7 +20,7 @@ struct EspConfig
     // Hotkeys
     // A hotkey is a key, optionally with Ctrl / Shift / Alt / Win: "F6", "Ctrl+Shift+F5". "" = not bound (allowed except for the first two).
     std::string HotkeyToggle = "Delete", HotkeyConfig = "Insert", HotkeyExit = "End";
-    std::string HotkeyTogglePlayers, HotkeyToggleItems, HotkeyToggleTracers, HotkeyToggleMinimap, HotkeyNextProfile, HotkeyCycleHud;
+    std::string HotkeyTogglePlayers, HotkeyToggleItems, HotkeyToggleTracers, HotkeyToggleMinimap, HotkeyNextProfile, HotkeyCycleHud, HotkeyCycleView;
     std::string& HotkeyText(hotkeys::Action a); // the field of an action
     // GENERAL
     std::string DistanceFormat = "Meters"; // Meters | Kilometers | Off
@@ -64,6 +64,7 @@ struct EspConfig
     bool ShowItemEnchants = true; // list enchantments under an item's name
     bool ShowItemTags = false; // list the stack's raw tags (NBT / components) under the name
     std::string HudMode = "Compact"; // the status text top-left: Off | Compact | Detailed (hud::Mode)
+    std::string ViewMode = "Smoothed"; // Smoothed | Raw | Both: what is drawn - the smoothed picture, the agent's samples as they arrive, or both (raw in magenta)
     bool LabelDeclutter = true; // names and distances move out of each other's way (LabelLayout.h); false = the old, overlapping labels
     std::string ItemFilterMode = "Off"; // Off | Whitelist | Blacklist (itemfilter::Mode)
     std::string ItemFilterList; // name patterns, comma separated: "diamond*, *_sword" (ItemFilter.h)
@@ -123,6 +124,7 @@ struct Settings
     int agentHz = 120;
     float itemMinPx = 6, playerMinPx = 2;
     int hudMode = 1; // hud::Mode
+    int viewMode = 0; // 0 Smoothed, 1 Raw, 2 Both (EspConfig::ViewMode)
     bool labelDeclutter = true;
     int itemFilterMode = 0, itemMinTier = 0; // itemfilter::Mode
     std::string itemFilterList;

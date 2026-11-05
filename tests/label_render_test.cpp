@@ -179,6 +179,38 @@ int main()
         CHECK(Find(g, "Alice") != nullptr);
     }
 
+    // ---- the raw "ghost" outlines ----
+    {
+        Settings s = Defaults();
+        s.showItems = true;
+        s.maxPlayerDistIdx = 0; // 50 m
+        WorldSnapshot raw;
+        raw.players = {Player("Near", 0, 15), Player("Far", 3, 80)};
+        ItemState it;
+        it.pos = {1, 0, 12};
+        it.key = "minecraft:diamond";
+        raw.items = {it};
+        EspRenderer r;
+        Gfx g;
+        r.DrawGhosts(g, s, cam, raw);
+        CHECK(g.rects == 2 && g.texts.empty() && g.lines == 0); // the near player and the item; the far player is past 50 m; never any text
+        s.showItems = false;
+        Gfx g2;
+        r.DrawGhosts(g2, s, cam, raw);
+        CHECK(g2.rects == 1);
+        s.showPlayers = false;
+        Gfx g3;
+        r.DrawGhosts(g3, s, cam, raw);
+        CHECK(g3.rects == 0);
+        // a player behind the camera is not drawn
+        s.showPlayers = true;
+        WorldSnapshot behind;
+        behind.players = {Player("Behind", 0, -20)};
+        Gfx g4;
+        r.DrawGhosts(g4, s, cam, behind);
+        CHECK(g4.rects == 0);
+    }
+
     // ---- item filters: what is drawn and what is counted as hidden ----
     {
         Settings s = Defaults();

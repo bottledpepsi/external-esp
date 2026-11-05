@@ -50,6 +50,7 @@ namespace configschema
                 B("TracerFade");
                 W("HudMode", {"Off", "Compact", "Detailed"});
                 B("LabelDeclutter");
+                W("ViewMode", {"Smoothed", "Raw", "Both"});
                 W("ItemFilterMode", {"Off", "Whitelist", "Blacklist"});
                 I("ItemMinTier", 0, 3);
                 s.push_back({"ItemFilterList", Kind::Text, 0, 512, {}});

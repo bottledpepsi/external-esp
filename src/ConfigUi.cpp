@@ -190,6 +190,13 @@ void ConfigUi::TabGeneral()
     CycleRow("Camera FOV (fallback)", s_.fovIdx, static_cast<int>(Fovs.size()), FovLabels[s_.fovIdx]);
     ToggleRow("VSync", s_.vsync);
     ToggleRow("Motion smoothing", s_.smoothing);
+    {
+        static const char* const kViews[] = {"Smoothed", "Raw", "Both (raw = magenta)"};
+        int v = std::clamp(s_.viewMode, 0, 2);
+        const int before = v;
+        CycleRow("View", v, 3, kViews[v]);
+        if (v != before) s_.viewMode = v;
+    }
     y_ += 4;
     if (!cameraInfo_.empty()) InfoRow(cameraInfo_);
     InfoRow("With the game camera found, its exact pose and FOV are used (sprint, underwater, third person).");
