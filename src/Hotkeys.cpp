@@ -25,6 +25,7 @@ namespace hotkeys
             {Action::ToggleNeutral, "HotkeyToggleNeutral", "Toggle neutral mobs", "", false, false},
             {Action::ToggleProjectiles, "HotkeyToggleProjectiles", "Toggle projectiles", "", false, false},
             {Action::ToggleXp, "HotkeyToggleXp", "Toggle experience orbs", "", false, false},
+            {Action::ClearDeathMarker, "HotkeyClearDeath", "Clear the death marker", "", false, false},
         };
 
         std::string Lower(std::string s)

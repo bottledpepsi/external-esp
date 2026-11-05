@@ -14,7 +14,17 @@ class EspRenderer
 {
 public:
     void DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap);
-    void DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap, int winW);
+    // What the radar shows besides the players: the entities (when shown) and where the local player died (when there is a marker).
+    struct MinimapExtras
+    {
+        const std::vector<EntityState>* entities = nullptr;
+        bool hasDeath = false;
+        Vec3 death;
+    };
+    void DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap, int winW, int winH, const MinimapExtras& extra);
+    void DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap, int winW, int winH) { DrawMinimap(g, s, cam, snap, winW, winH, MinimapExtras()); }
+    // The death marker in the world: a red diamond over the spot with "Death  87m" (clamped to the screen edge when it is off to the side).
+    void DrawDeathMarker(Gfx& g, const Settings& s, const Camera& cam, const Vec3& where, int winW, int winH);
     // The "Both" view: the agent's samples exactly as they arrived, as thin magenta outlines (players) and small squares (items), drawn under
     // the normal picture. No labels, tracers or health. `cam` belongs to the same raw snapshot (CameraFromSnapshot).
     void DrawGhosts(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& raw);

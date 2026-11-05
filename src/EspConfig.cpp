@@ -46,9 +46,10 @@ std::string& EspConfig::HotkeyText(hotkeys::Action a)
     case Action::ToggleNeutral: return HotkeyToggleNeutral;
     case Action::ToggleProjectiles: return HotkeyToggleProjectiles;
     case Action::ToggleXp: return HotkeyToggleXp;
+    case Action::ClearDeathMarker: return HotkeyClearDeath;
     case Action::Count: break;
     }
-    return HotkeyToggleXp; // not reachable for a real action
+    return HotkeyClearDeath; // not reachable for a real action
 }
 
 const EntityKeys& EntityKeysFor(int kind)
@@ -68,7 +69,8 @@ std::string EspConfig::ToJson() const
         Kv("HotkeyToggleTracers", S(HotkeyToggleTracers)) + Kv("HotkeyToggleMinimap", S(HotkeyToggleMinimap)) + Kv("HotkeyNextProfile", S(HotkeyNextProfile)) +
         Kv("HotkeyCycleHud", S(HotkeyCycleHud)) + Kv("HotkeyCycleView", S(HotkeyCycleView)) + Kv("HotkeyToggleGraphs", S(HotkeyToggleGraphs)) +
         Kv("HotkeyToggleEntities", S(HotkeyToggleEntities)) + Kv("HotkeyToggleHostile", S(HotkeyToggleHostile)) + Kv("HotkeyTogglePassive", S(HotkeyTogglePassive)) +
-        Kv("HotkeyToggleNeutral", S(HotkeyToggleNeutral)) + Kv("HotkeyToggleProjectiles", S(HotkeyToggleProjectiles)) + Kv("HotkeyToggleXp", S(HotkeyToggleXp));
+        Kv("HotkeyToggleNeutral", S(HotkeyToggleNeutral)) + Kv("HotkeyToggleProjectiles", S(HotkeyToggleProjectiles)) + Kv("HotkeyToggleXp", S(HotkeyToggleXp)) +
+        Kv("HotkeyClearDeath", S(HotkeyClearDeath));
     j += Kv("DistanceFormat", S(DistanceFormat)) + Kv("MaxLabelDist", N(MaxLabelDist)) +
         Kv("TextShadow", B(TextShadow));
     j += Kv("ShowPlayers", B(ShowPlayers)) + Kv("ShowPlayerNames", B(ShowPlayerNames)) + Kv("BoxStyle", S(BoxStyle)) +
@@ -87,6 +89,7 @@ std::string EspConfig::ToJson() const
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
         Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags)) + Kv("HudMode", S(HudMode));
     j += Kv("ViewMode", S(ViewMode)) + Kv("ShowGraphs", B(ShowGraphs));
+    j += Kv("MinimapMode", S(MinimapMode)) + Kv("MinimapCorner", S(MinimapCorner)) + Kv("ShowDeathMarker", B(ShowDeathMarker));
     j += Kv("ShowEntities", B(ShowEntities)) + Kv("EntityMaxDist", S(EntityMaxDist)) + Kv("EntityLabels", B(EntityLabels));
     for (int k = 0; k < kEntityKindCount; ++k) j += Kv(EntityKeysFor(k).show, B(EntityShow[k])) + Kv(EntityKeysFor(k).color, S(EntityColor[k]));
     j += Kv("ItemFilterMode", S(ItemFilterMode)) + Kv("ItemFilterList", S(ItemFilterList)) + Kv("ItemMinTier", N(ItemMinTier));
@@ -119,9 +122,13 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HotkeyToggleNeutral = GetString(o, "HotkeyToggleNeutral", c.HotkeyToggleNeutral);
     c.HotkeyToggleProjectiles = GetString(o, "HotkeyToggleProjectiles", c.HotkeyToggleProjectiles);
     c.HotkeyToggleXp = GetString(o, "HotkeyToggleXp", c.HotkeyToggleXp);
+    c.HotkeyClearDeath = GetString(o, "HotkeyClearDeath", c.HotkeyClearDeath);
     c.HudMode = GetString(o, "HudMode", c.HudMode);
     c.ViewMode = GetString(o, "ViewMode", c.ViewMode);
     c.ShowGraphs = GetBool(o, "ShowGraphs", c.ShowGraphs);
+    c.MinimapMode = GetString(o, "MinimapMode", c.MinimapMode);
+    c.MinimapCorner = GetString(o, "MinimapCorner", c.MinimapCorner);
+    c.ShowDeathMarker = GetBool(o, "ShowDeathMarker", c.ShowDeathMarker);
     c.ShowEntities = GetBool(o, "ShowEntities", c.ShowEntities);
     c.EntityMaxDist = GetString(o, "EntityMaxDist", c.EntityMaxDist);
     c.EntityLabels = GetBool(o, "EntityLabels", c.EntityLabels);
@@ -258,6 +265,9 @@ void Settings::Apply(const EspConfig& c)
     }
     itemFilterList = c.ItemFilterList;
     showGraphs = c.ShowGraphs;
+    minimapMode = c.MinimapMode == "Rotate" ? 1 : 0;
+    minimapCorner = c.MinimapCorner == "TopLeft" ? 1 : c.MinimapCorner == "BottomRight" ? 2 : c.MinimapCorner == "BottomLeft" ? 3 : 0;
+    showDeath = c.ShowDeathMarker;
     showEntities = c.ShowEntities;
     entLabels = c.EntityLabels;
     {
@@ -331,6 +341,9 @@ EspConfig Settings::Build() const
     c.ItemFilterMode = itemfilter::Name(static_cast<itemfilter::Mode>(itemFilterMode));
     c.ItemFilterList = itemFilterList;
     c.ShowGraphs = showGraphs;
+    c.MinimapMode = minimapMode == 1 ? "Rotate" : "North";
+    c.MinimapCorner = minimapCorner == 1 ? "TopLeft" : minimapCorner == 2 ? "BottomRight" : minimapCorner == 3 ? "BottomLeft" : "TopRight";
+    c.ShowDeathMarker = showDeath;
     c.ShowEntities = showEntities;
     c.EntityLabels = entLabels;
     c.EntityMaxDist = presets::EntityDistLabels[static_cast<size_t>(std::clamp(entDistIdx, 0, static_cast<int>(presets::EntityDistLabels.size()) - 1))];

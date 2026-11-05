@@ -179,6 +179,141 @@ int main()
         CHECK(Find(g, "Alice") != nullptr);
     }
 
+    // ---- the radar: corner, orientation, entities, death marker ----
+    {
+        const int W = 1920, H = 1080;
+        const float mm = static_cast<float>(presets::MinimapSizes[1]);
+        WorldSnapshot w;
+        w.localValid = true;
+        w.local.pos = {0, 0, 0};
+        EspRenderer r;
+        auto panel = [&](const Settings& s, const WorldSnapshot& snap, const EspRenderer::MinimapExtras& x)
+        {
+            Gfx g;
+            r.DrawMinimap(g, s, cam, snap, W, H, x);
+            return g;
+        };
+        // corners
+        Settings s = Defaults();
+        for (int c = 0; c < 4; ++c)
+        {
+            s.minimapCorner = c;
+            const Gfx g = panel(s, w, {});
+            CHECK(g.panels.size() == 1);
+            const float ex = (c == 0 || c == 2) ? W - mm - 12.f : 12.f, ey = (c == 2 || c == 3) ? H - mm - 12.f : 12.f;
+            CHECK(std::fabs(g.panels[0].x - ex) < 1e-3f && std::fabs(g.panels[0].y - ey) < 1e-3f && std::fabs(g.panels[0].w - mm) < 1e-3f);
+        }
+        s.minimapCorner = 0;
+        // north-up (the cam looks along +z): a player north (-z) is above the centre, one east (+x) to the right, one south below
+        w.players = {Player("North", 0, -20), Player("East", 20, 0), Player("South", 0, 20)};
+        s.maxPlayerDistIdx = 3;
+        {
+            const Gfx g = panel(s, w, {});
+            const float cx = g.panels[0].x + mm * 0.5f, cy = g.panels[0].y + mm * 0.5f;
+            // the first three discs are the players, then the self dot
+            CHECK(g.discs.size() == 4);
+            CHECK(std::fabs(g.discs[0].x - cx) < 1e-3f && g.discs[0].y < cy);
+            CHECK(g.discs[1].x > cx && std::fabs(g.discs[1].y - cy) < 1e-3f);
+            CHECK(std::fabs(g.discs[2].x - cx) < 1e-3f && g.discs[2].y > cy);
+        }
+        // rotate: facing +z (yaw 0) is up, so the +z player is above, the -z one below; your right is west (-x)
+        s.minimapMode = 1;
+        {
+            const Gfx g = panel(s, w, {});
+            const float cx = g.panels[0].x + mm * 0.5f, cy = g.panels[0].y + mm * 0.5f;
+            CHECK(g.discs[0].y > cy && std::fabs(g.discs[0].x - cx) < 1e-3f); // "North" (-z) is behind you
+            CHECK(g.discs[1].x < cx); // "East" (+x) is on your left when you face +z
+            CHECK(g.discs[2].y < cy); // "South" (+z) is ahead
+            bool n = false;
+            for (const TextCall& t : g.texts) n = n || t.text == "N";
+            CHECK(n); // and the map says where north went
+        }
+        // turn the camera to face +x (yaw -90: forward = (-sin yaw, cos yaw) = (1, 0)): the east player is ahead, so above
+        {
+            Camera east = cam;
+            east.yawDeg = -90;
+            east.Update();
+            Gfx g;
+            r.DrawMinimap(g, s, east, w, W, H, {});
+            const float cx = g.panels[0].x + mm * 0.5f, cy = g.panels[0].y + mm * 0.5f;
+            CHECK(g.discs[1].y < cy && std::fabs(g.discs[1].x - cx) < 1e-2f);
+        }
+        s.minimapMode = 0;
+        // the rim: a player very far away is pinned to the rim, never outside the panel
+        w.players = {Player("Far", 5000, -5000)};
+        {
+            const Gfx g = panel(s, w, {});
+            const float cx = g.panels[0].x + mm * 0.5f, cy = g.panels[0].y + mm * 0.5f;
+            CHECK(std::hypot(g.discs[0].x - cx, g.discs[0].y - cy) <= mm * 0.5f - 3.9f);
+        }
+        w.players.clear();
+        // entities: small dots in their category color, only the shown categories and only inside the rim
+        {
+            std::vector<EntityState> es(3);
+            es[0].kind = EntityKind::Hostile;
+            es[0].pos = {0, 0, -20};
+            es[1].kind = EntityKind::Passive;
+            es[1].pos = {10, 0, 0};
+            es[2].kind = EntityKind::Hostile;
+            es[2].pos = {0, 0, -5000}; // outside the radar: left out
+            EspRenderer::MinimapExtras x;
+            x.entities = &es;
+            Settings t = s;
+            t.showEntities = true;
+            Gfx g = panel(t, w, x);
+            CHECK(g.discs.size() == 3); // two entities and the self dot
+            CHECK(std::fabs(g.discs[0].col.r - presets::EntityPaletteRgb[0].r) < 1e-4f); // hostile: red
+            t.entShow[static_cast<int>(EntityKind::Passive)] = false;
+            g = panel(t, w, x);
+            CHECK(g.discs.size() == 2);
+            t.showEntities = false;
+            g = panel(t, w, x);
+            CHECK(g.discs.size() == 1); // master off: none
+            x.entities = nullptr;
+            t.showEntities = true;
+            CHECK(panel(t, w, x).discs.size() == 1);
+        }
+        // the death marker: a red cross at the spot, pinned (and dimmer) at the rim when it is far
+        {
+            EspRenderer::MinimapExtras x;
+            x.hasDeath = true;
+            x.death = {0, 0, 30};
+            const Gfx none = panel(s, w, {});
+            const Gfx g = panel(s, w, x);
+            CHECK(g.segs.size() == none.segs.size() + 2);
+            const auto& a = g.segs[g.segs.size() - 2];
+            CHECK(a.col.r == 1.f && a.col.g < 0.5f && a.col.a == 1.f);
+            x.death = {0, 0, 9000};
+            const Gfx far = panel(s, w, x);
+            CHECK(far.segs.back().col.a < 1.f); // pinned: dimmer
+        }
+    }
+
+    // ---- the death marker in the world ----
+    {
+        EspRenderer r;
+        Settings s = Defaults();
+        {
+            Gfx g;
+            r.DrawDeathMarker(g, s, cam, {0, 0, 87}, 1920, 1080); // straight ahead, 87 m
+            CHECK(g.segs.size() == 4 && Find(g, "Death  87m"));
+            const TextCall* t = Find(g, "Death  87m");
+            CHECK(t && std::fabs(t->x - 960.f) < 2.f && t->y < 540.f + 40.f); // centred, around the horizon
+        }
+        {
+            Gfx g;
+            r.DrawDeathMarker(g, s, cam, {0, 0, -40}, 1920, 1080); // behind: bottom centre, not off the screen
+            const TextCall* t = Find(g, "Death  40m");
+            CHECK(t && std::fabs(t->x - 960.f) < 1.f && t->y > 900.f && t->y < 1080.f);
+        }
+        {
+            Gfx g;
+            r.DrawDeathMarker(g, s, cam, {500, 0, 10}, 1920, 1080); // far to the right: clamped to the screen
+            const TextCall* t = Find(g, "Death  500m");
+            CHECK(t && t->x <= 1920.f - 30.f + 1.f && t->x >= 30.f);
+        }
+    }
+
     // ---- entities: categories, distance, colors, labels ----
     {
         auto ent = [](uint32_t id, EntityKind k, double x, double z, const char* label, float hp = 20.f)

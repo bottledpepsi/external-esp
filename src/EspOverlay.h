@@ -10,6 +10,7 @@
 #include "EspRenderer.h"
 #include "Gfx.h"
 #include "HotkeyRegistry.h"
+#include "DeathTracker.h"
 #include "EntityTracker.h"
 #include "Hud.h"
 #include "PerfStats.h"
@@ -55,6 +56,7 @@ private:
     AppOptions opt_;
     hud::Text hudText_;
     hud::Mode lastHudMode_ = hud::Mode::Compact;
+    DeathTracker death_; // where the local player last died (DeathTracker.h)
     EntityTracker entTracker_; // follows the mobs from list to list (EntityTracker.h)
     std::vector<EntityState> entPredicted_; // what the tracker says they look like now
     WorldSnapshot rawSnap_; // the "raw" view: a copy of the smoother's newest sample, kept so its vectors keep their capacity
@@ -119,6 +121,7 @@ private:
     uint64_t lastSessions_ = 0;     // StreamIngest::Link().sessions
     void CheckSession();
     void ToggleEntityKind(EntityKind k);
+    EspRenderer::MinimapExtras MinimapExtrasFor(const std::vector<EntityState>* ents, bool death) const;
     void ProbeJitter(const Camera& cam, const WorldSnapshot& snap); // feeds the jitter meter with the nearest player's box centre
     void SwitchToLegacy();          // device loss that could not be recovered: new window, legacy renderer
     bool f10Down_ = false;

@@ -52,6 +52,9 @@ namespace configschema
                 B("LabelDeclutter");
                 W("ViewMode", {"Smoothed", "Raw", "Both"});
                 B("ShowGraphs");
+                W("MinimapMode", {"North", "Rotate"});
+                W("MinimapCorner", {"TopRight", "TopLeft", "BottomRight", "BottomLeft"});
+                B("ShowDeathMarker");
                 B("ShowEntities");
                 B("EntityLabels");
                 W("EntityMaxDist", presets::EntityDistLabels);

@@ -86,3 +86,10 @@ Needs the agent to send wire v6 entities and class names it can read (docs/compa
 * **Smoothing**: mobs arrive about ten times a second. They are followed by the agent's id and moved ahead of their newest sample along the velocity of the last two (at most 0.15 s, never across a teleport), so a walking zombie does not step ten times a second. In the **Raw** view they are drawn as they arrived.
 * The Detailed status text shows `mobs N/M shown`.
 
+## Radar: orientation, corner, entities, death marker (MINIMAP tab)
+
+* **Orientation** (`MinimapMode`): **North up** (default, as before: the map keeps its orientation and a wedge shows where you look) or **Rotate**: the map turns so what is in front of you is always at the top; an `N` on the rim says where north went.
+* **Corner** (`MinimapCorner`): TopRight (default), TopLeft, BottomRight, BottomLeft.
+* **Entities**: when the entity display is on, mobs and projectiles appear as small dots in their category color, only those inside the radar (they are not pinned to the rim).
+* **Death marker** (`ShowDeathMarker`, default on; `HotkeyClearDeath` removes it): when your health reaches 0 and stays there for a quarter of a second, the place is remembered - a red cross on the radar and a red diamond with `Death  87m` in the world (at the screen edge when it is off to the side, at the bottom centre when it is behind you). It stays through the death screen and the respawn and goes away when you get within 3 blocks of it (a second after you respawn, so a bed next to it does not clear it at once), after ten minutes, on the hotkey, or when you die again. A single frame of 0 health while a world loads is not a death; a teleport is not a death; without a health reading from the agent nothing is concluded.
+

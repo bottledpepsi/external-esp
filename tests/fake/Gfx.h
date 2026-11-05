@@ -26,14 +26,20 @@ class Gfx
 public:
     std::vector<TextCall> texts;
     int lines = 0, rects = 0, images = 0;
+    struct Seg { float x0, y0, x1, y1; Col col; };
+    struct Disc { float x, y, r; Col col; };
+    struct Box { float x, y, w, h; };
+    std::vector<Seg> segs; // every Line(): where, and in what color
+    std::vector<Disc> discs; // every FillCircle()
+    std::vector<Box> panels; // every FillRRect() (the radar's background, labels' plates ...)
 
-    void Line(float, float, float, float, Col, float = 1.f) { ++lines; }
+    void Line(float x0, float y0, float x1, float y1, Col c, float = 1.f) { ++lines; segs.push_back({x0, y0, x1, y1, c}); }
     void Rect(float, float, float, float, Col, float = 1.f) { ++rects; }
     void FillRect(float, float, float, float, Col) { ++rects; }
     void RRect(float, float, float, float, float, Col, float = 1.f) { ++rects; }
-    void FillRRect(float, float, float, float, float, Col) { ++rects; }
+    void FillRRect(float x, float y, float w, float h, float, Col) { ++rects; panels.push_back({x, y, w, h}); }
     void Circle(float, float, float, Col, float = 1.f) { ++rects; }
-    void FillCircle(float, float, float, Col) { ++rects; }
+    void FillCircle(float x, float y, float r, Col c) { ++rects; discs.push_back({x, y, r, c}); }
     void FillTriangle(float, float, float, float, float, float, Col) { ++rects; }
     void DrawImage(const Image&, float, float, float, float, float = 1.f) { ++images; }
     void PushClip(float, float, float, float) {}

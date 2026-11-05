@@ -332,6 +332,7 @@ void EspOverlay::Perform(hotkeys::Action a)
         settings_.RequestSave();
         break;
     case Action::ToggleGraphs: settings_.showGraphs = !settings_.showGraphs; LOG_INFO("Performance graphs %s (hotkey)", settings_.showGraphs ? "on" : "off"); settings_.RequestSave(); break;
+    case Action::ClearDeathMarker: death_.Clear(); LOG_INFO("Death marker cleared (hotkey)"); break;
     case Action::ToggleEntities: settings_.showEntities = !settings_.showEntities; LOG_INFO("Entities %s (hotkey)", settings_.showEntities ? "on" : "off"); settings_.RequestSave(); break;
     case Action::ToggleHostile: ToggleEntityKind(EntityKind::Hostile); break;
     case Action::TogglePassive: ToggleEntityKind(EntityKind::Passive); break;
@@ -355,6 +356,15 @@ void EspOverlay::ToggleEntityKind(EntityKind k)
     if (on) settings_.showEntities = true;
     LOG_INFO("Entities: %s %s (hotkey)", EntityKeysFor(static_cast<int>(k)).show, on ? "on" : "off");
     settings_.RequestSave();
+}
+
+EspRenderer::MinimapExtras EspOverlay::MinimapExtrasFor(const std::vector<EntityState>* ents, bool death) const
+{
+    EspRenderer::MinimapExtras x;
+    x.entities = ents;
+    x.hasDeath = death;
+    if (death) x.death = death_.Marker();
+    return x;
 }
 
 void EspOverlay::ProbeJitter(const Camera& cam, const WorldSnapshot& snap)
@@ -822,6 +832,14 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     gfx_.SetOpacity(presets::OverlayOpacity[settings_.overlayOpacityIdx]);
     gfx_.SetVSync(settings_.vsync);
     gfx_.Begin(configOpen_ ? Col{0, 0, 0, 1.f / 255.f} : Col{0, 0, 0, 0});
+    // the local player's death (DeathTracker.h): watched every frame so a marker set while the option was off is there when it is switched on
+    if (visible_)
+    {
+        const auto secsNow = std::chrono::duration<double>(now.time_since_epoch()).count();
+        death_.Update(secsNow, snap.localValid && snap.local.healthValid, snap.local.health, snap.localValid, snap.local.pos);
+    }
+    const bool showDeath = settings_.showDeath && death_.HasMarker();
+
     // performance graphs: one value per frame while on, nothing at all while off (the history is dropped when they are switched off)
     const bool graphs = settings_.showGraphs;
     if (graphs)
@@ -849,7 +867,8 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         {
             renderer_.DrawWorld(gfx_, settings_, rawCam, rawSnap_);
             renderer_.DrawEntities(gfx_, settings_, rawCam, rawSnap_.entities); // raw: the lists as they came
-            if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, rawCam, rawSnap_, w);
+            if (showDeath) renderer_.DrawDeathMarker(gfx_, settings_, rawCam, death_.Marker(), w, h);
+            if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, rawCam, rawSnap_, w, h, MinimapExtrasFor(&rawSnap_.entities, showDeath));
             if (graphs) ProbeJitter(rawCam, rawSnap_);
         }
         else
@@ -865,7 +884,9 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
                 renderer_.DrawEntities(gfx_, settings_, cam, entPredicted_);
             }
             else renderer_.DrawEntities(gfx_, settings_, cam, snap.entities); // off: counts only
-            if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, cam, snap, w);
+            if (showDeath) renderer_.DrawDeathMarker(gfx_, settings_, cam, death_.Marker(), w, h);
+            if (settings_.showMinimap)
+                renderer_.DrawMinimap(gfx_, settings_, cam, snap, w, h, MinimapExtrasFor(settings_.showEntities ? &entPredicted_ : nullptr, showDeath));
             if (graphs) ProbeJitter(cam, snap);
         }
     }

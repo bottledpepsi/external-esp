@@ -561,11 +561,13 @@ void EspRenderer::DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const 
 }
 
 // Top-right radar, north-up like the original (+X east = right, +Z south = down).
-void EspRenderer::DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap, int winW)
+void EspRenderer::DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap, int winW, int winH, const MinimapExtras& extra)
 {
     const int mm = presets::MinimapSizes[s.minimapSizeIdx];
     const float range = static_cast<float>(presets::MinimapRanges[s.minimapRangeIdx]);
-    const float x = winW - mm - 12.f, y = 12.f, r = mm * 0.5f, cx = x + r, cy = y + r;
+    const float pad = 12.f;
+    const bool right = s.minimapCorner == 0 || s.minimapCorner == 2, bottom = s.minimapCorner == 2 || s.minimapCorner == 3;
+    const float x = right ? winW - mm - pad : pad, y = bottom ? winH - mm - pad : pad, r = mm * 0.5f, cx = x + r, cy = y + r;
     const Col bg{0.05f, 0.06f, 0.09f, 0.72f}, line{0.40f, 0.45f, 0.60f, 0.45f}, border{0.30f, 0.34f, 0.48f, 0.9f};
 
     g.FillRRect(x, y, static_cast<float>(mm), static_cast<float>(mm), 6.f, bg);
@@ -577,26 +579,104 @@ void EspRenderer::DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, cons
 
     const Vec3 center = snap.localValid ? snap.local.pos : cam.eye; // in third person the camera is not at the player
     const float scale = (r - 4.f) / range;
+    const double yaw = cam.yawDeg * kDeg2Rad;
+    const float fx = static_cast<float>(-std::sin(yaw)), fz = static_cast<float>(std::cos(yaw)); // world forward in (x, z)
+    const bool rotate = s.minimapMode == 1;
+    // A world offset (dx, dz) in blocks -> screen offset in pixels. North-up: 1:1 (+x right, +z down). Rotate: your forward is up, your right is right.
+    auto toScreen = [&](double dx, double dz, float& sx, float& sy)
+    {
+        if (rotate)
+        {
+            sx = static_cast<float>(-dx * fz + dz * fx) * scale;
+            sy = static_cast<float>(-(dx * fx + dz * fz)) * scale;
+        }
+        else
+        {
+            sx = static_cast<float>(dx) * scale;
+            sy = static_cast<float>(dz) * scale;
+        }
+    };
+    auto clampRim = [&](float& sx, float& sy)
+    {
+        const float d = std::hypot(sx, sy);
+        if (d > r - 4.f)
+        {
+            const float k = (r - 4.f) / d;
+            sx *= k;
+            sy *= k;
+        }
+    };
+
+    // entities first, small, so players are on top of them
+    if (extra.entities && s.showEntities)
+    {
+        const float entMax = presets::EntityDist[static_cast<size_t>(std::clamp(s.entDistIdx, 0, static_cast<int>(presets::EntityDist.size()) - 1))];
+        for (const EntityState& e : *extra.entities)
+        {
+            const int k = static_cast<int>(e.kind);
+            if (k < 0 || k >= kEntityKindCount || !s.entShow[k] || cam.Distance(e.pos) > entMax) continue;
+            float sx, sy;
+            toScreen(e.pos.x - center.x, e.pos.z - center.z, sx, sy);
+            if (std::hypot(sx, sy) > r - 4.f) continue; // far entities are not pinned to the rim: it would only be a ring of noise
+            const presets::Rgb c = presets::EntityPaletteRgb[static_cast<size_t>(std::clamp(s.entColor[k], 0, static_cast<int>(presets::EntityPaletteRgb.size()) - 1))];
+            g.FillCircle(cx + sx, cy + sy, 2.f, Col{c.r, c.g, c.b, 0.85f});
+        }
+    }
     const float maxDist = presets::PlayerDist[s.maxPlayerDistIdx];
     for (const auto& p : snap.players)
     {
         if (cam.Distance(p.pos) > maxDist) continue;
-        float dx = static_cast<float>(p.pos.x - center.x) * scale, dz = static_cast<float>(p.pos.z - center.z) * scale;
-        const float d = std::hypot(dx, dz);
-        if (d > r - 4.f)
-        {
-            const float k = (r - 4.f) / d;
-            dx *= k;
-            dz *= k;
-        } // clamp to the rim
-        g.FillCircle(cx + dx, cy + dz, 3.f, FriendList::Contains(p.name) ? kFriend : kEnemy);
+        float sx, sy;
+        toScreen(p.pos.x - center.x, p.pos.z - center.z, sx, sy);
+        clampRim(sx, sy); // clamp to the rim
+        g.FillCircle(cx + sx, cy + sy, 3.f, FriendList::Contains(p.name) ? kFriend : kEnemy);
     }
-    // Self: dot + facing wedge. World forward = (-sin yaw, +cos yaw) in (x, z), which maps 1:1 to screen (x, y).
-    const double yaw = cam.yawDeg * kDeg2Rad;
-    const float fx = static_cast<float>(-std::sin(yaw)), fz = static_cast<float>(std::cos(yaw));
-    g.FillTriangle(cx + fx * 9.f, cy + fz * 9.f, cx - fz * 4.f - fx * 2.f, cy + fx * 4.f - fz * 2.f,
-                   cx + fz * 4.f - fx * 2.f, cy - fx * 4.f - fz * 2.f, Col{0.35f, 0.60f, 1.f, 0.95f});
+    if (extra.hasDeath)
+    {
+        float sx, sy;
+        toScreen(extra.death.x - center.x, extra.death.z - center.z, sx, sy);
+        const bool pinned = std::hypot(sx, sy) > r - 4.f;
+        clampRim(sx, sy);
+        const Col red{1.f, 0.25f, 0.25f, pinned ? 0.7f : 1.f};
+        g.Line(cx + sx - 4, cy + sy - 4, cx + sx + 4, cy + sy + 4, red, 2.f);
+        g.Line(cx + sx - 4, cy + sy + 4, cx + sx + 4, cy + sy - 4, red, 2.f);
+    }
+    // Self: dot + facing wedge. North-up: the wedge points where you look. Rotate: it always points up.
+    const float wx = rotate ? 0.f : fx, wz = rotate ? -1.f : fz;
+    g.FillTriangle(cx + wx * 9.f, cy + wz * 9.f, cx - wz * 4.f - wx * 2.f, cy + wx * 4.f - wz * 2.f,
+                   cx + wz * 4.f - wx * 2.f, cy - wx * 4.f - wz * 2.f, Col{0.35f, 0.60f, 1.f, 0.95f});
     g.FillCircle(cx, cy, 2.5f, Col{0.35f, 0.60f, 1.f, 1.f});
     g.Text(std::to_string(static_cast<int>(range)) + "m", x + 4, y + mm - 15.f, Font::Hint,
            Col{0.7f, 0.75f, 0.9f, 0.8f});
+    if (rotate)
+    {
+        // the map turns, so say where north went (world -z)
+        float nx, ny;
+        toScreen(0.0, -1.0, nx, ny);
+        const float nl = std::hypot(nx, ny);
+        if (nl > 1e-6f) g.TextCentered("N", cx + nx / nl * (r - 9.f), cy + ny / nl * (r - 9.f) - 6.f, Font::Hint, Col{0.95f, 0.55f, 0.55f, 0.95f});
+    }
+}
+
+void EspRenderer::DrawDeathMarker(Gfx& g, const Settings& s, const Camera& cam, const Vec3& where, int winW, int winH)
+{
+    (void)s;
+    const double dist = cam.Distance(where);
+    float sx = 0, sy = 0;
+    const Vec3 above{where.x, where.y + 1.0, where.z};
+    const bool front = cam.Project(above, sx, sy);
+    const Col red{1.f, 0.25f, 0.25f, 0.95f};
+    if (!front || sx < 12 || sx > winW - 12 || sy < 12 || sy > winH - 12)
+    {
+        // off screen or behind: a small arrow-less tag at the nearest edge, so it is known to be somewhere there
+        if (!front) { sx = winW * 0.5f; sy = winH - 40.f; } // behind: bottom centre
+        sx = std::clamp(sx, 30.f, static_cast<float>(winW) - 30.f);
+        sy = std::clamp(sy, 30.f, static_cast<float>(winH) - 30.f);
+    }
+    const float d = 7.f;
+    g.Line(sx, sy - d, sx + d, sy, red, 2.f);
+    g.Line(sx + d, sy, sx, sy + d, red, 2.f);
+    g.Line(sx, sy + d, sx - d, sy, red, 2.f);
+    g.Line(sx - d, sy, sx, sy - d, red, 2.f);
+    g.TextCentered("Death  " + std::to_string(static_cast<int>(dist + 0.5)) + "m", sx, sy + d + 3.f, Font::UiSmall, red, true);
 }

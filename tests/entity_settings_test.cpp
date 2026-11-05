@@ -65,6 +65,34 @@ int main()
     CHECK(presets::EntityPaletteNames.size() == presets::EntityPaletteRgb.size());
     for (const auto& c : presets::EntityPaletteRgb) CHECK(c.r >= 0 && c.r <= 1 && c.g >= 0 && c.g <= 1 && c.b >= 0 && c.b <= 1);
 
+    // ---- radar and death marker settings ----
+    {
+        Settings s;
+        CHECK(s.minimapMode == 0 && s.minimapCorner == 0 && s.showDeath); // today's radar, plus the death marker
+        const char* modes[] = {"North", "Rotate"};
+        const char* corners[] = {"TopRight", "TopLeft", "BottomRight", "BottomLeft"};
+        for (int m = 0; m < 2; ++m)
+            for (int c = 0; c < 4; ++c)
+            {
+                Settings a;
+                a.minimapMode = m;
+                a.minimapCorner = c;
+                a.showDeath = (m + c) % 2 == 0;
+                const auto back = configschema::LoadText(a.Build().ToJson());
+                Settings b;
+                b.Apply(back.cfg);
+                CHECK(back.Warnings() == 0 && b.minimapMode == m && b.minimapCorner == c && b.showDeath == a.showDeath);
+                CHECK(back.cfg.MinimapMode == modes[m] && back.cfg.MinimapCorner == corners[c]);
+            }
+        const auto bad = configschema::LoadText(R"({"MinimapMode":"Spin","MinimapCorner":"Middle","ShowDeathMarker":"no"})");
+        CHECK(bad.Warnings() == 3 && bad.cfg.MinimapMode == "North" && bad.cfg.MinimapCorner == "TopRight" && bad.cfg.ShowDeathMarker);
+        CHECK(configschema::LoadText(R"({"Version":1})").Warnings() == 0);
+        const auto k = configschema::LoadText(R"({"HotkeyClearDeath":"F9"})");
+        CHECK(k.Warnings() == 0 && k.cfg.HotkeyClearDeath == "F9");
+        EspConfig c;
+        CHECK(&c.HotkeyText(hotkeys::Action::ClearDeathMarker) == &c.HotkeyClearDeath);
+    }
+
     // ---- keys: unique per category ----
     {
         std::set<std::string> keys;

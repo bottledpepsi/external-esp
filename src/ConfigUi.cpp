@@ -384,6 +384,14 @@ void ConfigUi::TabMinimap()
     CycleRow("Size", s_.minimapSizeIdx, static_cast<int>(MinimapSizes.size()), MinimapSizeLabels[s_.minimapSizeIdx]);
     CycleRow("Range", s_.minimapRangeIdx, static_cast<int>(MinimapRanges.size()),
              MinimapRangeLabels[s_.minimapRangeIdx]);
+    {
+        static const char* const kModes[] = {"North up", "Rotate (you look up)"};
+        static const char* const kCorners[] = {"Top right", "Top left", "Bottom right", "Bottom left"};
+        CycleRow("Orientation", s_.minimapMode, 2, kModes[std::clamp(s_.minimapMode, 0, 1)]);
+        CycleRow("Corner", s_.minimapCorner, 4, kCorners[std::clamp(s_.minimapCorner, 0, 3)]);
+    }
+    ToggleRow("Death marker", s_.showDeath);
+    InfoRow("Where you died, on the radar and in the world, until you get there. Needs your health.");
 }
 
 void ConfigUi::TabProfiles()

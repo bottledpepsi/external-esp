@@ -28,7 +28,7 @@ struct EspConfig
     // A hotkey is a key, optionally with Ctrl / Shift / Alt / Win: "F6", "Ctrl+Shift+F5". "" = not bound (allowed except for the first two).
     std::string HotkeyToggle = "Delete", HotkeyConfig = "Insert", HotkeyExit = "End";
     std::string HotkeyTogglePlayers, HotkeyToggleItems, HotkeyToggleTracers, HotkeyToggleMinimap, HotkeyNextProfile, HotkeyCycleHud, HotkeyCycleView, HotkeyToggleGraphs, HotkeyToggleEntities,
-        HotkeyToggleHostile, HotkeyTogglePassive, HotkeyToggleNeutral, HotkeyToggleProjectiles, HotkeyToggleXp;
+        HotkeyToggleHostile, HotkeyTogglePassive, HotkeyToggleNeutral, HotkeyToggleProjectiles, HotkeyToggleXp, HotkeyClearDeath;
     std::string& HotkeyText(hotkeys::Action a); // the field of an action
     // GENERAL
     std::string DistanceFormat = "Meters"; // Meters | Kilometers | Off
@@ -75,6 +75,9 @@ struct EspConfig
     std::string ViewMode = "Smoothed"; // Smoothed | Raw | Both: what is drawn - the smoothed picture, the agent's samples as they arrive, or both (raw in magenta)
     // Entities (wire v6): mobs, projectiles, experience orbs. Master switch off by default so an update changes nothing until asked; each category
     // has its own switch and a palette color (presets::EntityPaletteNames). Indexed by EntityKind: Other, Hostile, Passive, Neutral, Projectile, Xp.
+    std::string MinimapMode = "North"; // North (the map keeps its orientation, a wedge shows where you look) | Rotate (the map turns so you always look up)
+    std::string MinimapCorner = "TopRight"; // TopRight | TopLeft | BottomRight | BottomLeft
+    bool ShowDeathMarker = true; // a marker where the local player last died (radar and world) - DeathTracker.h
     bool ShowEntities = false;
     std::string EntityMaxDist = "64m"; // 32m | 64m | 128m | Unlimited
     bool EntityLabels = true; // class name and distance under the same rules as the players' labels
@@ -141,6 +144,8 @@ struct Settings
     float itemMinPx = 6, playerMinPx = 2;
     int hudMode = 1; // hud::Mode
     bool showGraphs = false;
+    int minimapMode = 0, minimapCorner = 0; // 0 north-up / 1 rotate;  0 top right, 1 top left, 2 bottom right, 3 bottom left
+    bool showDeath = true;
     bool showEntities = false, entLabels = true;
     bool entShow[kEntityKindCount] = {false, true, true, true, true, true};
     int entColor[kEntityKindCount] = {8, 0, 3, 2, 1, 4}; // presets::EntityPaletteNames
