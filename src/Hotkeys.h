@@ -31,6 +31,12 @@ namespace hotkeys
         CycleHud,
         CycleView,
         ToggleGraphs,
+        ToggleEntities,
+        ToggleHostile,
+        TogglePassive,
+        ToggleNeutral,
+        ToggleProjectiles,
+        ToggleXp,
         Count
     };
     inline constexpr int kActionCount = static_cast<int>(Action::Count);

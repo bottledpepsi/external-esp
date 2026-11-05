@@ -15,6 +15,8 @@ A hotkey is a key, optionally with **Ctrl, Shift, Alt, Win**: `F6`, `Ctrl+Shift+
 | Cycle status text (Off / Compact / Detailed) | `HotkeyCycleHud` | not set |
 | Cycle raw / smoothed view (Smoothed / Raw / Both) | `HotkeyCycleView` | not set |
 | Toggle performance graphs | `HotkeyToggleGraphs` | not set |
+| Toggle mobs / entities (master switch) | `HotkeyToggleEntities` | not set |
+| Toggle hostile mobs / passive mobs / neutral mobs / projectiles / experience orbs | `HotkeyToggleHostile`, `HotkeyTogglePassive`, `HotkeyToggleNeutral`, `HotkeyToggleProjectiles`, `HotkeyToggleXp` | not set |
 
 The new actions have no default key on purpose: any key we pick could be one the game or a server uses. Bind them in the HOTKEYS tab (CLEAR unbinds). The two that open and hide the overlay cannot be left empty. The category toggles change the setting itself, so they are saved like a click in the window; "Next profile" works like NEXT in the PROFILES tab.
 

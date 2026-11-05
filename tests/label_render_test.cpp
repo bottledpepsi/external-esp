@@ -179,6 +179,106 @@ int main()
         CHECK(Find(g, "Alice") != nullptr);
     }
 
+    // ---- entities: categories, distance, colors, labels ----
+    {
+        auto ent = [](uint32_t id, EntityKind k, double x, double z, const char* label, float hp = 20.f)
+        {
+            EntityState e;
+            e.id = id;
+            e.kind = k;
+            e.pos = {x, 0, z};
+            e.label = label;
+            e.sizeValid = true;
+            e.width = 0.6f;
+            e.height = 1.8f;
+            e.healthValid = k != EntityKind::Projectile && k != EntityKind::Xp;
+            e.health = hp;
+            return e;
+        };
+        std::vector<EntityState> list = {ent(1, EntityKind::Hostile, 0, 12, "Zombie", 10.f), ent(2, EntityKind::Passive, 2, 14, "Cow"),
+                                         ent(3, EntityKind::Projectile, -2, 16, "Arrow"), ent(4, EntityKind::Xp, 3, 18, "ExperienceOrb"),
+                                         ent(5, EntityKind::Other, -3, 20, "Blob"), ent(6, EntityKind::Neutral, 4, 22, "Wolf"),
+                                         ent(7, EntityKind::Hostile, 0, 90, "Skeleton")};
+        Settings s = Defaults();
+        s.showHealth = true;
+        EspRenderer r;
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, list); // master switch off: nothing drawn, but the list is counted
+            CHECK(g.rects == 0 && g.texts.empty() && r.EntitiesShown() == 0 && r.EntitiesSeen() == 7);
+        }
+        s.showEntities = true; // defaults: every category but "other", within 64 m
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, list);
+            CHECK(r.EntitiesShown() == 5 && r.EntitiesSeen() == 7); // Other hidden, Skeleton at 90 m too far
+            CHECK(r.EntityKindShown(static_cast<int>(EntityKind::Hostile)) == 1 && r.EntityKindShown(static_cast<int>(EntityKind::Other)) == 0 &&
+                  r.EntityKindShown(static_cast<int>(EntityKind::Projectile)) == 1 && r.EntityKindShown(99) == 0);
+            CHECK(Find(g, "Zombie") && Find(g, "Cow") && Find(g, "Wolf")); // mobs have names
+            CHECK(!Find(g, "Arrow") && !Find(g, "ExperienceOrb") && !Find(g, "Blob") && !Find(g, "Skeleton")); // projectiles / orbs have none; the others are hidden / far
+            CHECK(Find(g, "12m") && Find(g, "14m") && Find(g, "22m") && !Find(g, "16m")); // distances under the names
+            CHECK(Overlaps(AllRects(g)) == 0);
+            const TextCall* z = Find(g, "Zombie");
+            const presets::Rgb red = presets::EntityPaletteRgb[0]; // Hostile defaults to Red
+            CHECK(z && std::fabs(z->col.r - red.r) < 1e-4f && std::fabs(z->col.g - red.g) < 1e-4f);
+            const TextCall* c = Find(g, "Cow");
+            const presets::Rgb green = presets::EntityPaletteRgb[3];
+            CHECK(c && std::fabs(c->col.g - green.g) < 1e-4f);
+        }
+        s.entShow[static_cast<int>(EntityKind::Other)] = true;
+        s.entShow[static_cast<int>(EntityKind::Hostile)] = false;
+        s.entDistIdx = 3; // unlimited
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, list);
+            CHECK(r.EntitiesShown() == 5 && r.EntityKindShown(static_cast<int>(EntityKind::Hostile)) == 0 && r.EntityKindShown(static_cast<int>(EntityKind::Other)) == 1);
+            CHECK(!Find(g, "Zombie") && !Find(g, "Skeleton") && Find(g, "Blob"));
+        }
+        s.entLabels = false;
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, list);
+            CHECK(g.texts.empty() && r.EntitiesShown() == 5); // boxes only
+        }
+        s.entLabels = true;
+        s.entShow[static_cast<int>(EntityKind::Hostile)] = true;
+        s.entColor[static_cast<int>(EntityKind::Hostile)] = 5; // Blue
+        s.entColor[static_cast<int>(EntityKind::Passive)] = 99; // garbage index: clamped, not a crash
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, list);
+            const TextCall* z = Find(g, "Zombie");
+            CHECK(z && std::fabs(z->col.b - presets::EntityPaletteRgb[5].b) < 1e-4f && Find(g, "Cow"));
+        }
+        // health bars: a living mob's box has a bar (two extra rectangles), a projectile's has none
+        {
+            Settings t = Defaults();
+            t.showEntities = true;
+            t.entLabels = false;
+            t.showHealth = true;
+            std::vector<EntityState> one = {ent(1, EntityKind::Hostile, 0, 12, "Zombie", 10.f)}, arrow = {ent(2, EntityKind::Projectile, 0, 12, "Arrow")};
+            Gfx a, b, c;
+            r.DrawEntities(a, t, cam, one);
+            t.showHealth = false;
+            r.DrawEntities(b, t, cam, one);
+            r.DrawEntities(c, t, cam, arrow);
+            CHECK(a.rects == b.rects + 2 && c.rects == 1);
+        }
+        // an entity behind the camera, nothing in the list, and many entities (the label queue is bounded)
+        {
+            Settings t = Defaults();
+            t.showEntities = true;
+            std::vector<EntityState> none, behind = {ent(1, EntityKind::Hostile, 0, -10, "Zombie")}, crowd;
+            Gfx a, b, c;
+            r.DrawEntities(a, t, cam, none);
+            r.DrawEntities(b, t, cam, behind);
+            CHECK(a.rects == 0 && b.rects == 0 && r.EntitiesShown() == 0 && r.EntitiesSeen() == 1);
+            for (uint32_t i = 0; i < 500; ++i) crowd.push_back(ent(i, EntityKind::Passive, (i % 20) * 0.3 - 3, 10 + (i % 7), "Pig"));
+            r.DrawEntities(c, t, cam, crowd);
+            CHECK(r.EntitiesSeen() == 500 && r.EntitiesShown() > 0 && c.texts.size() <= 128 * 2);
+        }
+    }
+
     // ---- performance panel and the jitter probe ----
     {
         Settings s = Defaults();

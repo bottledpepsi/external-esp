@@ -338,6 +338,80 @@ void EspRenderer::DrawItem(Gfx& g, const Settings& s, const Camera& cam, const I
     }
 }
 
+void EspRenderer::DrawEntities(Gfx& g, const Settings& s, const Camera& cam, const std::vector<EntityState>& list)
+{
+    entShown_ = 0;
+    entSeen_ = static_cast<int>(list.size());
+    for (int& n : entKindShown_) n = 0;
+    if (!s.showEntities) return;
+    const float maxDist = presets::EntityDist[static_cast<size_t>(std::clamp(s.entDistIdx, 0, static_cast<int>(presets::EntityDist.size()) - 1))];
+    int nReq = 0;
+    // boxes far -> near (the agent sends them nearest first), labels afterwards nearest first
+    for (int i = static_cast<int>(list.size()) - 1; i >= 0; --i)
+    {
+        const EntityState& e = list[static_cast<size_t>(i)];
+        const int k = static_cast<int>(e.kind);
+        if (k < 0 || k >= kEntityKindCount || !s.entShow[k]) continue;
+        const float dist = static_cast<float>(cam.Distance(e.pos));
+        if (dist > maxDist) continue;
+        const bool small = e.kind == EntityKind::Projectile || e.kind == EntityKind::Xp;
+        const double w = e.sizeValid ? e.width : small ? 0.4 : kPlayerW, h = e.sizeValid ? e.height : small ? 0.4 : kPlayerH;
+        ScreenBox sb;
+        if (!ProjectBox(cam, e.pos, w, h, small ? s.itemMinPx : s.playerMinPx, sb)) continue;
+        const presets::Rgb rgb = presets::EntityPaletteRgb[static_cast<size_t>(std::clamp(s.entColor[k], 0, static_cast<int>(presets::EntityPaletteRgb.size()) - 1))];
+        const Col col{rgb.r, rgb.g, rgb.b, small ? 0.80f : 0.90f};
+        const float bx = sb.x0, by = sb.y0, bw = sb.x1 - sb.x0, bh = sb.y1 - sb.y0;
+        const float thick = small ? 1.f : presets::Thickness[s.boxThickIdx];
+        g.Rect(bx, by, bw, bh, col, thick);
+        if (s.showHealth && e.healthValid && !small)
+        {
+            const float ratio = Clamp01(e.health / 20.f);
+            const float barX = bx - 5.f - thick * 0.5f;
+            g.FillRect(barX, by, 3.f, bh, Col{0, 0, 0, 0.55f});
+            const float fh = bh * ratio;
+            g.FillRect(barX, by + bh - fh, 3.f, fh, Col{1.f - ratio, ratio, 0.10f, 1.f});
+        }
+        ++entShown_;
+        ++entKindShown_[k];
+        if (s.entLabels && !small && nReq < static_cast<int>(entReq_.size())) entReq_[static_cast<size_t>(nReq++)] = EntReq{&e, dist, bx + bw * 0.5f, by, by + bh};
+    }
+    for (int i = nReq - 1; i >= 0; --i) // nearest first: the nearest mob keeps its place
+    {
+        const EntReq& r = entReq_[static_cast<size_t>(i)];
+        const float alpha = labels::Fade(r.dist, s.labelDist, s.labelFadePct);
+        if (alpha < 0.03f) continue;
+        const int k = static_cast<int>(r.e->kind);
+        const presets::Rgb rgb = presets::EntityPaletteRgb[static_cast<size_t>(std::clamp(s.entColor[k], 0, static_cast<int>(presets::EntityPaletteRgb.size()) - 1))];
+        const Font f = NameFont(s);
+        const float px = presets::NameSizes[s.nameSizeIdx], a = px + 2.f;
+        const std::string& name = r.e->label.empty() ? std::string("Mob") : r.e->label;
+        float y = r.top - px - 7.f;
+        bool draw = true;
+        if (s.labelDeclutter)
+        {
+            const float tw = g.TextWidth(name, f);
+            labels::Rect box{r.cx - tw * 0.5f, y, r.cx + tw * 0.5f, y + a};
+            draw = placer_.Place(box, -1, a, 3);
+            y = box.y0;
+        }
+        if (draw) g.TextCentered(name, r.cx, y, f, Col{rgb.r, rgb.g, rgb.b, alpha}, s.textShadow);
+        if (s.distFmtIdx < 2)
+        {
+            const std::string d = DistText(s, r.dist);
+            float dy = r.bottom + 3.f;
+            bool drawD = true;
+            if (s.labelDeclutter)
+            {
+                const float tw = g.TextWidth(d, Font::UiSmall);
+                labels::Rect box{r.cx - tw * 0.5f, dy, r.cx + tw * 0.5f, dy + kDistLineH};
+                drawD = placer_.Place(box, +1, kDistLineH, 2);
+                dy = box.y0;
+            }
+            if (drawD) g.TextCentered(d, r.cx, dy, Font::UiSmall, kDistText.with(kDistText.a * alpha), s.textShadow);
+        }
+    }
+}
+
 void EspRenderer::DrawGhosts(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& raw)
 {
     const Col ghost{1.f, 0.2f, 0.9f, 0.85f};

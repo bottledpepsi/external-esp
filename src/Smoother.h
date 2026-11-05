@@ -85,6 +85,8 @@ public:
 
     // The newest sample exactly as the agent sent it: no extrapolation, no interpolation (the "raw" view). Valid when HasData().
     const WorldSnapshot& Newest() const { return cur_; }
+    // When the item/entity list in Newest() arrived (it is older than Newest() itself when later datagrams had no list).
+    Clock::time_point ListArrived() const { return listArrived_; }
     void SetTuning(const SmootherTuning& t) { tune_ = t.Sanitized(); }
     const SmootherTuning& Tuning() const { return tune_; }
     const SmootherStats& Stats() const { return stats_; }
@@ -101,6 +103,8 @@ public:
         const bool keepItems = !s.hasItems && haveCur_;
         std::vector<ItemState> keep;
         std::vector<EntityState> keepEnt;
+        const uint64_t keepSeq = cur_.listSeq;
+        const Clock::time_point keepArrived = listArrived_;
         if (keepItems) keepEnt = std::move(cur_.entities); // the item and entity lists travel together (the F line)
         if (keepItems) keep = std::move(cur_.items);
         cur_ = s;
@@ -108,6 +112,13 @@ public:
         {
             cur_.items = std::move(keep);
             cur_.entities = std::move(keepEnt);
+            cur_.listSeq = keepSeq;
+            listArrived_ = keepArrived;
+        }
+        else
+        {
+            cur_.listSeq = ++listCounter_; // a list of its own: the tracker takes it as new
+            listArrived_ = s.arrived;
         }
         cur_.hasItems = true;
         haveCur_ = true;
@@ -445,6 +456,8 @@ private:
     double jitterEma_ = 0, ageEma_ = 0, lastSampleT_ = 0;
     uint64_t jitterN_ = 0, ageN_ = 0;
     WorldSnapshot cur_;
+    Clock::time_point listArrived_{}; // when the datagram that brought the current item/entity list arrived
+    uint64_t listCounter_ = 0;
     bool haveCur_ = false;
     Clock::time_point epoch_{};
     double lastTs_ = 0;

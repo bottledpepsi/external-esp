@@ -10,6 +10,7 @@
 #include "EspRenderer.h"
 #include "Gfx.h"
 #include "HotkeyRegistry.h"
+#include "EntityTracker.h"
 #include "Hud.h"
 #include "PerfStats.h"
 #include "Hotkeys.h"
@@ -54,6 +55,8 @@ private:
     AppOptions opt_;
     hud::Text hudText_;
     hud::Mode lastHudMode_ = hud::Mode::Compact;
+    EntityTracker entTracker_; // follows the mobs from list to list (EntityTracker.h)
+    std::vector<EntityState> entPredicted_; // what the tracker says they look like now
     WorldSnapshot rawSnap_; // the "raw" view: a copy of the smoother's newest sample, kept so its vectors keep their capacity
     perf::PerfHistory perfHist_; // the graphs' data; filled only while Settings::showGraphs is on
     Clock::time_point lastFrameT_{};
@@ -115,6 +118,7 @@ private:
     unsigned lastGeneration_ = 0;   // AgentSupervisor::Generation() when the data on screen was received
     uint64_t lastSessions_ = 0;     // StreamIngest::Link().sessions
     void CheckSession();
+    void ToggleEntityKind(EntityKind k);
     void ProbeJitter(const Camera& cam, const WorldSnapshot& snap); // feeds the jitter meter with the nearest player's box centre
     void SwitchToLegacy();          // device loss that could not be recovered: new window, legacy renderer
     bool f10Down_ = false;

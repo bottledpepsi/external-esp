@@ -50,6 +50,7 @@ namespace hud
         float cacheHitPct = -1; // text-layout cache hits over the last window (-1 = no lookups)
         uint64_t cacheClears = 0; // times the cache was emptied because it was full (a high number = labels change every frame)
         int labelsDropped = 0; // labels the declutter pass found no room for in the last frame
+        int entShown = -1, entSeen = 0; // mobs drawn / in the list; -1 = the entity display is off
         int itemsShown = 0, itemsFiltered = 0; // items drawn / hidden by the junk, tier and name filters in the last frame
     };
 

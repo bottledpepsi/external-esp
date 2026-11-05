@@ -354,6 +354,25 @@ void ConfigUi::TabItems()
         else if (s_.itemFilterMode == 0) InfoRow("The pattern list is not used while \"Name filter\" is Off.");
     }
     y_ += 6;
+
+    // ---- other entities (wire v6) ----
+    Section("ENTITIES (MOBS, PROJECTILES, XP)");
+    ToggleRow("Show entities", s_.showEntities);
+    ToggleRow("Labels (name, distance)", s_.entLabels);
+    {
+        const int dn = static_cast<int>(presets::EntityDistLabels.size());
+        CycleRow("Distance", s_.entDistIdx, dn, presets::EntityDistLabels[static_cast<size_t>(std::clamp(s_.entDistIdx, 0, dn - 1))]);
+        static const char* const kNames[kEntityKindCount] = {"Other mobs", "Hostile mobs", "Passive mobs", "Neutral mobs", "Projectiles", "Experience orbs"};
+        for (int i = 1; i <= kEntityKindCount; ++i)
+        {
+            const int kind = i % kEntityKindCount; // "Other mobs" last: hidden by default
+            ToggleRow(kNames[kind], s_.entShow[kind]);
+            const int cn = static_cast<int>(presets::EntityPaletteNames.size());
+            CycleRow("    color", s_.entColor[kind], cn, presets::EntityPaletteNames[static_cast<size_t>(std::clamp(s_.entColor[kind], 0, cn - 1))]);
+        }
+    }
+    InfoRow("Needs readable class names (docs/compatibility.md); the agent sends the 128 nearest.");
+    y_ += 6;
     InfoRow("Items, enchantments and tags are read from the game by the agent (nearest 48).");
     InfoRow("Item frames / arrows (they also carry a stack) are filtered out by hitbox size.");
 }

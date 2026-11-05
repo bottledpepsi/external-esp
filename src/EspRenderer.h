@@ -18,6 +18,13 @@ public:
     // The "Both" view: the agent's samples exactly as they arrived, as thin magenta outlines (players) and small squares (items), drawn under
     // the normal picture. No labels, tracers or health. `cam` belongs to the same raw snapshot (CameraFromSnapshot).
     void DrawGhosts(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& raw);
+    // Mobs, projectiles and experience orbs (wire v6): a box per entity in its category's color, a health bar for living ones, a name and distance
+    // for mobs (through the same declutter pass as the players'). Call after DrawWorld() with the entities to show - the tracker's predictions, or the
+    // raw list. Nothing is drawn unless Settings::showEntities is on.
+    void DrawEntities(Gfx& g, const Settings& s, const Camera& cam, const std::vector<EntityState>& list);
+    int EntitiesShown() const { return entShown_; } // of the last DrawEntities(): drawn
+    int EntitiesSeen() const { return entSeen_; } // ... and in the list
+    int EntityKindShown(int kind) const { return kind < 0 || kind >= kEntityKindCount ? 0 : entKindShown_[kind]; }
     // The performance graphs (bottom-left): frame time and data age as 240-frame line graphs with their summary text, and the jitter line.
     void DrawPerfPanel(Gfx& g, int winH, const perf::PerfHistory& h);
     // Where the nearest player's box centre is on the screen, for the jitter meter (the golden tests' "player" probe: in front by 1.5 m or more,
@@ -50,6 +57,15 @@ private:
     labels::Placer placer_;
     std::array<LabelReq, labels::Placer::kCapacity / 2> reqs_{}; // the queue is filled far -> near, like the boxes
     int nReq_ = 0;
+
+    struct EntReq
+    {
+        const EntityState* e;
+        float dist, cx, top, bottom;
+    };
+    std::array<EntReq, 128> entReq_{};
+    int entShown_ = 0, entSeen_ = 0;
+    int entKindShown_[kEntityKindCount] = {};
 
     itemfilter::Rules itemRules_; // ItemFilterList, parsed again only when the text changes
     std::string itemRulesSrc_;

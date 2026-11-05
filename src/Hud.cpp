@@ -145,6 +145,7 @@ namespace hud
             if (f.cacheHitPct >= 0) e.F("text cache  hit %.1f%%", f.cacheHitPct);
             else e.S("text cache  idle");
             e.F("  |  emptied %llu x  |  labels dropped %d", static_cast<unsigned long long>(f.cacheClears), f.labelsDropped);
+            if (f.entShown >= 0) e.F("  |  mobs %d/%d shown", f.entShown, f.entSeen);
             if (f.itemsFiltered > 0) e.F("  |  items %d shown, %d filtered", f.itemsShown, f.itemsFiltered);
             Set(lines_++, e.b, e.n, f.cacheHitPct >= 0 && f.cacheHitPct < 80.f); // a low rate is worth a look
         }

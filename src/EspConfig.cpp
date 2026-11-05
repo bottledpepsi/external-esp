@@ -39,8 +39,24 @@ std::string& EspConfig::HotkeyText(hotkeys::Action a)
     case Action::NextProfile: return HotkeyNextProfile;
     case Action::CycleHud: return HotkeyCycleHud;
     case Action::CycleView: return HotkeyCycleView;
-    default: return HotkeyToggleGraphs;
+    case Action::ToggleGraphs: return HotkeyToggleGraphs;
+    case Action::ToggleEntities: return HotkeyToggleEntities;
+    case Action::ToggleHostile: return HotkeyToggleHostile;
+    case Action::TogglePassive: return HotkeyTogglePassive;
+    case Action::ToggleNeutral: return HotkeyToggleNeutral;
+    case Action::ToggleProjectiles: return HotkeyToggleProjectiles;
+    case Action::ToggleXp: return HotkeyToggleXp;
+    case Action::Count: break;
     }
+    return HotkeyToggleXp; // not reachable for a real action
+}
+
+const EntityKeys& EntityKeysFor(int kind)
+{
+    static const EntityKeys k[kEntityKindCount] = {{"ShowOtherMobs", "ColorOtherMobs"},   {"ShowHostile", "ColorHostile"},
+                                                    {"ShowPassive", "ColorPassive"},       {"ShowNeutral", "ColorNeutral"},
+                                                    {"ShowProjectiles", "ColorProjectiles"}, {"ShowXp", "ColorXp"}};
+    return k[kind < 0 || kind >= kEntityKindCount ? 0 : kind];
 }
 
 std::string EspConfig::ToJson() const
@@ -50,7 +66,9 @@ std::string EspConfig::ToJson() const
     j += Kv("HotkeyToggle", S(HotkeyToggle)) + Kv("HotkeyConfig", S(HotkeyConfig)) + Kv("HotkeyExit", S(HotkeyExit));
     j += Kv("HotkeyTogglePlayers", S(HotkeyTogglePlayers)) + Kv("HotkeyToggleItems", S(HotkeyToggleItems)) +
         Kv("HotkeyToggleTracers", S(HotkeyToggleTracers)) + Kv("HotkeyToggleMinimap", S(HotkeyToggleMinimap)) + Kv("HotkeyNextProfile", S(HotkeyNextProfile)) +
-        Kv("HotkeyCycleHud", S(HotkeyCycleHud)) + Kv("HotkeyCycleView", S(HotkeyCycleView)) + Kv("HotkeyToggleGraphs", S(HotkeyToggleGraphs));
+        Kv("HotkeyCycleHud", S(HotkeyCycleHud)) + Kv("HotkeyCycleView", S(HotkeyCycleView)) + Kv("HotkeyToggleGraphs", S(HotkeyToggleGraphs)) +
+        Kv("HotkeyToggleEntities", S(HotkeyToggleEntities)) + Kv("HotkeyToggleHostile", S(HotkeyToggleHostile)) + Kv("HotkeyTogglePassive", S(HotkeyTogglePassive)) +
+        Kv("HotkeyToggleNeutral", S(HotkeyToggleNeutral)) + Kv("HotkeyToggleProjectiles", S(HotkeyToggleProjectiles)) + Kv("HotkeyToggleXp", S(HotkeyToggleXp));
     j += Kv("DistanceFormat", S(DistanceFormat)) + Kv("MaxLabelDist", N(MaxLabelDist)) +
         Kv("TextShadow", B(TextShadow));
     j += Kv("ShowPlayers", B(ShowPlayers)) + Kv("ShowPlayerNames", B(ShowPlayerNames)) + Kv("BoxStyle", S(BoxStyle)) +
@@ -69,6 +87,8 @@ std::string EspConfig::ToJson() const
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
         Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags)) + Kv("HudMode", S(HudMode));
     j += Kv("ViewMode", S(ViewMode)) + Kv("ShowGraphs", B(ShowGraphs));
+    j += Kv("ShowEntities", B(ShowEntities)) + Kv("EntityMaxDist", S(EntityMaxDist)) + Kv("EntityLabels", B(EntityLabels));
+    for (int k = 0; k < kEntityKindCount; ++k) j += Kv(EntityKeysFor(k).show, B(EntityShow[k])) + Kv(EntityKeysFor(k).color, S(EntityColor[k]));
     j += Kv("ItemFilterMode", S(ItemFilterMode)) + Kv("ItemFilterList", S(ItemFilterList)) + Kv("ItemMinTier", N(ItemMinTier));
     j += Kv("LabelDeclutter", B(LabelDeclutter)) + Kv("LabelFadePct", N(LabelFadePct));
     j += Kv("SmootherBaselineMs", N(SmootherBaselineMs)) + Kv("SmootherBlendTauMs", N(SmootherBlendTauMs)) + Kv("SmootherMaxAheadMs", N(SmootherMaxAheadMs)) +
@@ -93,9 +113,23 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HotkeyCycleHud = GetString(o, "HotkeyCycleHud", c.HotkeyCycleHud);
     c.HotkeyCycleView = GetString(o, "HotkeyCycleView", c.HotkeyCycleView);
     c.HotkeyToggleGraphs = GetString(o, "HotkeyToggleGraphs", c.HotkeyToggleGraphs);
+    c.HotkeyToggleEntities = GetString(o, "HotkeyToggleEntities", c.HotkeyToggleEntities);
+    c.HotkeyToggleHostile = GetString(o, "HotkeyToggleHostile", c.HotkeyToggleHostile);
+    c.HotkeyTogglePassive = GetString(o, "HotkeyTogglePassive", c.HotkeyTogglePassive);
+    c.HotkeyToggleNeutral = GetString(o, "HotkeyToggleNeutral", c.HotkeyToggleNeutral);
+    c.HotkeyToggleProjectiles = GetString(o, "HotkeyToggleProjectiles", c.HotkeyToggleProjectiles);
+    c.HotkeyToggleXp = GetString(o, "HotkeyToggleXp", c.HotkeyToggleXp);
     c.HudMode = GetString(o, "HudMode", c.HudMode);
     c.ViewMode = GetString(o, "ViewMode", c.ViewMode);
     c.ShowGraphs = GetBool(o, "ShowGraphs", c.ShowGraphs);
+    c.ShowEntities = GetBool(o, "ShowEntities", c.ShowEntities);
+    c.EntityMaxDist = GetString(o, "EntityMaxDist", c.EntityMaxDist);
+    c.EntityLabels = GetBool(o, "EntityLabels", c.EntityLabels);
+    for (int k = 0; k < kEntityKindCount; ++k)
+    {
+        c.EntityShow[k] = GetBool(o, EntityKeysFor(k).show, c.EntityShow[k]);
+        c.EntityColor[k] = GetString(o, EntityKeysFor(k).color, c.EntityColor[k]);
+    }
     c.ItemFilterMode = GetString(o, "ItemFilterMode", c.ItemFilterMode);
     c.ItemFilterList = GetString(o, "ItemFilterList", c.ItemFilterList);
     c.ItemMinTier = static_cast<int>(GetNumber(o, "ItemMinTier", c.ItemMinTier));
@@ -224,6 +258,19 @@ void Settings::Apply(const EspConfig& c)
     }
     itemFilterList = c.ItemFilterList;
     showGraphs = c.ShowGraphs;
+    showEntities = c.ShowEntities;
+    entLabels = c.EntityLabels;
+    {
+        const EspConfig defaults;
+        entDistIdx = 1;
+        for (size_t i = 0; i < presets::EntityDistLabels.size(); ++i)
+            if (presets::EntityDistLabels[i] == c.EntityMaxDist) entDistIdx = static_cast<int>(i);
+        for (int k = 0; k < kEntityKindCount; ++k)
+        {
+            entShow[k] = c.EntityShow[k];
+            entColor[k] = presets::EntityPaletteIndex(c.EntityColor[k], presets::EntityPaletteIndex(defaults.EntityColor[k], 7));
+        }
+    }
     viewMode = c.ViewMode == "Raw" ? 1 : c.ViewMode == "Both" ? 2 : 0;
     itemMinTier = std::clamp(c.ItemMinTier, 0, 3);
     labelDeclutter = c.LabelDeclutter;
@@ -284,6 +331,14 @@ EspConfig Settings::Build() const
     c.ItemFilterMode = itemfilter::Name(static_cast<itemfilter::Mode>(itemFilterMode));
     c.ItemFilterList = itemFilterList;
     c.ShowGraphs = showGraphs;
+    c.ShowEntities = showEntities;
+    c.EntityLabels = entLabels;
+    c.EntityMaxDist = presets::EntityDistLabels[static_cast<size_t>(std::clamp(entDistIdx, 0, static_cast<int>(presets::EntityDistLabels.size()) - 1))];
+    for (int k = 0; k < kEntityKindCount; ++k)
+    {
+        c.EntityShow[k] = entShow[k];
+        c.EntityColor[k] = presets::EntityPaletteNames[static_cast<size_t>(std::clamp(entColor[k], 0, static_cast<int>(presets::EntityPaletteNames.size()) - 1))];
+    }
     c.ViewMode = viewMode == 1 ? "Raw" : viewMode == 2 ? "Both" : "Smoothed";
     c.ItemMinTier = itemMinTier;
     c.LabelDeclutter = labelDeclutter;

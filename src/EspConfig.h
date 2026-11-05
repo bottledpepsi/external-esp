@@ -12,15 +12,23 @@
 #include <chrono>
 #include <filesystem>
 #include <map>
+#include "Types.h"
 #include <string>
 #include <vector>
+
+struct EntityKeys
+{
+    const char *show, *color; // the settings-file keys of one entity category
+};
+const EntityKeys& EntityKeysFor(int kind); // by EntityKind; out of range -> Other
 
 struct EspConfig
 {
     // Hotkeys
     // A hotkey is a key, optionally with Ctrl / Shift / Alt / Win: "F6", "Ctrl+Shift+F5". "" = not bound (allowed except for the first two).
     std::string HotkeyToggle = "Delete", HotkeyConfig = "Insert", HotkeyExit = "End";
-    std::string HotkeyTogglePlayers, HotkeyToggleItems, HotkeyToggleTracers, HotkeyToggleMinimap, HotkeyNextProfile, HotkeyCycleHud, HotkeyCycleView, HotkeyToggleGraphs;
+    std::string HotkeyTogglePlayers, HotkeyToggleItems, HotkeyToggleTracers, HotkeyToggleMinimap, HotkeyNextProfile, HotkeyCycleHud, HotkeyCycleView, HotkeyToggleGraphs, HotkeyToggleEntities,
+        HotkeyToggleHostile, HotkeyTogglePassive, HotkeyToggleNeutral, HotkeyToggleProjectiles, HotkeyToggleXp;
     std::string& HotkeyText(hotkeys::Action a); // the field of an action
     // GENERAL
     std::string DistanceFormat = "Meters"; // Meters | Kilometers | Off
@@ -65,6 +73,13 @@ struct EspConfig
     bool ShowItemTags = false; // list the stack's raw tags (NBT / components) under the name
     std::string HudMode = "Compact"; // the status text top-left: Off | Compact | Detailed (hud::Mode)
     std::string ViewMode = "Smoothed"; // Smoothed | Raw | Both: what is drawn - the smoothed picture, the agent's samples as they arrive, or both (raw in magenta)
+    // Entities (wire v6): mobs, projectiles, experience orbs. Master switch off by default so an update changes nothing until asked; each category
+    // has its own switch and a palette color (presets::EntityPaletteNames). Indexed by EntityKind: Other, Hostile, Passive, Neutral, Projectile, Xp.
+    bool ShowEntities = false;
+    std::string EntityMaxDist = "64m"; // 32m | 64m | 128m | Unlimited
+    bool EntityLabels = true; // class name and distance under the same rules as the players' labels
+    bool EntityShow[kEntityKindCount] = {false, true, true, true, true, true};
+    std::string EntityColor[kEntityKindCount] = {"Gray", "Red", "Green", "Yellow", "Orange", "Cyan"};
     bool ShowGraphs = false; // frame time / data age graphs and the jitter meter (bottom-left); nothing is recorded while off
     bool LabelDeclutter = true; // names and distances move out of each other's way (LabelLayout.h); false = the old, overlapping labels
     std::string ItemFilterMode = "Off"; // Off | Whitelist | Blacklist (itemfilter::Mode)
@@ -126,6 +141,10 @@ struct Settings
     float itemMinPx = 6, playerMinPx = 2;
     int hudMode = 1; // hud::Mode
     bool showGraphs = false;
+    bool showEntities = false, entLabels = true;
+    bool entShow[kEntityKindCount] = {false, true, true, true, true, true};
+    int entColor[kEntityKindCount] = {8, 0, 3, 2, 1, 4}; // presets::EntityPaletteNames
+    int entDistIdx = 1; // presets::EntityDist
     int viewMode = 0; // 0 Smoothed, 1 Raw, 2 Both (EspConfig::ViewMode)
     bool labelDeclutter = true;
     int itemFilterMode = 0, itemMinTier = 0; // itemfilter::Mode

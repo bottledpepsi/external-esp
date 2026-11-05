@@ -332,6 +332,12 @@ void EspOverlay::Perform(hotkeys::Action a)
         settings_.RequestSave();
         break;
     case Action::ToggleGraphs: settings_.showGraphs = !settings_.showGraphs; LOG_INFO("Performance graphs %s (hotkey)", settings_.showGraphs ? "on" : "off"); settings_.RequestSave(); break;
+    case Action::ToggleEntities: settings_.showEntities = !settings_.showEntities; LOG_INFO("Entities %s (hotkey)", settings_.showEntities ? "on" : "off"); settings_.RequestSave(); break;
+    case Action::ToggleHostile: ToggleEntityKind(EntityKind::Hostile); break;
+    case Action::TogglePassive: ToggleEntityKind(EntityKind::Passive); break;
+    case Action::ToggleNeutral: ToggleEntityKind(EntityKind::Neutral); break;
+    case Action::ToggleProjectiles: ToggleEntityKind(EntityKind::Projectile); break;
+    case Action::ToggleXp: ToggleEntityKind(EntityKind::Xp); break;
     case Action::CycleView:
         settings_.viewMode = (std::clamp(settings_.viewMode, 0, 2) + 1) % 3;
         LOG_INFO("View: %s (hotkey)", settings_.viewMode == 1 ? "Raw" : settings_.viewMode == 2 ? "Both" : "Smoothed");
@@ -339,6 +345,16 @@ void EspOverlay::Perform(hotkeys::Action a)
         break;
     default: break;
     }
+}
+
+// A category's own hotkey: flips that category; turning one on while the master switch is off switches it on too (pressing "hostile" means "show me hostiles").
+void EspOverlay::ToggleEntityKind(EntityKind k)
+{
+    bool& on = settings_.entShow[static_cast<int>(k)];
+    on = !on;
+    if (on) settings_.showEntities = true;
+    LOG_INFO("Entities: %s %s (hotkey)", EntityKeysFor(static_cast<int>(k)).show, on ? "on" : "off");
+    settings_.RequestSave();
 }
 
 void EspOverlay::ProbeJitter(const Camera& cam, const WorldSnapshot& snap)
@@ -832,6 +848,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         if (view == 1 && haveRaw)
         {
             renderer_.DrawWorld(gfx_, settings_, rawCam, rawSnap_);
+            renderer_.DrawEntities(gfx_, settings_, rawCam, rawSnap_.entities); // raw: the lists as they came
             if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, rawCam, rawSnap_, w);
             if (graphs) ProbeJitter(rawCam, rawSnap_);
         }
@@ -839,6 +856,15 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         {
             if (view == 2 && haveRaw) renderer_.DrawGhosts(gfx_, settings_, rawCam, rawSnap_);
             renderer_.DrawWorld(gfx_, settings_, cam, snap);
+            if (settings_.showEntities)
+            {
+                // mobs arrive about 10 times a second: followed by id and moved a little ahead of the newest sample (EntityTracker.h)
+                const auto secs = [](Clock::time_point t) { return std::chrono::duration<double>(t.time_since_epoch()).count(); };
+                entTracker_.Update(snap.listSeq, snap.entities, secs(smoother_.ListArrived()));
+                entTracker_.Predict(secs(now), entPredicted_);
+                renderer_.DrawEntities(gfx_, settings_, cam, entPredicted_);
+            }
+            else renderer_.DrawEntities(gfx_, settings_, cam, snap.entities); // off: counts only
             if (settings_.showMinimap) renderer_.DrawMinimap(gfx_, settings_, cam, snap, w);
             if (graphs) ProbeJitter(cam, snap);
         }
@@ -939,6 +965,8 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
             f.cacheClears = cc.clears;
             f.labelsDropped = renderer_.LabelsDropped();
             f.itemsShown = renderer_.ItemsShown();
+            f.entShown = settings_.showEntities ? renderer_.EntitiesShown() : -1;
+            f.entSeen = renderer_.EntitiesSeen();
             f.itemsFiltered = renderer_.ItemsFiltered();
             cachePrev_ = cc;
         }

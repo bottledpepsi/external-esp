@@ -52,6 +52,14 @@ namespace configschema
                 B("LabelDeclutter");
                 W("ViewMode", {"Smoothed", "Raw", "Both"});
                 B("ShowGraphs");
+                B("ShowEntities");
+                B("EntityLabels");
+                W("EntityMaxDist", presets::EntityDistLabels);
+                for (int k = 0; k < kEntityKindCount; ++k)
+                {
+                    B(EntityKeysFor(k).show);
+                    W(EntityKeysFor(k).color, presets::EntityPaletteNames);
+                }
                 W("ItemFilterMode", {"Off", "Whitelist", "Blacklist"});
                 I("ItemMinTier", 0, 3);
                 s.push_back({"ItemFilterList", Kind::Text, 0, 512, {}});

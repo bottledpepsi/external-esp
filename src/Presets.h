@@ -28,6 +28,13 @@ namespace presets
     extern const std::vector<float> LabelDist;
     extern const std::vector<std::string> LabelDistLabels;
     extern const std::vector<float> PlayerDist;
+    // Entities (mobs, projectiles, orbs): how far they are drawn, and the colors a category can take.
+    extern const std::vector<float> EntityDist;
+    extern const std::vector<std::string> EntityDistLabels; // 32m / 64m / 128m / Unlimited
+    struct Rgb { float r, g, b; };
+    extern const std::vector<std::string> EntityPaletteNames; // Red Orange Yellow Green Cyan Blue Magenta White Gray
+    extern const std::vector<Rgb> EntityPaletteRgb;
+    int EntityPaletteIndex(const std::string& name, int fallback); // the index of a palette color by name, `fallback` when unknown
     extern const std::vector<std::string> PlayerDistLabels;
     extern const std::vector<float> OverlayOpacity;
     extern const std::vector<std::string> OverlayOpacityLabels;

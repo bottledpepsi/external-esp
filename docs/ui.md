@@ -75,3 +75,14 @@ Off by default; while off nothing is recorded or drawn. On, the bottom-left corn
 * **Jitter** - the same measure the golden tests use (tests/golden.h), on the box of the nearest player who is on the screen: the distance of each frame's position from the midpoint of the two neighbouring frames, in pixels, as RMS / 95th percentile / maximum over the last 240 frames. Smooth motion gives about 0; a box that vibrates around a smoothly moving target gives a large number. "no player in view" while nobody qualifies (in front of the camera, at least 1.5 m away, inside the screen plus 10 %).
 
 The scale of a graph steps through 4, 8, 16, 32 ... ms so it does not jump about with every frame; its top is written in the corner. The texts are rebuilt four times a second.
+
+## Entities: mobs, projectiles, experience orbs (ITEMS tab, "ENTITIES")
+
+Needs the agent to send wire v6 entities and class names it can read (docs/compatibility.md). **Off by default** (`ShowEntities`); nothing changes for an existing config until it is switched on.
+
+* **Categories**: hostile mobs, passive mobs, neutral mobs, projectiles, experience orbs, and "other mobs" (a living thing the agent could not place; hidden by default). Each has its own switch (`ShowHostile`, `ShowPassive`, `ShowNeutral`, `ShowProjectiles`, `ShowXp`, `ShowOtherMobs`), its own color out of nine (`ColorHostile`, ... : Red, Orange, Yellow, Green, Cyan, Blue, Magenta, White, Gray) and its own hotkey (`HotkeyToggleHostile`, ...; pressing one while "Show entities" is off switches the master on too). `HotkeyToggleEntities` is the master switch.
+* **What is drawn**: a box in the category's color; a health bar for living ones (when "Health bars" is on); for mobs, the class name and the distance, through the same fade and declutter as the players' labels. Projectiles and orbs get a small box only.
+* **Distance** (`EntityMaxDist`: 32m, 64m (default), 128m, Unlimited). The agent sends the 128 nearest.
+* **Smoothing**: mobs arrive about ten times a second. They are followed by the agent's id and moved ahead of their newest sample along the velocity of the last two (at most 0.15 s, never across a teleport), so a walking zombie does not step ten times a second. In the **Raw** view they are drawn as they arrived.
+* The Detailed status text shows `mobs N/M shown`.
+

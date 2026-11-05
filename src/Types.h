@@ -87,6 +87,7 @@ struct WorldSnapshot
     CameraState camera;
     std::vector<PlayerState> players; // OTHER players only
     std::vector<ItemState> items;
+    uint64_t listSeq = 0; // which item/entity list this is: the Smoother numbers each list it receives and keeps the number while it keeps the list
     std::vector<EntityState> entities; // wire v6; sent with the item list (hasItems), so the overlay keeps the previous ones when a datagram has neither
     std::string status; // agent status line
     uint64_t seq = 0; // increments per received datagram

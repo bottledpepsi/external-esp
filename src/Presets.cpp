@@ -21,6 +21,17 @@ namespace presets
     const std::vector<float> LabelDist{25.f, 50.f, 100.f, kUnlimited};
     const std::vector<std::string> LabelDistLabels{"25m", "50m", "100m", "Unlimited"};
     const std::vector<float> PlayerDist{50.f, 100.f, 200.f, kUnlimited};
+    const std::vector<float> EntityDist{32.f, 64.f, 128.f, kUnlimited};
+    const std::vector<std::string> EntityDistLabels{"32m", "64m", "128m", "Unlimited"};
+    const std::vector<std::string> EntityPaletteNames{"Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Magenta", "White", "Gray"};
+    const std::vector<Rgb> EntityPaletteRgb{{1.f, 0.25f, 0.25f}, {1.f, 0.60f, 0.15f}, {1.f, 0.92f, 0.25f}, {0.30f, 0.90f, 0.35f}, {0.30f, 0.90f, 0.95f},
+                                            {0.35f, 0.55f, 1.f}, {1.f, 0.35f, 0.90f}, {1.f, 1.f, 1.f}, {0.60f, 0.62f, 0.68f}};
+    int EntityPaletteIndex(const std::string& name, int fallback)
+    {
+        for (size_t i = 0; i < EntityPaletteNames.size(); ++i)
+            if (EntityPaletteNames[i] == name) return static_cast<int>(i);
+        return fallback;
+    }
     const std::vector<std::string> PlayerDistLabels{"50m", "100m", "200m", "Unlimited"};
     const std::vector<float> OverlayOpacity{1.00f, 0.85f, 0.70f};
     const std::vector<std::string> OverlayOpacityLabels{"100%", "85%", "70%"};

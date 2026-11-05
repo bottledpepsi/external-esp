@@ -101,6 +101,12 @@ int main()
         f.itemsFiltered = 0;
         t.Build(Mode::Detailed, f);
         CHECK(!Has(t.Line(3), "filtered")); // nothing hidden: nothing said
+        f.entShown = 3; f.entSeen = 9;
+        t.Build(Mode::Detailed, f);
+        CHECK(Has(t.Line(3), "mobs 3/9 shown"));
+        f.entShown = -1; // display off
+        t.Build(Mode::Detailed, f);
+        CHECK(!Has(t.Line(3), "mobs"));
         f.cacheHitPct = 41.f;
         t.Build(Mode::Detailed, f);
         CHECK(t.Alert(3)); // a low rate is flagged
