@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "EspConfig.h"
 #include "Gfx.h"
+#include "ItemFilter.h"
 #include "LabelLayout.h"
 #include "Types.h"
 #include <array>
@@ -15,6 +16,9 @@ public:
     void DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& snap, int winW);
     // Labels of the last DrawWorld() that found no free place (declutter on) - for the status text and the tests.
     int LabelsDropped() const { return placer_.Dropped(); }
+    // Items of the last DrawWorld(): how many were drawn and how many the junk / tier / name filters hid (the HUD shows both).
+    int ItemsShown() const { return itemsShown_; }
+    int ItemsFiltered() const { return itemsFiltered_; }
 
 private:
     void DrawTracer(Gfx& g, const Settings& s, const Camera& cam, const Vec3& target, float dist, bool isFriend);
@@ -36,4 +40,8 @@ private:
     labels::Placer placer_;
     std::array<LabelReq, labels::Placer::kCapacity / 2> reqs_{}; // the queue is filled far -> near, like the boxes
     int nReq_ = 0;
+
+    itemfilter::Rules itemRules_; // ItemFilterList, parsed again only when the text changes
+    std::string itemRulesSrc_;
+    int itemsShown_ = 0, itemsFiltered_ = 0;
 };

@@ -350,6 +350,7 @@ void EspRenderer::DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const 
     std::vector<E> list;
     placer_.Reset();
     nReq_ = 0;
+    itemsShown_ = itemsFiltered_ = 0;
     for (const auto& p : snap.players)
     {
         const float d = static_cast<float>(cam.Distance(p.pos));
@@ -375,12 +376,29 @@ void EspRenderer::DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const 
     FlushLabels(g, s); // names and distances, once all the boxes are down
 
     if (s.showItems)
+    {
+        if (itemRulesSrc_ != s.itemFilterList)
+        {
+            itemRules_.Set(s.itemFilterList);
+            itemRulesSrc_ = s.itemFilterList;
+        }
+        const auto mode = static_cast<itemfilter::Mode>(s.itemFilterMode);
         for (const auto& it : snap.items)
         {
-            if (s.hideJunk && presets::IsJunkItem(PrettyItemName(it.key))) continue;
-            // junk list uses display names ("Rotten Flesh")
+            if (s.hideJunk && presets::IsJunkItem(PrettyItemName(it.key))) // junk list uses display names ("Rotten Flesh")
+            {
+                ++itemsFiltered_;
+                continue;
+            }
+            if (!itemfilter::Show(mode, itemRules_, s.itemMinTier, it))
+            {
+                ++itemsFiltered_;
+                continue;
+            }
+            ++itemsShown_;
             DrawItem(g, s, cam, it, static_cast<float>(cam.Distance(it.pos)));
         }
+    }
 }
 
 // Top-right radar, north-up like the original (+X east = right, +Z south = down).

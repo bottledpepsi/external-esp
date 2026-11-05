@@ -1,9 +1,11 @@
 #include "EspConfig.h"
 #include "ConfigSchema.h"
 #include "ConfigStore.h"
+#include "ItemFilter.h"
 #include "Logger.h"
 #include "Paths.h"
 #include "Presets.h"
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -64,6 +66,7 @@ std::string EspConfig::ToJson() const
     j += Kv("ConfigX", N(ConfigX)) + Kv("ConfigY", N(ConfigY));
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
         Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags)) + Kv("HudMode", S(HudMode));
+    j += Kv("ItemFilterMode", S(ItemFilterMode)) + Kv("ItemFilterList", S(ItemFilterList)) + Kv("ItemMinTier", N(ItemMinTier));
     j += Kv("LabelDeclutter", B(LabelDeclutter)) + Kv("LabelFadePct", N(LabelFadePct));
     j += Kv("SmootherBaselineMs", N(SmootherBaselineMs)) + Kv("SmootherBlendTauMs", N(SmootherBlendTauMs)) + Kv("SmootherMaxAheadMs", N(SmootherMaxAheadMs)) +
         Kv("SmootherTickMs", N(SmootherTickMs)) + Kv("AgentHz", N(AgentHz)) + Kv("ItemMinPx", N(ItemMinPx)) + Kv("PlayerMinPx", N(PlayerMinPx), Unknown.empty());
@@ -86,6 +89,9 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HotkeyNextProfile = GetString(o, "HotkeyNextProfile", c.HotkeyNextProfile);
     c.HotkeyCycleHud = GetString(o, "HotkeyCycleHud", c.HotkeyCycleHud);
     c.HudMode = GetString(o, "HudMode", c.HudMode);
+    c.ItemFilterMode = GetString(o, "ItemFilterMode", c.ItemFilterMode);
+    c.ItemFilterList = GetString(o, "ItemFilterList", c.ItemFilterList);
+    c.ItemMinTier = static_cast<int>(GetNumber(o, "ItemMinTier", c.ItemMinTier));
     c.LabelDeclutter = GetBool(o, "LabelDeclutter", c.LabelDeclutter);
     c.LabelFadePct = GetNumber(o, "LabelFadePct", c.LabelFadePct);
     c.DistanceFormat = GetString(o, "DistanceFormat", c.DistanceFormat);
@@ -204,6 +210,13 @@ void Settings::Apply(const EspConfig& c)
         hud::Parse(c.HudMode, m);
         hudMode = static_cast<int>(m);
     }
+    {
+        itemfilter::Mode m = itemfilter::Mode::Off;
+        itemfilter::Parse(c.ItemFilterMode, m);
+        itemFilterMode = static_cast<int>(m);
+    }
+    itemFilterList = c.ItemFilterList;
+    itemMinTier = std::clamp(c.ItemMinTier, 0, 3);
     labelDeclutter = c.LabelDeclutter;
     labelFadePct = static_cast<int>(std::lround(c.LabelFadePct));
     itemMinPx = static_cast<float>(c.ItemMinPx);
@@ -259,6 +272,9 @@ EspConfig Settings::Build() const
     c.SmootherTickMs = smTickMs;
     c.AgentHz = agentHz;
     c.HudMode = hud::Name(static_cast<hud::Mode>(hudMode));
+    c.ItemFilterMode = itemfilter::Name(static_cast<itemfilter::Mode>(itemFilterMode));
+    c.ItemFilterList = itemFilterList;
+    c.ItemMinTier = itemMinTier;
     c.LabelDeclutter = labelDeclutter;
     c.LabelFadePct = labelFadePct;
     c.ItemMinPx = itemMinPx;

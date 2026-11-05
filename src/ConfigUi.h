@@ -55,7 +55,7 @@ public:
     // "Copy diagnostics" (GENERAL tab): the handler builds the report, puts it on the clipboard and returns the one-line result to show.
     void SetDiagnosticsHandler(std::function<std::string()> h) { diagnostics_ = std::move(h); }
     // shown in GENERAL (exact / reconstructed, FOV, perspective)
-    bool CapturingKeys() const { return rebindActive_ || friendFocus_ || profileFocus_; }
+    bool CapturingKeys() const { return rebindActive_ || friendFocus_ || profileFocus_ || itemFocus_; }
     // Esc was pressed with nothing waiting for input: the overlay closes the window (taken once).
     bool TakeCloseRequest()
     {
@@ -66,7 +66,7 @@ public:
 
     void ResetFocus()
     {
-        friendFocus_ = profileFocus_ = rebindActive_ = false;
+        friendFocus_ = profileFocus_ = itemFocus_ = rebindActive_ = false;
         dragging_ = false;
         sliderDrag_ = -1;
         nav_.OnMouse();
@@ -126,8 +126,8 @@ private:
     std::function<std::string()> diagnostics_;
     std::string diagnosticsNote_;
     std::string cameraInfo_;
-    std::string friendInput_, profileInput_;
-    bool friendFocus_ = false, profileFocus_ = false;
+    std::string friendInput_, profileInput_, itemInput_; // itemInput_: a name pattern for the item filter
+    bool friendFocus_ = false, profileFocus_ = false, itemFocus_ = false;
     bool rebindActive_ = false;
     int rebindSlot_ = 0; // hotkeys::Action + 1
     long long frame_ = 0;

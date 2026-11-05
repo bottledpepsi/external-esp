@@ -82,6 +82,7 @@ esp_add_test(cli_spec_test cli_spec_test.cpp)
 esp_add_test(shutdown_test shutdown_test.cpp)
 esp_add_test(hud_test hud_test.cpp)
 esp_add_test(label_layout_test label_layout_test.cpp)
+esp_add_test(item_filter_test item_filter_test.cpp)
 esp_add_test(perf_stats_test perf_stats_test.cpp)
 
 # The renderer on a recording Gfx. EspRenderer.cpp/.h are copied next to tests/fake/Gfx.h and tests/fake/SkinCache.h: a quoted #include looks in

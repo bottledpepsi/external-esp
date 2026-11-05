@@ -95,6 +95,12 @@ int main()
         f.perfValid = true; f.cacheHitPct = 99.25f; f.cacheClears = 2; f.labelsDropped = 3;
         t.Build(Mode::Detailed, f);
         CHECK(t.Lines() == 4 && Has(t.Line(3), "text cache  hit 99.2%") && Has(t.Line(3), "emptied 2 x") && Has(t.Line(3), "labels dropped 3") && !t.Alert(3));
+        f.itemsShown = 2; f.itemsFiltered = 4;
+        t.Build(Mode::Detailed, f);
+        CHECK(Has(t.Line(3), "items 2 shown, 4 filtered"));
+        f.itemsFiltered = 0;
+        t.Build(Mode::Detailed, f);
+        CHECK(!Has(t.Line(3), "filtered")); // nothing hidden: nothing said
         f.cacheHitPct = 41.f;
         t.Build(Mode::Detailed, f);
         CHECK(t.Alert(3)); // a low rate is flagged

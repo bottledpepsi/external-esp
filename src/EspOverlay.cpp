@@ -892,6 +892,8 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
             f.cacheHitPct = perf::HitRatePct(cachePrev_, cc);
             f.cacheClears = cc.clears;
             f.labelsDropped = renderer_.LabelsDropped();
+            f.itemsShown = renderer_.ItemsShown();
+            f.itemsFiltered = renderer_.ItemsFiltered();
             cachePrev_ = cc;
         }
         hudText_.Build(hudMode, f);

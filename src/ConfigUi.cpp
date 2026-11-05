@@ -1,4 +1,5 @@
 #include "ConfigUi.h"
+#include "ItemFilter.h"
 #include "Avatar.h"
 #include "FriendList.h"
 #include "Presets.h"
@@ -233,7 +234,7 @@ void ConfigUi::TabPlayers()
     if (Input(friendInput_, lx, inputW, friendFocus_, "friend name..."))
     {
         friendFocus_ = true;
-        profileFocus_ = false;
+        profileFocus_ = itemFocus_ = false;
     }
     if (Button("ADD", lx + inputW + 4, 60) && friendInput_.find_first_not_of(' ') != std::string::npos) submit();
     y_ += kRowH;
@@ -291,6 +292,59 @@ void ConfigUi::TabItems()
     ToggleRow("Item enchantments", s_.showItemEnchants);
     ToggleRow("Item tags (raw NBT)", s_.showItemTags);
     ToggleRow("Hide junk items", s_.hideJunk);
+
+    // ---- filters (ItemFilter.h) ----
+    y_ += 6;
+    Section("ITEM FILTER");
+    {
+        int tier = std::clamp(s_.itemMinTier, 0, 3);
+        const int beforeTier = tier;
+        CycleRow("Minimum value", tier, 4, itemfilter::TierName(tier));
+        if (tier != beforeTier) s_.itemMinTier = tier;
+        int mode = std::clamp(s_.itemFilterMode, 0, 2);
+        const int beforeMode = mode;
+        CycleRow("Name filter", mode, 3, itemfilter::Name(static_cast<itemfilter::Mode>(mode)));
+        if (mode != beforeMode) s_.itemFilterMode = mode;
+    }
+    {
+        const float lx = px_ + kPad, inputW = kW - kPad * 2 - 68;
+        auto submit = [&]()
+        {
+            s_.itemFilterList = itemfilter::AddPattern(s_.itemFilterList, itemInput_);
+            itemInput_.clear();
+            itemFocus_ = false;
+            Save();
+        };
+        if (Input(itemInput_, lx, inputW, itemFocus_, "pattern, e.g. diamond*  or  *_sword"))
+        {
+            itemFocus_ = true;
+            friendFocus_ = profileFocus_ = false;
+        }
+        const bool hasText = itemInput_.find_first_not_of(' ') != std::string::npos;
+        if (Button("ADD", lx + inputW + 4, 60) && hasText) submit();
+        y_ += kRowH;
+        if (itemFocus_ && hasText)
+            for (int vk : in_->keys) if (vk == VK_RETURN)
+            {
+                submit();
+                break;
+            }
+        itemfilter::Rules shownRules;
+        shownRules.Set(s_.itemFilterList);
+        for (size_t i = 0; i < shownRules.Size(); ++i)
+        {
+            const std::string pat = shownRules.Pattern(i); // the copy: Remove changes the list under the loop
+            g_->Text(pat, lx + 6, y_ + 3, Font::Ui, Col{0.80f, 0.85f, 1.f, 1.f});
+            if (Button("Remove", px_ + kW - 54 - kPad, 50))
+            {
+                s_.itemFilterList = itemfilter::RemovePattern(s_.itemFilterList, pat);
+                Save();
+            }
+            y_ += kRowH;
+        }
+        if (shownRules.Size() == 0) InfoRow("No patterns. Names ignore case, spaces and underscores; * matches any run.");
+        else if (s_.itemFilterMode == 0) InfoRow("The pattern list is not used while \"Name filter\" is Off.");
+    }
     y_ += 6;
     InfoRow("Items, enchantments and tags are read from the game by the agent (nearest 48).");
     InfoRow("Item frames / arrows (they also carry a stack) are filtered out by hitbox size.");
@@ -329,7 +383,7 @@ void ConfigUi::TabProfiles()
     if (Input(profileInput_, lx, inputW, profileFocus_, "profile name..."))
     {
         profileFocus_ = true;
-        friendFocus_ = false;
+        friendFocus_ = itemFocus_ = false;
     }
     if (Button("SAVE", lx + inputW + 4, 70) && profileInput_.find_first_not_of(' ') != std::string::npos) submit();
     if (profileFocus_)
@@ -374,7 +428,7 @@ void ConfigUi::HotkeyRow(hotkeys::Action a)
     {
         rebindActive_ = true;
         rebindSlot_ = slot;
-        friendFocus_ = profileFocus_ = false;
+        friendFocus_ = profileFocus_ = itemFocus_ = false;
         hotkeyNote_.clear();
     }
     if (!d.required && cur.Bound() && !rebinding && Button("CLEAR", col + 168.f, 52, 20))
@@ -529,6 +583,7 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
     {
         friendFocus_ = false;
         profileFocus_ = false;
+        itemFocus_ = false;
     } // widgets re-focus themselves if clicked
     auto typing = [&](std::string& buf, size_t maxLen, bool focus)
     {
@@ -538,7 +593,8 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
     };
     typing(friendInput_, 24, friendFocus_);
     typing(profileInput_, 32, profileFocus_);
-    if ((friendFocus_ || profileFocus_)) for (int vk : in.keys) if (vk == VK_ESCAPE) friendFocus_ = profileFocus_ =
+    typing(itemInput_, itemfilter::kMaxPatternLen, itemFocus_);
+    if ((friendFocus_ || profileFocus_ || itemFocus_)) for (int vk : in.keys) if (vk == VK_ESCAPE) friendFocus_ = profileFocus_ = itemFocus_ =
         false;
     if (rebindActive_)
     {

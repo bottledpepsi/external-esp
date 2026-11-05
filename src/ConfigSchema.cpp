@@ -10,13 +10,13 @@ namespace configschema
 {
     namespace
     {
-        enum class Kind { Bool, Int, Float, Word, Hotkey };
+        enum class Kind { Bool, Int, Float, Word, Hotkey, Text };
 
         struct Spec
         {
             const char* key;
             Kind kind;
-            double min = 0, max = 0; // Int / Float
+            double min = 0, max = 0; // Int / Float; for Text, max = the longest allowed text
             std::vector<std::string> words; // Word
         };
 
@@ -50,6 +50,9 @@ namespace configschema
                 B("TracerFade");
                 W("HudMode", {"Off", "Compact", "Detailed"});
                 B("LabelDeclutter");
+                W("ItemFilterMode", {"Off", "Whitelist", "Blacklist"});
+                I("ItemMinTier", 0, 3);
+                s.push_back({"ItemFilterList", Kind::Text, 0, 512, {}});
                 B("ShowItems"); B("ShowItemNames"); B("ShowItemCount");
                 { const auto r = mm(presets::TraceOpacities); F("ItemOpacity", r.first, r.second); }
                 B("HideJunk");
@@ -152,6 +155,18 @@ namespace configschema
                     }
                     break;
                 }
+            case Kind::Text:
+                if (v.type != json::Value::Type::String)
+                {
+                    Warn(out, key, key + ": expected text, found " + TypeName(v.type) + " - using the default");
+                    o.erase(it);
+                }
+                else if (v.s.size() > static_cast<size_t>(sp.max))
+                {
+                    Warn(out, key, key + ": " + std::to_string(v.s.size()) + " characters is more than " + Num(sp.max) + " - the end is cut off");
+                    v.s.resize(static_cast<size_t>(sp.max));
+                }
+                break;
             case Kind::Hotkey:
                 {
                     hotkeys::Binding bind;

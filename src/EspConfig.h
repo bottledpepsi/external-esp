@@ -65,6 +65,9 @@ struct EspConfig
     bool ShowItemTags = false; // list the stack's raw tags (NBT / components) under the name
     std::string HudMode = "Compact"; // the status text top-left: Off | Compact | Detailed (hud::Mode)
     bool LabelDeclutter = true; // names and distances move out of each other's way (LabelLayout.h); false = the old, overlapping labels
+    std::string ItemFilterMode = "Off"; // Off | Whitelist | Blacklist (itemfilter::Mode)
+    std::string ItemFilterList; // name patterns, comma separated: "diamond*, *_sword" (ItemFilter.h)
+    int ItemMinTier = 0; // hide items below this value tier: 0 all, 1 no junk, 2 valuable, 3 rare
     double LabelFadePct = 30; // names fade out over the last N % of MaxLabelDist; 0 = hard cut (Tunables.h)
 
     // ADVANCED tab (see Tunables.h for the ranges): smoothing, agent rate, minimum marker sizes
@@ -121,6 +124,8 @@ struct Settings
     float itemMinPx = 6, playerMinPx = 2;
     int hudMode = 1; // hud::Mode
     bool labelDeclutter = true;
+    int itemFilterMode = 0, itemMinTier = 0; // itemfilter::Mode
+    std::string itemFilterList;
     int labelFadePct = 30;
 
     // Keys of the loaded file this build does not know (kept so the next Save writes them back), and what Load() had to correct or migrate.

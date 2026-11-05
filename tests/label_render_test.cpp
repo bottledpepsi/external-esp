@@ -179,6 +179,66 @@ int main()
         CHECK(Find(g, "Alice") != nullptr);
     }
 
+    // ---- item filters: what is drawn and what is counted as hidden ----
+    {
+        Settings s = Defaults();
+        s.showItems = true;
+        WorldSnapshot w;
+        auto mk = [](const char* key, double x)
+        {
+            ItemState it;
+            it.pos = {x, 0, 15};
+            it.key = key;
+            return it;
+        };
+        w.items = {mk("minecraft:diamond", -1), mk("minecraft:oak_planks", 0), mk("minecraft:rotten_flesh", 1), mk("minecraft:gold_ingot", 2)};
+        EspRenderer r;
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(r.ItemsShown() == 4 && r.ItemsFiltered() == 0); // defaults: everything
+        }
+        s.hideJunk = true;
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(r.ItemsShown() == 3 && r.ItemsFiltered() == 1);
+        }
+        s.hideJunk = false;
+        s.itemMinTier = 2; // valuable and rare only
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(r.ItemsShown() == 2 && r.ItemsFiltered() == 2 && Find(g, "Diamond") && !Find(g, "Oak Planks"));
+        }
+        s.itemMinTier = 0;
+        s.itemFilterMode = 1; // whitelist
+        s.itemFilterList = "diamond*";
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(r.ItemsShown() == 1 && r.ItemsFiltered() == 3 && Find(g, "Diamond") && !Find(g, "Gold Ingot"));
+        }
+        s.itemFilterList = "diamond*, gold ingot"; // the list is parsed again when its text changes
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(r.ItemsShown() == 2);
+        }
+        s.itemFilterMode = 2; // blacklist
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(r.ItemsShown() == 2 && !Find(g, "Diamond") && Find(g, "Oak Planks"));
+        }
+        s.showItems = false;
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(r.ItemsShown() == 0 && r.ItemsFiltered() == 0 && g.texts.empty()); // counters are per frame
+        }
+    }
+
     if (fails) std::printf("%d failure(s)\n", fails);
     else std::printf("label_render_test: ok\n");
     return fails ? 1 : 0;

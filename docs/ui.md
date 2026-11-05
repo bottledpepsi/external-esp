@@ -45,3 +45,13 @@ GENERAL tab, "Status text" (`"HudMode"` in the file; the "Cycle status text" hot
 - *guess off* - the ADVANCED tab's prediction error, in screen pixels.
 
 The text is rebuilt four times a second, not every frame, so it costs no allocation and the text cache keeps hitting. **Off** hides everything except the exit countdown when you hold the exit key.
+
+## Item filters (ITEMS tab, "ITEM FILTER")
+
+Three filters, all applied to the items the agent sends (so they cost nothing on the game side):
+
+* **Hide junk items** (older toggle): the fixed junk list - rotten flesh, cobblestone, wooden tools, ...
+* **Minimum value**: **All**, **No junk**, **Valuable**, **Rare**. Rare = netherite and diamond things, elytra, totems, enchanted golden apples, nether stars, beacons, tridents, dragon eggs and heads, hearts of the sea, shulker shells, conduits, ancient debris. Valuable = gold, emeralds, ender pearls and eyes, blaze rods, ghast tears, experience bottles, iron ingots and blocks, lapis, amethyst, obsidian, ender chests, shulker boxes, name tags, saddles, horse armor - and **anything enchanted**. Junk is never Valuable, except that an enchanted stack is not junk. Everything else is ordinary.
+* **Name filter**: **Off**, **Whitelist** (only items matching a pattern) or **Blacklist** (everything except those). Patterns are typed in the field under it and added with ADD or Enter; Remove deletes one. `*` matches any run of characters, `?` one character. Case, spaces and underscores are ignored (`Diamond Sword`, `diamond_sword` and the old `diamondSword` are the same name). A pattern containing `:` is compared with the whole id (`mymod:ruby*`), any other with the part after the namespace. An empty whitelist shows nothing; an empty blacklist hides nothing.
+
+File keys: `ItemMinTier` (0-3), `ItemFilterMode` (`Off`/`Whitelist`/`Blacklist`), `ItemFilterList` (text, comma separated, at most 512 characters and 64 patterns). The Detailed status text gets `items N shown, M filtered` when something is hidden.
