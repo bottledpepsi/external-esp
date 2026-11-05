@@ -48,7 +48,10 @@ public:
 
 private:
     void DrawGraph(Gfx& g, float x, float y, float w, float h, const perf::Ring<perf::PerfHistory::kN>& r, const std::string& caption);
-    void DrawTracer(Gfx& g, const Settings& s, const Camera& cam, const Vec3& target, float dist, bool isFriend);
+    // `fixed` = a category color (entities); null = the players' own colors (friend / near-red to far-green / white).
+    // A line from the screen origin (bottom / center / top) to `target`, clamped to the screen edge when it is off to the side. `fixed`: a category
+    // color (entities); null = the players' own colors (friend / near-red to far-green / white). Nothing beyond the tracer distance.
+    void DrawTracer(Gfx& g, const Settings& s, const Camera& cam, const Vec3& target, float dist, bool isFriend, const Col* fixed = nullptr);
     void DrawPlayer(Gfx& g, const Settings& s, const Camera& cam, const PlayerState& p, float dist, bool isFriend);
     void DrawSkeleton(Gfx& g, const Settings& s, const Camera& cam, const PlayerState& p, float dist, bool isFriend);
     void DrawItem(Gfx& g, const Settings& s, const Camera& cam, const ItemState& it, float dist);

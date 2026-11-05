@@ -280,13 +280,25 @@ void ConfigUi::TabTracers()
 {
     using namespace presets;
     ToggleRow("Show tracers", s_.showTracers);
-    CycleRow("Origin", s_.tracerOriginIdx, 2, TracerOriginLabels[s_.tracerOriginIdx]);
+    CycleRow("Origin", s_.tracerOriginIdx, 3, TracerOriginLabels[std::clamp(s_.tracerOriginIdx, 0, 2)]);
+    CycleRow("Max distance", s_.tracerMaxIdx, static_cast<int>(TracerDistLabels.size()), TracerDistLabels[static_cast<size_t>(std::clamp(s_.tracerMaxIdx, 0, 3))]);
+    ToggleRow("To players", s_.tracerPlayers);
     CycleRow("Color", s_.tracerColorIdx, 2, TracerColorLabels[s_.tracerColorIdx]);
     CycleRow("Opacity", s_.tracerOpacityIdx, static_cast<int>(TraceOpacities.size()),
              TraceOpacityLabels[s_.tracerOpacityIdx]);
     CycleRow("Thickness", s_.tracerThickIdx, static_cast<int>(Thickness.size()), ThicknessLabels[s_.tracerThickIdx]);
     CycleRow("Target point", s_.tracerTargetIdx, 3, TracerTargetLabels[s_.tracerTargetIdx]);
     ToggleRow("Fade w/ distance", s_.tracerFade);
+    {
+        Section("TRACERS TO MOBS");
+        static const char* const kNames[kEntityKindCount] = {"Other mobs", "Hostile mobs", "Passive mobs", "Neutral mobs", "Projectiles", "Experience orbs"};
+        for (int i = 1; i <= kEntityKindCount; ++i)
+        {
+            const int kind = i % kEntityKindCount;
+            ToggleRow(kNames[kind], s_.tracerEntity[kind]);
+        }
+        InfoRow("Drawn in the category's color; the mob must be shown (ITEMS tab, ENTITIES).");
+    }
 }
 
 void ConfigUi::TabItems()

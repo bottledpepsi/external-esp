@@ -179,6 +179,127 @@ int main()
         CHECK(Find(g, "Alice") != nullptr);
     }
 
+    // ---- tracers: origin, distance cap, players and mob categories ----
+    {
+        Settings s = Defaults();
+        s.showTracers = true;
+        s.maxPlayerDistIdx = 3;
+        s.showHealth = false;
+        s.tracerFade = false; // (the distance fade would hide the 150 m one by itself)
+        EspRenderer r;
+        WorldSnapshot w;
+        w.players = {Player("Near", 2, 20), Player("Mid", -2, 60), Player("Far", 0, 150)};
+        // the three players, unlimited tracer distance: three lines, all starting at the bottom centre
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(g.segs.size() == 3);
+            for (const auto& l : g.segs) CHECK(std::fabs(l.x0 - 960.f) < 1e-3f && std::fabs(l.y0 - 1080.f) < 1e-3f);
+        }
+        s.tracerOriginIdx = 1;
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(g.segs.size() == 3 && std::fabs(g.segs[0].y0 - 540.f) < 1e-3f);
+        }
+        s.tracerOriginIdx = 2;
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(g.segs.size() == 3 && g.segs[0].y0 == 0.f && std::fabs(g.segs[0].x0 - 960.f) < 1e-3f);
+        }
+        s.tracerOriginIdx = 0;
+        s.tracerMaxIdx = 1; // 50 m
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(g.segs.size() == 1); // only the one at 20 m
+        }
+        s.tracerMaxIdx = 2; // 100 m
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(g.segs.size() == 2);
+        }
+        s.tracerMaxIdx = 3;
+        s.tracerPlayers = false;
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(g.segs.empty()); // players' tracers off: boxes and labels remain
+            CHECK(Find(g, "Near") != nullptr);
+        }
+        s.tracerPlayers = true;
+        s.showTracers = false;
+        {
+            Gfx g;
+            r.DrawWorld(g, s, cam, w);
+            CHECK(g.segs.empty()); // the master switch
+        }
+
+        // mobs: only the categories with their tracer on, in the category's color, within the distance, and only while the mob is shown
+        s.showTracers = true;
+        s.tracerPlayers = false;
+        s.showEntities = true;
+        std::vector<EntityState> es(4);
+        const EntityKind kinds[] = {EntityKind::Hostile, EntityKind::Passive, EntityKind::Hostile, EntityKind::Projectile};
+        for (int i = 0; i < 4; ++i)
+        {
+            es[static_cast<size_t>(i)].id = static_cast<uint32_t>(i + 1);
+            es[static_cast<size_t>(i)].kind = kinds[i];
+            es[static_cast<size_t>(i)].pos = {static_cast<double>(i) - 1.5, 0, 15.0 + i};
+            es[static_cast<size_t>(i)].label = "M";
+        }
+        es[2].pos.z = 90; // a hostile 90 m away: beyond the default 64 m entity distance, so not shown at all
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, es);
+            CHECK(g.segs.size() == 1); // default: hostile only; the far one is not shown; the passive and the projectile have no tracer
+            CHECK(std::fabs(g.segs[0].col.r - presets::EntityPaletteRgb[0].r) < 1e-4f); // red = hostile
+        }
+        s.tracerEntity[static_cast<int>(EntityKind::Passive)] = true;
+        s.tracerEntity[static_cast<int>(EntityKind::Projectile)] = true;
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, es);
+            CHECK(g.segs.size() == 3);
+        }
+        s.tracerMaxIdx = 0; // 25 m
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, es);
+            CHECK(g.segs.size() == 3); // all three are within 25 m
+        }
+        es[0].pos.z = 28;
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, es);
+            CHECK(g.segs.size() == 2); // one of them is now beyond the tracer distance (still shown, no line)
+            CHECK(r.EntitiesShown() == 3);
+        }
+        s.tracerMaxIdx = 3;
+        s.entShow[static_cast<int>(EntityKind::Passive)] = false; // not shown: no box and no tracer
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, es);
+            CHECK(g.segs.size() == 2 && r.EntitiesShown() == 2);
+        }
+        s.showEntities = false;
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, es);
+            CHECK(g.segs.empty());
+        }
+        // behind the camera: no line, no crash
+        s.showEntities = true;
+        es[0].pos.z = -10;
+        {
+            Gfx g;
+            r.DrawEntities(g, s, cam, std::vector<EntityState>{es[0]});
+            CHECK(g.segs.empty());
+        }
+    }
+
     // ---- the radar: corner, orientation, entities, death marker ----
     {
         const int W = 1920, H = 1080;

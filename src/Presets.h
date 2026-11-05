@@ -50,7 +50,9 @@ namespace presets
     extern const std::vector<std::string> DistFormatLabels; // Meters / Kilometers / Off
     extern const std::vector<std::string> BoxStyleLabels; // Rounded / Sharp / Corner-only / Skeleton
     extern const std::vector<std::string> BoxColorLabels; // Static / Gradient
-    extern const std::vector<std::string> TracerOriginLabels; // Bottom Center / Screen Center
+    extern const std::vector<std::string> TracerOriginLabels; // Bottom Center / Screen Center / Top Center
+    extern const std::vector<float> TracerDist; // how far a tracer is drawn: 25 / 50 / 100 / unlimited
+    extern const std::vector<std::string> TracerDistLabels;
     extern const std::vector<std::string> TracerColorLabels; // Dynamic / White
     extern const std::vector<std::string> TracerTargetLabels; // Feet / Center / Head
 

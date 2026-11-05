@@ -42,7 +42,9 @@ namespace configschema
                 { const auto r = mm(presets::NameSizes); I("NameSize", r.first, r.second); }
                 { const auto r = mm(presets::Opacities); F("BoxFillOpacity", r.first, r.second); }
                 B("ShowTracers");
-                W("TracerOrigin", {"Bottom", "Center"});
+                W("TracerOrigin", {"Bottom", "Center", "Top"});
+                W("TracerMaxDist", presets::TracerDistLabels);
+                B("TracerPlayers");
                 W("TracerColor", {"Dynamic", "White"});
                 { const auto r = mm(presets::TraceOpacities); F("TracerOpacity", r.first, r.second); }
                 { const auto r = mm(presets::Thickness); I("TracerThickness", r.first, r.second); }
@@ -61,6 +63,7 @@ namespace configschema
                 for (int k = 0; k < kEntityKindCount; ++k)
                 {
                     B(EntityKeysFor(k).show);
+                    B(EntityKeysFor(k).tracer);
                     W(EntityKeysFor(k).color, presets::EntityPaletteNames);
                 }
                 W("ItemFilterMode", {"Off", "Whitelist", "Blacklist"});

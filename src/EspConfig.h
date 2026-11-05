@@ -18,7 +18,7 @@
 
 struct EntityKeys
 {
-    const char *show, *color; // the settings-file keys of one entity category
+    const char *show, *color, *tracer; // the settings-file keys of one entity category: displayed, its color, a tracer to it
 };
 const EntityKeys& EntityKeysFor(int kind); // by EntityKind; out of range -> Other
 
@@ -44,7 +44,10 @@ struct EspConfig
     float BoxFillOpacity = 0.f;
     // TRACERS
     bool ShowTracers = true;
-    std::string TracerOrigin = "Bottom"; // Bottom | Center
+    std::string TracerMaxDist = "Unlimited"; // 25m | 50m | 100m | Unlimited: tracers to things farther away are not drawn
+    bool TracerPlayers = true; // a tracer to every player (the "Show tracers" switch must be on)
+    bool TracerEntity[kEntityKindCount] = {false, true, false, false, false, false}; // tracers to mobs by category (hostile only, to start with)
+    std::string TracerOrigin = "Bottom"; // Bottom | Center | Top // Bottom | Center
     std::string TracerColor = "Dynamic"; // Dynamic | White
     float TracerOpacity = 0.75f;
     int TracerThickness = 1;
@@ -146,6 +149,9 @@ struct Settings
     bool showGraphs = false;
     int minimapMode = 0, minimapCorner = 0; // 0 north-up / 1 rotate;  0 top right, 1 top left, 2 bottom right, 3 bottom left
     bool showDeath = true;
+    int tracerMaxIdx = 3; // presets::TracerDist
+    bool tracerPlayers = true;
+    bool tracerEntity[kEntityKindCount] = {false, true, false, false, false, false};
     bool showEntities = false, entLabels = true;
     bool entShow[kEntityKindCount] = {false, true, true, true, true, true};
     int entColor[kEntityKindCount] = {8, 0, 3, 2, 1, 4}; // presets::EntityPaletteNames

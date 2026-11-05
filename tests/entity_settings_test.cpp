@@ -93,12 +93,39 @@ int main()
         CHECK(&c.HotkeyText(hotkeys::Action::ClearDeathMarker) == &c.HotkeyClearDeath);
     }
 
+    // ---- tracer settings ----
+    {
+        Settings s;
+        CHECK(s.tracerMaxIdx == 3 && s.tracerPlayers && s.tracerOriginIdx == 0); // unchanged for an existing user
+        const bool wantT[kEntityKindCount] = {false, true, false, false, false, false};
+        for (int k = 0; k < kEntityKindCount; ++k) CHECK(s.tracerEntity[k] == wantT[k]);
+        for (int o = 0; o < 3; ++o)
+            for (int d = 0; d < 4; ++d)
+            {
+                Settings a;
+                a.tracerOriginIdx = o;
+                a.tracerMaxIdx = d;
+                a.tracerPlayers = (o + d) % 2 == 0;
+                for (int k = 0; k < kEntityKindCount; ++k) a.tracerEntity[k] = (k + o + d) % 3 == 0;
+                const auto back = configschema::LoadText(a.Build().ToJson());
+                Settings b;
+                b.Apply(back.cfg);
+                CHECK(back.Warnings() == 0 && b.tracerOriginIdx == o && b.tracerMaxIdx == d && b.tracerPlayers == a.tracerPlayers);
+                for (int k = 0; k < kEntityKindCount; ++k) CHECK(b.tracerEntity[k] == a.tracerEntity[k]);
+            }
+        CHECK(configschema::LoadText(R"({"TracerOrigin":"Top"})").Warnings() == 0 && configschema::LoadText(R"({"TracerOrigin":"Left"})").Warnings() == 1);
+        const auto bad = configschema::LoadText(R"({"TracerMaxDist":"1km","TracerPlayers":3,"TracerXp":"on"})");
+        CHECK(bad.Warnings() == 3 && bad.cfg.TracerMaxDist == "Unlimited" && bad.cfg.TracerPlayers && !bad.cfg.TracerEntity[static_cast<int>(EntityKind::Xp)]);
+        CHECK(presets::TracerDist.size() == presets::TracerDistLabels.size() && presets::TracerOriginLabels.size() == 3);
+        for (int k = 0; k < kEntityKindCount; ++k) CHECK(std::string(EntityKeysFor(k).tracer).find("Tracer") == 0);
+    }
+
     // ---- keys: unique per category ----
     {
         std::set<std::string> keys;
         for (int k = 0; k < kEntityKindCount; ++k)
         {
-            CHECK(keys.insert(EntityKeysFor(k).show).second && keys.insert(EntityKeysFor(k).color).second);
+            CHECK(keys.insert(EntityKeysFor(k).show).second && keys.insert(EntityKeysFor(k).color).second && keys.insert(EntityKeysFor(k).tracer).second);
         }
         CHECK(std::string(EntityKeysFor(-3).show) == EntityKeysFor(0).show && std::string(EntityKeysFor(99).color) == EntityKeysFor(0).color);
     }

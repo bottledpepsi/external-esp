@@ -121,8 +121,9 @@ void EspRenderer::DrawLabels(Gfx& g, const Settings& s, const LabelReq& r)
 }
 
 void EspRenderer::DrawTracer(Gfx& g, const Settings& s, const Camera& cam, const Vec3& target, float dist,
-                             bool isFriend)
+                             bool isFriend, const Col* fixed)
 {
+    if (dist > presets::TracerDist[static_cast<size_t>(std::clamp(s.tracerMaxIdx, 0, static_cast<int>(presets::TracerDist.size()) - 1))]) return;
     double xc, yc, zc;
     cam.ToCamera(target, xc, yc, zc);
     if (zc < Camera::kNear) return; // behind the camera
@@ -130,14 +131,15 @@ void EspRenderer::DrawTracer(Gfx& g, const Settings& s, const Camera& cam, const
     const float ndcX = std::clamp(static_cast<float>(xc / zc * cam.k / cam.aspect), -1.f, 1.f);
     const float ndcY = std::clamp(static_cast<float>(yc / zc * cam.k), -1.f, 1.f);
     const float tx = (ndcX + 1.f) * 0.5f * cam.w, ty = (1.f - ndcY) * 0.5f * cam.h;
-    const float ox = cam.w * 0.5f, oy = s.tracerOriginIdx == 0 ? static_cast<float>(cam.h) : cam.h * 0.5f;
+    const float ox = cam.w * 0.5f, oy = s.tracerOriginIdx == 0 ? static_cast<float>(cam.h) : s.tracerOriginIdx == 2 ? 0.f : cam.h * 0.5f;
 
     float opacity = presets::TraceOpacities[s.tracerOpacityIdx];
     if (s.tracerFade) opacity *= 1.f - Clamp01((dist - TRACER_NEAR) / (TRACER_FAR * 2.f - TRACER_NEAR));
     if (opacity <= 0.01f) return;
 
     Col c;
-    if (s.tracerColorIdx == 1) c = Col{1, 1, 1, opacity};
+    if (fixed) c = fixed->with(opacity);
+    else if (s.tracerColorIdx == 1) c = Col{1, 1, 1, opacity};
     else if (isFriend) c = kFriend.with(opacity);
     else
     {
@@ -363,6 +365,11 @@ void EspRenderer::DrawEntities(Gfx& g, const Settings& s, const Camera& cam, con
         const float bx = sb.x0, by = sb.y0, bw = sb.x1 - sb.x0, bh = sb.y1 - sb.y0;
         const float thick = small ? 1.f : presets::Thickness[s.boxThickIdx];
         g.Rect(bx, by, bw, bh, col, thick);
+        if (s.showTracers && s.tracerEntity[k])
+        {
+            const double ty = s.tracerTargetIdx == 0 ? e.pos.y : s.tracerTargetIdx == 2 ? e.pos.y + h : e.pos.y + h * 0.5;
+            DrawTracer(g, s, cam, {e.pos.x, ty, e.pos.z}, dist, false, &col);
+        }
         if (s.showHealth && e.healthValid && !small)
         {
             const float ratio = Clamp01(e.health / 20.f);
@@ -519,7 +526,7 @@ void EspRenderer::DrawWorld(Gfx& g, const Settings& s, const Camera& cam, const 
     std::sort(list.begin(), list.end(), [](const E& a, const E& b) { return a.dist > b.dist; });
     // far first -> near on top
 
-    if (s.showTracers)
+    if (s.showTracers && s.tracerPlayers)
         for (const auto& e : list)
         {
             const double eh = e.p->sizeValid ? e.p->height : kPlayerH;

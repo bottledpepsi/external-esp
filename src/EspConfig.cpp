@@ -54,9 +54,10 @@ std::string& EspConfig::HotkeyText(hotkeys::Action a)
 
 const EntityKeys& EntityKeysFor(int kind)
 {
-    static const EntityKeys k[kEntityKindCount] = {{"ShowOtherMobs", "ColorOtherMobs"},   {"ShowHostile", "ColorHostile"},
-                                                    {"ShowPassive", "ColorPassive"},       {"ShowNeutral", "ColorNeutral"},
-                                                    {"ShowProjectiles", "ColorProjectiles"}, {"ShowXp", "ColorXp"}};
+    static const EntityKeys k[kEntityKindCount] = {
+        {"ShowOtherMobs", "ColorOtherMobs", "TracerOtherMobs"},   {"ShowHostile", "ColorHostile", "TracerHostile"},
+        {"ShowPassive", "ColorPassive", "TracerPassive"},         {"ShowNeutral", "ColorNeutral", "TracerNeutral"},
+        {"ShowProjectiles", "ColorProjectiles", "TracerProjectiles"}, {"ShowXp", "ColorXp", "TracerXp"}};
     return k[kind < 0 || kind >= kEntityKindCount ? 0 : kind];
 }
 
@@ -89,9 +90,10 @@ std::string EspConfig::ToJson() const
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
         Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags)) + Kv("HudMode", S(HudMode));
     j += Kv("ViewMode", S(ViewMode)) + Kv("ShowGraphs", B(ShowGraphs));
+    j += Kv("TracerMaxDist", S(TracerMaxDist)) + Kv("TracerPlayers", B(TracerPlayers));
     j += Kv("MinimapMode", S(MinimapMode)) + Kv("MinimapCorner", S(MinimapCorner)) + Kv("ShowDeathMarker", B(ShowDeathMarker));
     j += Kv("ShowEntities", B(ShowEntities)) + Kv("EntityMaxDist", S(EntityMaxDist)) + Kv("EntityLabels", B(EntityLabels));
-    for (int k = 0; k < kEntityKindCount; ++k) j += Kv(EntityKeysFor(k).show, B(EntityShow[k])) + Kv(EntityKeysFor(k).color, S(EntityColor[k]));
+    for (int k = 0; k < kEntityKindCount; ++k) j += Kv(EntityKeysFor(k).show, B(EntityShow[k])) + Kv(EntityKeysFor(k).color, S(EntityColor[k])) + Kv(EntityKeysFor(k).tracer, B(TracerEntity[k]));
     j += Kv("ItemFilterMode", S(ItemFilterMode)) + Kv("ItemFilterList", S(ItemFilterList)) + Kv("ItemMinTier", N(ItemMinTier));
     j += Kv("LabelDeclutter", B(LabelDeclutter)) + Kv("LabelFadePct", N(LabelFadePct));
     j += Kv("SmootherBaselineMs", N(SmootherBaselineMs)) + Kv("SmootherBlendTauMs", N(SmootherBlendTauMs)) + Kv("SmootherMaxAheadMs", N(SmootherMaxAheadMs)) +
@@ -126,6 +128,8 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HudMode = GetString(o, "HudMode", c.HudMode);
     c.ViewMode = GetString(o, "ViewMode", c.ViewMode);
     c.ShowGraphs = GetBool(o, "ShowGraphs", c.ShowGraphs);
+    c.TracerMaxDist = GetString(o, "TracerMaxDist", c.TracerMaxDist);
+    c.TracerPlayers = GetBool(o, "TracerPlayers", c.TracerPlayers);
     c.MinimapMode = GetString(o, "MinimapMode", c.MinimapMode);
     c.MinimapCorner = GetString(o, "MinimapCorner", c.MinimapCorner);
     c.ShowDeathMarker = GetBool(o, "ShowDeathMarker", c.ShowDeathMarker);
@@ -136,6 +140,7 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     {
         c.EntityShow[k] = GetBool(o, EntityKeysFor(k).show, c.EntityShow[k]);
         c.EntityColor[k] = GetString(o, EntityKeysFor(k).color, c.EntityColor[k]);
+        c.TracerEntity[k] = GetBool(o, EntityKeysFor(k).tracer, c.TracerEntity[k]);
     }
     c.ItemFilterMode = GetString(o, "ItemFilterMode", c.ItemFilterMode);
     c.ItemFilterList = GetString(o, "ItemFilterList", c.ItemFilterList);
@@ -217,7 +222,12 @@ void Settings::Apply(const EspConfig& c)
     boxFillIdx = NearestIdx(Opacities, c.BoxFillOpacity);
 
     showTracers = c.ShowTracers;
-    tracerOriginIdx = c.TracerOrigin == "Center" ? 1 : 0;
+    tracerOriginIdx = c.TracerOrigin == "Center" ? 1 : c.TracerOrigin == "Top" ? 2 : 0;
+    tracerPlayers = c.TracerPlayers;
+    tracerMaxIdx = 3;
+    for (size_t i = 0; i < presets::TracerDistLabels.size(); ++i)
+        if (presets::TracerDistLabels[i] == c.TracerMaxDist) tracerMaxIdx = static_cast<int>(i);
+    for (int k = 0; k < kEntityKindCount; ++k) tracerEntity[k] = c.TracerEntity[k];
     tracerColorIdx = c.TracerColor == "White" ? 1 : 0;
     tracerOpacityIdx = NearestIdx(TraceOpacities, c.TracerOpacity);
     tracerThickIdx = NearestIdx(Thickness, static_cast<float>(c.TracerThickness));
@@ -307,7 +317,10 @@ EspConfig Settings::Build() const
     c.NameSize = static_cast<int>(NameSizes[nameSizeIdx]);
     c.BoxFillOpacity = Opacities[boxFillIdx];
     c.ShowTracers = showTracers;
-    c.TracerOrigin = tracerOriginIdx == 1 ? "Center" : "Bottom";
+    c.TracerOrigin = tracerOriginIdx == 1 ? "Center" : tracerOriginIdx == 2 ? "Top" : "Bottom";
+    c.TracerPlayers = tracerPlayers;
+    c.TracerMaxDist = presets::TracerDistLabels[static_cast<size_t>(std::clamp(tracerMaxIdx, 0, static_cast<int>(presets::TracerDistLabels.size()) - 1))];
+    for (int k = 0; k < kEntityKindCount; ++k) c.TracerEntity[k] = tracerEntity[k];
     c.TracerColor = tracerColorIdx == 1 ? "White" : "Dynamic";
     c.TracerOpacity = TraceOpacities[tracerOpacityIdx];
     c.TracerThickness = static_cast<int>(Thickness[tracerThickIdx]);

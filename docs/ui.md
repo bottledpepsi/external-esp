@@ -93,3 +93,10 @@ Needs the agent to send wire v6 entities and class names it can read (docs/compa
 * **Entities**: when the entity display is on, mobs and projectiles appear as small dots in their category color, only those inside the radar (they are not pinned to the rim).
 * **Death marker** (`ShowDeathMarker`, default on; `HotkeyClearDeath` removes it): when your health reaches 0 and stays there for a quarter of a second, the place is remembered - a red cross on the radar and a red diamond with `Death  87m` in the world (at the screen edge when it is off to the side, at the bottom centre when it is behind you). It stays through the death screen and the respawn and goes away when you get within 3 blocks of it (a second after you respawn, so a bed next to it does not clear it at once), after ten minutes, on the hotkey, or when you die again. A single frame of 0 health while a world loads is not a death; a teleport is not a death; without a health reading from the agent nothing is concluded.
 
+## Tracers: origin, distance, mobs (TRACERS tab)
+
+* **Origin** (`TracerOrigin`): Bottom (default), Center or **Top** of the screen.
+* **Max distance** (`TracerMaxDist`: 25m, 50m, 100m, Unlimited (default)): nothing farther away gets a line. This applies to players and mobs alike.
+* **To players** (`TracerPlayers`, default on): the players' tracers, in their usual colors (friend / near-red to far-green / white). Turn it off to keep only the mobs' lines.
+* **Tracers to mobs** (`TracerHostile`, `TracerPassive`, `TracerNeutral`, `TracerProjectiles`, `TracerXp`, `TracerOtherMobs`): one switch per category, in the category's own color (ENTITIES section). Only hostile mobs have one by default. A line needs the mob to be shown, so a category that is hidden or beyond the entity distance has no tracer; thickness, opacity, fade and target point are the ones set for the players' tracers.
+

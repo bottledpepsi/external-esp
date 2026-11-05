@@ -47,7 +47,9 @@ namespace presets
     const std::vector<std::string> DistFormatLabels{"Meters", "Kilometers", "Off"};
     const std::vector<std::string> BoxStyleLabels{"Rounded", "Sharp", "Corner-only", "Skeleton"};
     const std::vector<std::string> BoxColorLabels{"Static", "Gradient"};
-    const std::vector<std::string> TracerOriginLabels{"Bottom Center", "Screen Center"};
+    const std::vector<std::string> TracerOriginLabels{"Bottom Center", "Screen Center", "Top Center"};
+    const std::vector<float> TracerDist{25.f, 50.f, 100.f, kUnlimited};
+    const std::vector<std::string> TracerDistLabels{"25m", "50m", "100m", "Unlimited"};
     const std::vector<std::string> TracerColorLabels{"Dynamic", "White"};
     const std::vector<std::string> TracerTargetLabels{"Feet", "Center", "Head"};
 
