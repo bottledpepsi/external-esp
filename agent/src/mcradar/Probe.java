@@ -93,6 +93,7 @@ final class Probe {
     private double[] lastEye;                 // eye of the last snapshot; pollItemsIfDue() searches around it
     private boolean itemsDirty = true;       // lastItems changed since it was last put on the wire
     private List<Snapshot.Item> lastItems = new ArrayList<Snapshot.Item>();
+    private List<Snapshot.Ent> lastEnts = new ArrayList<Snapshot.Ent>();   // wire v6, polled with the items
     private String exportedCam = "", exportedItems = "";
     private boolean ready;
     private int failTicks;
@@ -855,7 +856,7 @@ final class Probe {
             // poll can never delay a camera sample, and they go on the wire only when they changed (itemsFresh).
             lastEye = eye;
             s.itemsFresh = itemsDirty;
-            if (itemsDirty) { s.items.addAll(lastItems); itemsDirty = false; }
+            if (itemsDirty) { s.items.addAll(lastItems); s.entities.addAll(lastEnts); itemsDirty = false; }
             if (!camScan.describe.equals(exportedCam) || !itemScan.describe.equals(exportedItems)) {
                 exportedCam = camScan.describe; exportedItems = itemScan.describe;
                 exportLayout();
@@ -879,8 +880,9 @@ final class Probe {
         long now = System.currentTimeMillis();
         if (now - lastItemPoll < 100) return;
         lastItemPoll = now;
+        itemScan.wantEntities = cfg.negotiatedWire() >= Snapshot.WIRE_ENTITIES;     // nobody reads E lines below v6: do not even look for them
         List<Snapshot.Item> polled = itemScan.poll(eye, 48);
-        if (polled != null) { lastItems = polled; itemsDirty = true; }   // null = transient read failure: keep the last frame
+        if (polled != null) { lastItems = polled; lastEnts = itemScan.entities(); itemsDirty = true; }   // null = transient read failure: keep the last frame
     }
 
     /** Runs the second graph search (camera candidates + entity containers) once per discovery. */

@@ -111,4 +111,4 @@ snapshot must satisfy `tests/wire_invariants.h`).
 | `health` | `0 .. 1e5`, `-` unknown (projectiles and orbs have none) |
 | `label` | the class's simple name (`Zombie`), percent-encoded, at most 32 bytes, `-` when empty |
 
-The entity list travels with the item list: a datagram that has an `F 1` line carries both (either may be empty), one without it carries neither and the overlay keeps the previous lists. At most 512 `E` lines are kept per datagram (the rest count in `ignoredLines`), nearest first. An agent writes `E` lines only when the overlay said it reads v6 (`wire=6`); a v5 overlay ignores them anyway (an unknown line).
+The entity list travels with the item list: a datagram that has an `F 1` line carries both (either may be empty), one without it carries neither and the overlay keeps the previous lists. At most 512 `E` lines are kept per datagram (the rest count in `ignoredLines`), nearest first. An agent writes `E` lines only when the overlay said it reads v6 (`wire=6`); a v5 overlay ignores them anyway (an unknown line). Which kind an entity gets is decided by the agent from its class names; see docs/compatibility.md.

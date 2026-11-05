@@ -43,3 +43,16 @@ the relaxed camera match or an ancestor FOV method is unknown.
 * A failed attach is retried with growing delays instead of every 30 s.
 * The overlay drops all state when the game or agent restarts.
 * GPU device loss now ends in the GDI renderer instead of retrying forever.
+
+## Mobs, projectiles and experience orbs (wire v6)
+
+With wire 6 (the default when the overlay is v6 or newer) the agent also reports every entity that is neither a player nor a dropped item, in the same 10 Hz walk over the entity list that finds the items. What each one *is* is decided from the **class names** (`EntityKinds.java`): the simple name of the entity's class and of its superclasses.
+
+* *Hostile* (`Zombie`, `Skeleton`, `Creeper`, ... or anything under `Monster` / `HostileEntity`), *Neutral* (`Enderman`, `Wolf`, `IronGolem`, `Bee`, ...), *Passive* (`Cow`, `Villager`, `Axolotl`, ... or anything under `Animal`), *Projectile* (arrows, tridents, snowballs, fireballs, ... or anything under `Projectile`), *Experience orb*.
+* A living thing (a `Mob` / `LivingEntity`) that matches none of that is *Other*.
+* Players, items, item frames, armor stands, boats, minecarts, markers and similar are never reported here.
+
+**This needs readable class names.** Clients whose class names are the obfuscated one- and two-letter ones (`a`, `bgb`) match nothing: the agent then reports no entities at all, never a wrong category - the status text reads `mobs 0` and the overlay simply has none to draw. Mojang-mapped and Yarn-mapped (and unobfuscated) clients work. The class table is a fixed list; a mod's new mob is placed by its base class when it has one the tables know (a hostile under `Monster`, a passive under `Animal`), else it is *Other*.
+
+The agent learns each entity class once (the same bounded search budget as the item classes, logged as `Entity class: ... -> kind N`), reads the position and hitbox through the same structure the players use, and the health through the same getter. Up to 128 entities are sent, nearest first; the agent does not look for them at all when the overlay only reads wire 5 or older.
+

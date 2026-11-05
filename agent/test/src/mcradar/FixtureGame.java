@@ -529,7 +529,15 @@ public final class FixtureGame {
                 boolean known = false;
                 for (Object p : players) known |= p.getClass().getName().equals(ec);
                 for (Object e : itemEntities) known |= e.getClass().getName().equals(ec);
-                if (!known) { Object d = inst(ec); state.put(d, new double[] {105, 64, -55, 0, 0}); add(cont, d, id++); }
+                if (!known) {
+                    Object d = inst(ec);
+                    state.put(d, new double[] {105, 64, -55, 0, 0});
+                    try {   // a mob stands where its state says: the position and box fields are the Entity ones the players use
+                        Map<String, Object> pr = playerRole(players.get(0).getClass());
+                        if (pr != null) { writePos(d, MiniJson.obj(pr.get("position")), 105, 64, -55); writeBox(d, MiniJson.obj(pr.get("bbField")), 105, 64, -55, 0.6, 1.8); }
+                    } catch (Exception notAnEntity) { }
+                    add(cont, d, id++);
+                }
             }
         }
         tick(0);

@@ -65,9 +65,63 @@ final class ItemScanner {
     private Budget budget;
     private boolean budgetHit;
 
+    // ---- other entities (wire v6): mobs, projectiles, experience orbs, found in the same walk over the entity container ----
+    /** Set by Probe from the negotiated wire version: below v6 nobody reads E lines, so nothing is scanned for them. */
+    volatile boolean wantEntities;
+    static final int MAX_ENTITIES = 128;
+    static final int ENT_MODEL_TRIES = 30;                                           // about 3 s of polls
+    private final Map<Class<?>, Integer> entTries = new HashMap<Class<?>, Integer>();
+    private final Map<Class<?>, Object> entClasses = new HashMap<Class<?>, Object>();   // EntClass, or Neg (retried after NEG_TTL)
+    private List<Snapshot.Ent> entities = new ArrayList<Snapshot.Ent>();
+    int entityCount;                                   // for the HUD summary
+
+    private static final class EntClass {
+        final int kind; final String label; final Probe.Model model;
+        EntClass(int kind, String label, Probe.Model model) { this.kind = kind; this.label = label; this.model = model; }
+    }
+
+    /** The entities found by the last poll(), nearest first, at most MAX_ENTITIES. Never null. */
+    List<Snapshot.Ent> entities() { return entities; }
+
+    /** Per entity CLASS: a category and how to read its position, or null (not one of the categories / no position found). Bounded like classify(). */
+    private EntClass entClassOf(Object e) {
+        Class<?> c = e.getClass();
+        Object cached = entClasses.get(c);
+        if (cached instanceof EntClass) return (EntClass) cached;
+        if (cached instanceof Neg && System.currentTimeMillis() - ((Neg) cached).at < NEG_TTL) return null;
+        if (searchesThisPoll >= 40) return null;
+        if (budget != null && budget.expired()) { if (!budgetHit) { budgetHit = true; budgetStops++; } return null; }
+        searchesThisPoll++;
+        EntClass res = null;
+        boolean classOk = false;
+        try {
+            int kind = Probe.isJdkish(c) || p.isPlayerClass(c) ? -1 : EntityKinds.classify(c);
+            if (kind >= 0 && p.isEntityClass(c)) {
+                List<Object> sample = new ArrayList<Object>();
+                sample.add(e);
+                classOk = true;
+                Probe.Model m = p.buildModel(c, sample);
+                if (m != null) res = new EntClass(kind, EntityKinds.label(c), m);
+            }
+        } catch (Throwable ignored) { }
+        if (res != null) { entTries.remove(c); entClasses.put(c, res); Log.info("Entity class: " + c.getName() + " -> kind " + res.kind + " (" + res.label + ")"); }
+        else if (classOk) {
+            // a category but no position model yet: while the sample sits at the origin (just spawned, not moved) every candidate looks the same, so the model
+            // is tried again on the next polls - ENT_MODEL_TRIES of them - and only then written off for NEG_TTL like any other negative
+            Integer n = entTries.get(c);
+            int tries = n == null ? 1 : n + 1;
+            if (tries < ENT_MODEL_TRIES) entTries.put(c, tries);
+            else { entTries.remove(c); entClasses.put(c, new Neg(System.currentTimeMillis())); }
+        }
+        else entClasses.put(c, new Neg(System.currentTimeMillis()));
+        return res;
+    }
+
     /** A new world: forget every negative (not an item class / not a stack); positives are structural and stay. */
     void onWorldChange() {
         for (java.util.Iterator<Object> it = itemClasses.values().iterator(); it.hasNext();) if (it.next() instanceof Neg) it.remove();
+        for (java.util.Iterator<Object> it = entClasses.values().iterator(); it.hasNext();) if (it.next() instanceof Neg) it.remove();
+        entTries.clear();
         for (java.util.Iterator<Object> it = stackModels.values().iterator(); it.hasNext();) if (it.next() instanceof Neg) it.remove();
         itemKeyMethods.values().removeAll(java.util.Collections.singleton(Boolean.FALSE));
         best = null; lastPick = 0;
@@ -484,11 +538,26 @@ final class ItemScanner {
         double[] pos = new double[3];
         float[] size = new float[2];
         int seenEntities = 0, itemEnts = 0;
+        final boolean wantEnt = wantEntities;
+        List<Snapshot.Ent> ents = new ArrayList<Snapshot.Ent>();
         for (Object e : elements) {
             if (e == null) continue;
             seenEntities++;
             ItemClass ic = classify(e);
-            if (ic == null) continue;
+            if (ic == null) {
+                if (wantEnt) {
+                    try {
+                        EntClass ec = entClassOf(e);
+                        if (ec != null && ec.model.position(e, pos) && Probe.Model.sane(pos)) {
+                            float w = Float.NaN, h = Float.NaN;
+                            if (ec.model.size(e, size)) { w = size[0]; h = size[1]; }
+                            float hp = ec.kind == Snapshot.KIND_PROJECTILE || ec.kind == Snapshot.KIND_XP ? Float.NaN : ec.model.health(e);
+                            ents.add(new Snapshot.Ent(System.identityHashCode(e), ec.kind, pos[0], pos[1], pos[2], w, h, hp, ec.label));
+                        }
+                    } catch (Throwable ignored) { }
+                }
+                continue;
+            }
             itemEnts++;
             try {
                 Object stack = stackOf(e, ic);
@@ -510,6 +579,18 @@ final class ItemScanner {
             } catch (Throwable ignored) { }
         }
         entitiesSeen = seenEntities; itemEntities = itemEnts;
+        if (wantEnt) {
+            final double ex0 = eye[0], ey0 = eye[1], ez0 = eye[2];
+            Collections.sort(ents, new Comparator<Snapshot.Ent>() {      // nearest first (the encoder and the cap both keep the first ones)
+                public int compare(Snapshot.Ent a, Snapshot.Ent b) {
+                    double da = (a.x - ex0) * (a.x - ex0) + (a.y - ey0) * (a.y - ey0) + (a.z - ez0) * (a.z - ez0);
+                    double db = (b.x - ex0) * (b.x - ex0) + (b.y - ey0) * (b.y - ey0) + (b.z - ez0) * (b.z - ez0);
+                    return Double.compare(da, db);
+                }
+            });
+            entities = ents.size() > MAX_ENTITIES ? new ArrayList<Snapshot.Ent>(ents.subList(0, MAX_ENTITIES)) : ents;
+            entityCount = entities.size();
+        } else { entities = new ArrayList<Snapshot.Ent>(); entityCount = 0; }
         // forget stacks that vanished
         if (meta.size() > out.size() + 64) {
             java.util.Iterator<Map.Entry<Object, Meta>> it = meta.entrySet().iterator();
@@ -590,7 +671,7 @@ final class ItemScanner {
     String summary() {
         boolean getter = false;
         for (Object o : itemClasses.values()) if (o instanceof ItemClass && ((ItemClass) o).getter != null) getter = true;
-        return "items " + itemEntities + "/" + entitiesSeen + " ent" + (getter ? ", via getter" : "");
+        return "items " + itemEntities + "/" + entitiesSeen + " ent" + (getter ? ", via getter" : "") + (wantEntities ? ", mobs " + entityCount : "");
     }
 
     // ------------------------------------------------------------------ diagnostics

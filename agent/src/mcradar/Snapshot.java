@@ -55,6 +55,7 @@ final class Snapshot {
     final List<Ent> entities = new ArrayList<Ent>();   // wire v6: sent with the item list (itemsFresh), nearest first
 
     static final int WIRE_VERSION = 6;      // the newest protocol this encoder writes (v5 = v4 + the K session-token line, v6 = v5 + the E entity lines)
+    static final int WIRE_ENTITIES = 6;     // the first protocol with E lines
     static final int WIRE_MIN = 4;          // the oldest it can still write
     static final int MAX_BYTES = 56000;
 
@@ -106,7 +107,7 @@ final class Snapshot {
             if (sb.length() + one.length() > MAX_BYTES) break;     // nearest items were added first
             sb.append(one);
         }
-        if (wire >= 6 && itemsFresh) {
+        if (wire >= WIRE_ENTITIES && itemsFresh) {
             for (Ent e : entities) {
                 StringBuilder one = new StringBuilder(96);
                 one.append("E ").append(e.id & 0xFFFFFFFFL).append(' ').append(e.kind).append(' ')
