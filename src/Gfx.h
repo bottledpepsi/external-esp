@@ -16,6 +16,7 @@
 #include "GpuRecovery.h"
 #include "Platform.h"
 #include "Image.h"
+#include "PerfStats.h"
 #include "RaiiHandle.h"
 #ifdef DrawText
 #undef DrawText          // windows.h maps DrawText -> DrawTextA; that would rename ID2D1RenderTarget::DrawText
@@ -105,6 +106,8 @@ public:
     void TextCentered(const std::string& s, float cx, float y, Font f, Col c, bool shadow = false);
     void TextRight(const std::string& s, float rx, float y, Font f, Col c, bool shadow = false);
     float TextWidth(const std::string& s, Font f);
+    // How often the layout and width caches answered from memory (cumulative; the overlay takes the rate over a window, PerfStats.h).
+    const perf::CacheCounters& TextCache() const { return textCache_; }
 
 private:
     static constexpr int kFontCount = static_cast<int>(Font::Count);
@@ -124,6 +127,7 @@ private:
     ComPtr<IDWriteTextFormat> fmt_[kFontCount][3]; // [font][0=left 1=center 2=right]
     std::unordered_map<std::string, ComPtr<IDWriteTextLayout>> layouts_[kFontCount][3]; // text layout cache
     std::unordered_map<std::string, float> widths_[kFontCount]; // TextWidth cache
+    perf::CacheCounters textCache_;
 
     std::unordered_map<uint64_t, ComPtr<ID2D1Bitmap>> bitmaps_;
     HDC memDc_ = nullptr; // legacy

@@ -30,6 +30,8 @@ The line under the smoothing sliders is a live measure: how far each new camera 
 
 GENERAL tab, "Status text" (`"HudMode"` in the file; the "Cycle status text" hotkey switches it): **Compact** (default), **Detailed**, **Off**.
 
+**Detailed** ends with a line about the overlay itself: `text cache  hit 99.2%  |  emptied 0 x  |  labels dropped 0`. *Hit* is how often a name, distance or other text came out of the text-layout cache instead of being laid out again during the last quarter second (the status text is refreshed four times a second); it sits near 100 % in normal use and the line turns orange below 80 %. *Emptied* counts the times a cache filled up and was cleared; a number that keeps growing means labels change every frame (a very large crowd, or text that contains a changing number). *Labels dropped* is how many labels the declutter pass (see docs/tuning.md) found no room for in the last frame.
+
 **Compact** is one line while all is well:
 
     external-esp  |  active  |  262 fps  |  118 Hz  |  age 6 ms  |  loss 0.0%

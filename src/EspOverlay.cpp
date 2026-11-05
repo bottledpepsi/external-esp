@@ -886,6 +886,14 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
         f.recording = recorder_.Active();
         f.recorded = recorder_.Recorded();
         f.dropped = recorder_.Dropped();
+        {
+            const perf::CacheCounters& cc = gfx_.TextCache();
+            f.perfValid = true;
+            f.cacheHitPct = perf::HitRatePct(cachePrev_, cc);
+            f.cacheClears = cc.clears;
+            f.labelsDropped = renderer_.LabelsDropped();
+            cachePrev_ = cc;
+        }
         hudText_.Build(hudMode, f);
         lastStatus_ = status + (linkText.empty() ? std::string() : "  |  " + linkText); // for the diagnostics report
     }

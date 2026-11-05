@@ -823,8 +823,17 @@ IDWriteTextLayout* Gfx::Layout(const std::string& s, Font f, int align)
 {
     auto& m = layouts_[static_cast<int>(f)][align];
     auto it = m.find(s);
-    if (it != m.end()) return it->second.get();
-    if (m.size() >= kLayoutCacheMax) m.clear();
+    if (it != m.end())
+    {
+        ++textCache_.hits;
+        return it->second.get();
+    }
+    ++textCache_.misses;
+    if (m.size() >= kLayoutCacheMax)
+    {
+        m.clear();
+        ++textCache_.clears;
+    }
     const std::wstring ws = ToWide(s);
     ComPtr<IDWriteTextLayout> l;
     if (FAILED(dw_->CreateTextLayout(ws.c_str(), static_cast<UINT32>(ws.size()),
@@ -870,7 +879,12 @@ float Gfx::TextWidth(const std::string& s, Font f)
 {
     auto& cache = widths_[static_cast<int>(f)];
     auto it = cache.find(s);
-    if (it != cache.end()) return it->second;
+    if (it != cache.end())
+    {
+        ++textCache_.hits;
+        return it->second;
+    }
+    ++textCache_.misses;
     std::wstring ws = ToWide(s);
     if (ws.empty()) return 0.f;
     ComPtr<IDWriteTextLayout> layout;
@@ -878,7 +892,11 @@ float Gfx::TextWidth(const std::string& s, Font f)
                                      1000.f, 40.f, layout.put()))) return 0.f;
     DWRITE_TEXT_METRICS m{};
     layout->GetMetrics(&m);
-    if (cache.size() >= kWidthCacheMax) cache.clear();
+    if (cache.size() >= kWidthCacheMax)
+    {
+        cache.clear();
+        ++textCache_.clears;
+    }
     cache.emplace(s, m.widthIncludingTrailingWhitespace);
     return m.widthIncludingTrailingWhitespace;
 }

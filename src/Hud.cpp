@@ -133,5 +133,14 @@ namespace hud
             if (f.predictionErrPx >= 0) d.F("  |  guess off %.1f px", f.predictionErrPx);
             Set(lines_++, d.b, d.n, false);
         }
+
+        if (f.perfValid)
+        {
+            Buf e;
+            if (f.cacheHitPct >= 0) e.F("text cache  hit %.1f%%", f.cacheHitPct);
+            else e.S("text cache  idle");
+            e.F("  |  emptied %llu x  |  labels dropped %d", static_cast<unsigned long long>(f.cacheClears), f.labelsDropped);
+            Set(lines_++, e.b, e.n, f.cacheHitPct >= 0 && f.cacheHitPct < 80.f); // a low rate is worth a look
+        }
     }
 } // namespace hud

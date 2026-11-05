@@ -11,6 +11,7 @@
 #include "Gfx.h"
 #include "HotkeyRegistry.h"
 #include "Hud.h"
+#include "PerfStats.h"
 #include "Hotkeys.h"
 #include "Recorder.h"
 #include "Replay.h"
@@ -53,6 +54,7 @@ private:
     AppOptions opt_;
     hud::Text hudText_;
     hud::Mode lastHudMode_ = hud::Mode::Compact;
+    perf::CacheCounters cachePrev_; // the text-cache counters at the last HUD refresh
     Clock::time_point nextHud_{}, hudWinStart_{};
     uint64_t hudPackets_ = 0, hudNumbered_ = 0, hudLost_ = 0;
     float sampleHz_ = 0, lossPct_ = 0;

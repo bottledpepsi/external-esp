@@ -44,6 +44,11 @@ namespace hud
         std::string_view snapStatus; // the agent's own one-liner
         bool recording = false;
         uint64_t recorded = 0, dropped = 0;
+        // the overlay's own cost (Detailed only; perfValid = false leaves the line out)
+        bool perfValid = false;
+        float cacheHitPct = -1; // text-layout cache hits over the last window (-1 = no lookups)
+        uint64_t cacheClears = 0; // times the cache was emptied because it was full (a high number = labels change every frame)
+        int labelsDropped = 0; // labels the declutter pass found no room for in the last frame
     };
 
     class Text
@@ -55,7 +60,7 @@ namespace hud
         const std::string& Line(int i) const { return line_[i]; }
         bool Alert(int i) const { return alert_[i]; } // draw this line in the warning colour
         // the longest line a mode can produce is well under this many characters (the window is a few hundred pixels wide)
-        static constexpr int kMaxLines = 3;
+        static constexpr int kMaxLines = 5;
 
     private:
         void Set(int i, const char* s, size_t n, bool alert);

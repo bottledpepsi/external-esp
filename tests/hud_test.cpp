@@ -87,6 +87,23 @@ int main()
         t.Build(Mode::Detailed, f);
         CHECK(t.Lines() == 2 && t.Alert(1));
     }
+    // ---- Detailed: the overlay's own cost line (only when the overlay supplies it) ----
+    {
+        Facts f = Healthy();
+        t.Build(Mode::Detailed, f);
+        CHECK(t.Lines() == 3); // perfValid = false: nothing added, the older layout is unchanged
+        f.perfValid = true; f.cacheHitPct = 99.25f; f.cacheClears = 2; f.labelsDropped = 3;
+        t.Build(Mode::Detailed, f);
+        CHECK(t.Lines() == 4 && Has(t.Line(3), "text cache  hit 99.2%") && Has(t.Line(3), "emptied 2 x") && Has(t.Line(3), "labels dropped 3") && !t.Alert(3));
+        f.cacheHitPct = 41.f;
+        t.Build(Mode::Detailed, f);
+        CHECK(t.Alert(3)); // a low rate is flagged
+        f.cacheHitPct = -1.f;
+        t.Build(Mode::Detailed, f);
+        CHECK(Has(t.Line(3), "text cache  idle") && !t.Alert(3));
+        t.Build(Mode::Compact, f);
+        CHECK(t.Lines() == 1); // Compact stays one line
+    }
     // ---- bounded: absurd input cannot overrun a line ----
     {
         std::string long1(2000, 'x');
@@ -106,6 +123,7 @@ int main()
         Text a;
         Facts f = Healthy();
         f.link = "UDP: 3 lost, 1 reordered of 12000"; f.snapStatus = "world: 12 players"; f.recording = true;
+        f.perfValid = true; f.cacheHitPct = 98.f;
         a.Build(Mode::Detailed, f);                          // warm-up
         a.Build(Mode::Compact, f);
         g_allocs = 0;
@@ -116,6 +134,9 @@ int main()
             f.sampleHz = static_cast<float>(i % 240);
             f.ageMs = static_cast<float>(i % 17) * 0.37f;
             f.recorded = static_cast<uint64_t>(i) * 977;
+            f.cacheHitPct = (i % 7) == 0 ? -1.f : static_cast<float>(i % 101);
+            f.labelsDropped = i % 9;
+            f.cacheClears = static_cast<uint64_t>(i);
             f.agentLive = (i % 5) != 0;
             a.Build(i % 3 == 0 ? Mode::Detailed : i % 3 == 1 ? Mode::Compact : Mode::Off, f);
         }
