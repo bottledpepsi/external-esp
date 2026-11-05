@@ -5,7 +5,7 @@ is `agent/src/mcradar/Snapshot.java` (`encode`), the consumer is `src/Wire.cpp` 
 outputs that the C++ tests parse (see `agent/test/README.md`).
 
 ```
-MCRADAR 5                                                            header: protocol version (1-5 accepted)
+MCRADAR 6                                                            header: protocol version (1-6 accepted)
 K <token>                                                            v5: the session token (see below), second line
 Q <session> <seq>                                                    v5: agent run id (8 hex) and datagram number, for loss accounting
 T <nanoTime>                                                         v4: instant the agent read the game state (agent clock, ns)
@@ -15,10 +15,11 @@ L <name> <x> <y> <z> <yaw|-> <pitch|-> <health|-> <w|-> <h|-> <uuid|->    the lo
 P <name> <same columns as L>                                         every other player
 F 1                                                                  v4: an item list follows (absent = keep the previous list)
 I <x> <y> <z> <w|-> <h|-> <count> <key> <ench|-> <tags|->            v3+: a dropped item; key/ench/tags are percent-encoded
+E <id> <kind> <x> <y> <z> <w|-> <h|-> <health|-> <label|->           v6: any other entity worth drawing (see below); sent with the items
 ```
 
 `-` means "unknown". Columns are separated by spaces or tabs, lines by `\n` (a trailing `\r` is ignored), unknown tags and lines shorter
-than two characters are skipped. Versions 1 (yaw only), 2 (+ pitch, health), 3 and 4 (+ `T`, `F`) are still parsed; v5 adds the `K` line.
+than two characters are skipped. Versions 1 (yaw only), 2 (+ pitch, health), 3 and 4 (+ `T`, `F`) are still parsed; v5 adds the `K` line, v6 the `E` lines.
 
 ## Version handshake
 
@@ -79,7 +80,7 @@ Any process on the machine can send a datagram to the port, and a bug in the age
 |---|---|
 | Number (`Q`) | only in v5: `<1-8 hex digits> <0..4294967295>`, otherwise the line is dropped |
 | Token (`K`) | only in v5; 1-64 letters/digits, otherwise the line is dropped (and the datagram has no token) |
-| Header | exactly `MCRADAR <1-3 digits>` then end of line or a space. `MCRADAR 4junk` is not ours (and `MCRADAR 10` is no longer read as v1: it is an unsupported version). A version outside 1..4 is rejected as `UnsupportedVersion` |
+| Header | exactly `MCRADAR <1-3 digits>` then end of line or a space. `MCRADAR 4junk` is not ours (and `MCRADAR 10` is no longer read as v1: it is an unsupported version). A version outside 1..6 is rejected as `UnsupportedVersion` |
 | Numbers | plain decimals only (`-`, digits, `.`, `e`/`E`): no `nan`, `inf`, hex floats, `+`, no 1e999. Must be finite |
 | Coordinates | `abs(v) <= 1e8` (the world border is 3e7). A line with a bad coordinate is dropped |
 | Angles | `abs(v) <= 1e6` degrees; otherwise the angle is "unknown" |
@@ -89,10 +90,25 @@ Any process on the machine can send a datagram to the port, and a bug in the age
 | Camera mode | integer 1-3; anything else is 1 |
 | Item count | clamped to `1 .. 1 000 000` before it is converted to `int` (a `nan` or `1e30` there was undefined behaviour) |
 | `T` stamp | a whole signed 64-bit integer; otherwise ignored |
-| Per datagram | at most 256 `P` lines and 1024 `I` lines are kept (the rest are counted in `ignoredLines`), 32 enchantments per item |
+| Per datagram | at most 256 `P` lines, 1024 `I` lines and 512 `E` lines are kept (the rest are counted in `ignoredLines`), 32 enchantments per item |
 | Text | names 64 bytes, uuid 40, status 256, item key 128, enchant text 1024, tags 4096. Text is forced to valid UTF-8 (each bad byte becomes U+FFFD, so overlong forms, surrogates and values above U+10FFFF cannot get through) and control characters become `?`. Percent escapes are decoded first, so `%00` or `%FF` cannot smuggle a NUL or invalid byte in. Truncation never splits a character |
 
 `WorldSnapshot::ignoredLines` counts lines with a known tag that were dropped. A rejected datagram leaves the output snapshot untouched.
 
 Tests: `tests/wire_validation_test.cpp` (each rule), `tests/wire_fuzz_test.cpp` (hostile corpus + seeded mutation fuzzer; every returned
 snapshot must satisfy `tests/wire_invariants.h`).
+
+## Other entities (v6, `E` lines)
+
+`E <id> <kind> <x> <y> <z> <w|-> <h|-> <health|-> <label|->` is one entity that is neither a player nor a dropped item: a mob, a projectile, an experience orb.
+
+| Column | Meaning |
+|---|---|
+| `id` | 0..4294967295: the agent's identity for the object (its identity hash) while it lives, so the overlay can follow one entity from sample to sample. It can repeat after the object is gone; it is never an index |
+| `kind` | `0` other living thing (the agent could not place it), `1` hostile, `2` passive, `3` neutral, `4` projectile, `5` experience orb. Anything else drops the line |
+| `x y z` | feet position, like `P` and `I` |
+| `w h` | hitbox size, `-` unknown (same limits as players) |
+| `health` | `0 .. 1e5`, `-` unknown (projectiles and orbs have none) |
+| `label` | the class's simple name (`Zombie`), percent-encoded, at most 32 bytes, `-` when empty |
+
+The entity list travels with the item list: a datagram that has an `F 1` line carries both (either may be empty), one without it carries neither and the overlay keeps the previous lists. At most 512 `E` lines are kept per datagram (the rest count in `ignoredLines`), nearest first. An agent writes `E` lines only when the overlay said it reads v6 (`wire=6`); a v5 overlay ignores them anyway (an unknown line).

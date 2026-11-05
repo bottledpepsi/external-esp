@@ -24,6 +24,18 @@ final class Snapshot {
         }
     }
 
+    /**
+     * Any other entity worth drawing (wire v6 "E" line): a mob, a projectile, an experience orb. `id` identifies the object while it lives (identity
+     * hash), `kind` is one of the KIND_* codes below, `label` the class's simple name. health NaN = unknown.
+     */
+    static final class Ent {
+        final int id, kind; final double x, y, z; final float w, h, health; final String label;
+        Ent(int id, int kind, double x, double y, double z, float w, float h, float health, String label) {
+            this.id = id; this.kind = kind; this.x = x; this.y = y; this.z = z; this.w = w; this.h = h; this.health = health; this.label = label;
+        }
+    }
+    static final int KIND_OTHER = 0, KIND_HOSTILE = 1, KIND_PASSIVE = 2, KIND_NEUTRAL = 3, KIND_PROJECTILE = 4, KIND_XP = 5;
+
     /** The game's camera. mode: 1 = first person, 2 = third person (behind), 3 = third person (front). fov NaN = unknown. */
     static final class Cam {
         final double x, y, z; final float yaw, pitch, fov; final int mode;
@@ -40,8 +52,9 @@ final class Snapshot {
     Cam camera;
     final List<Rec> players = new ArrayList<Rec>();
     final List<Item> items = new ArrayList<Item>();
+    final List<Ent> entities = new ArrayList<Ent>();   // wire v6: sent with the item list (itemsFresh), nearest first
 
-    static final int WIRE_VERSION = 5;      // the newest protocol this encoder writes (v5 = v4 + the K session-token line)
+    static final int WIRE_VERSION = 6;      // the newest protocol this encoder writes (v5 = v4 + the K session-token line, v6 = v5 + the E entity lines)
     static final int WIRE_MIN = 4;          // the oldest it can still write
     static final int MAX_BYTES = 56000;
 
@@ -66,6 +79,8 @@ final class Snapshot {
      *   F 1                                                                 marks that the item list follows (possibly empty);
      *                                                                       snapshots without it keep the previous items
      *   I <x> <y> <z> <w|-> <h|-> <count> <key> <ench|-> <tags|->           one line per dropped item
+     *   E <id> <kind> <x> <y> <z> <w|-> <h|-> <health|-> <label|->          v6: one line per other entity (mob, projectile, xp orb); kind 0 other,
+     *                                                                       1 hostile, 2 passive, 3 neutral, 4 projectile, 5 xp; sent with the items
      * ("-" = unknown.) Angles in degrees, Minecraft convention: yaw 0 = +Z (south), pitch +90 = straight down.
      */
     byte[] encode() {
@@ -90,6 +105,17 @@ final class Snapshot {
                .append(pct(it.key)).append(' ').append(pct(it.ench)).append(' ').append(pct(it.tags)).append('\n');
             if (sb.length() + one.length() > MAX_BYTES) break;     // nearest items were added first
             sb.append(one);
+        }
+        if (wire >= 6 && itemsFresh) {
+            for (Ent e : entities) {
+                StringBuilder one = new StringBuilder(96);
+                one.append("E ").append(e.id & 0xFFFFFFFFL).append(' ').append(e.kind).append(' ')
+                   .append(String.format(Locale.ROOT, "%.3f %.3f %.3f ", e.x, e.y, e.z))
+                   .append(num(e.w)).append(' ').append(num(e.h)).append(' ').append(num(e.health)).append(' ')
+                   .append(pct(e.label)).append('\n');
+                if (sb.length() + one.length() > MAX_BYTES) break;     // nearest entities were added first
+                sb.append(one);
+            }
         }
         return sb.toString().getBytes(Charset.forName("UTF-8"));
     }

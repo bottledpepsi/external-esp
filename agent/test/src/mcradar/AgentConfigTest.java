@@ -20,7 +20,7 @@ public final class AgentConfigTest {
 
         // a newer overlay never makes the agent write a version it does not know
         AgentConfig n = AgentConfig.parse("wire=9");
-        check(n.wire == 9 && n.negotiatedWire() == Snapshot.WIRE_VERSION && Snapshot.WIRE_VERSION == 5, "overlay wants v9: the agent writes its own newest (" + Snapshot.WIRE_VERSION + ")");
+        check(n.wire == 9 && n.negotiatedWire() == Snapshot.WIRE_VERSION && Snapshot.WIRE_VERSION == 6, "overlay wants v9: the agent writes its own newest (" + Snapshot.WIRE_VERSION + ")");
 
         // an older overlay than this encoder can write: still the oldest it can write (the agent logs a warning)
         AgentConfig o = AgentConfig.parse("wire=2");

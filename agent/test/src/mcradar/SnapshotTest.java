@@ -32,6 +32,35 @@ public final class SnapshotTest {
             "I 103.000 64.000 -47.000 0.25 0.25 1 minecraft:diamond_sword minecraft:sharpness@5,minecraft:unbreaking@3 %7BEnchantments:%5B%7Bid:%22minecraft:sharpness%22%7D%5D%7D\n" +
             "I 98.000 64.000 -52.000 - - 37 minecraft:cobblestone - -\n";
 
+    /**
+     * What the encoder must write for the full sample plus three entities at wire 6 (same token, session and number as V5_FULL). The same text is
+     * in tests/wire_v6_sample.h (kV6Full), which the C++ parser tests parse.
+     */
+    static final String V6_FULL =
+            "MCRADAR 6\n" +
+            "K 0123456789abcdef0123456789abcdef\n" +
+            "Q abcdef01 7\n" +
+            "T 123456789012345\n" +
+            "S agent ok: 1 other player(s)\n" +
+            "C 97.9276 65.6200 -45.4497 -175.83 18.91 68.02 2\n" +
+            "L Alice 100.000 64.000 -50.000 12.50 -3.25 17.50 0.60 1.80 069a79f4-44e9-4726-a5be-fca90e38aaf5\n" +
+            "P Bob 90.500 70.000 -60.250 12.50 -3.25 17.50 0.60 1.80 069a79f4-44e9-4726-a5be-fca90e38aaf5\n" +
+            "F 1\n" +
+            "I 103.000 64.000 -47.000 0.25 0.25 1 minecraft:diamond_sword minecraft:sharpness@5,minecraft:unbreaking@3 %7BEnchantments:%5B%7Bid:%22minecraft:sharpness%22%7D%5D%7D\n" +
+            "I 98.000 64.000 -52.000 - - 37 minecraft:cobblestone - -\n" +
+            "E 1234567 1 92.500 64.000 -47.250 0.60 1.95 20.00 Zombie\n" +
+            "E 77 2 99.000 64.000 -44.000 0.90 1.40 10.00 Cow\n" +
+            "E 4294967295 4 97.000 66.500 -48.000 0.50 0.50 - Arrow\n";
+
+    /** The full sample plus the three entities of V6_FULL. */
+    private static Snapshot fullSampleWithEntities() {
+        Snapshot s = fullSample();
+        s.entities.add(new Snapshot.Ent(1234567, Snapshot.KIND_HOSTILE, 92.5, 64, -47.25, 0.6f, 1.95f, 20f, "Zombie"));
+        s.entities.add(new Snapshot.Ent(77, Snapshot.KIND_PASSIVE, 99, 64, -44, 0.9f, 1.4f, 10f, "Cow"));
+        s.entities.add(new Snapshot.Ent(-1, Snapshot.KIND_PROJECTILE, 97, 66.5, -48, 0.5f, 0.5f, Float.NaN, "Arrow"));   // id -1 = 4294967295 on the wire
+        return s;
+    }
+
     /** The "full" sample snapshot (camera, local player, one player, two items): the source of full_v4.dgram and of V5_FULL. */
     private static Snapshot fullSample() {
         Snapshot full = new Snapshot();
@@ -71,6 +100,9 @@ public final class SnapshotTest {
         dir.mkdirs();
         Snapshot full = fullSample();
         write(dir, "full_v4.dgram", full);
+        Snapshot v6 = fullSampleWithEntities();
+        v6.wire = 6; v6.token = "0123456789abcdef0123456789abcdef"; v6.session = 0xABCDEF01; v6.seq = 7;
+        write(dir, "full_v6.dgram", v6);
 
         Snapshot bare = new Snapshot();
         bare.itemsFresh = false;
@@ -134,6 +166,32 @@ public final class SnapshotTest {
             String got = enc(v5);
             check(got.equals(V5_FULL), "v5 sample differs from V5_FULL (and tests/wire_v5_sample.h): " + firstDifference(V5_FULL, got));
             check(V5_FULL.indexOf('\r') < 0 && V5_FULL.endsWith("\n") && !V5_FULL.endsWith("\n\n"), "V5_FULL has LF line ends and one final newline");
+        }
+
+        // ---- the v6 sample (entities) is exactly the literal the C++ tests parse ----
+        {
+            Snapshot v6 = fullSampleWithEntities();
+            v6.wire = 6; v6.token = "0123456789abcdef0123456789abcdef"; v6.session = 0xABCDEF01; v6.seq = 7;
+            String got = enc(v6);
+            check(got.equals(V6_FULL), "v6 sample differs from V6_FULL (and tests/wire_v6_sample.h): " + firstDifference(V6_FULL, got));
+            check(V6_FULL.indexOf('\r') < 0 && V6_FULL.endsWith("\n") && !V6_FULL.endsWith("\n\n"), "V6_FULL has LF line ends and one final newline");
+            Snapshot v5 = fullSampleWithEntities();
+            v5.wire = 5;
+            check(!enc(v5).contains("\nE "), "v5 never carries E lines (the overlay would not read them)");
+            Snapshot stale = fullSampleWithEntities();
+            stale.wire = 6; stale.itemsFresh = false;
+            check(!enc(stale).contains("\nE "), "no item list this time = no entity list either (they travel together)");
+            Snapshot hostile = new Snapshot();
+            hostile.wire = 6;
+            hostile.entities.add(new Snapshot.Ent(5, Snapshot.KIND_OTHER, 1, 2, 3, Float.NaN, Float.NaN, Float.NaN, "Evil Name\nE 9 1 0 0 0 - - - X"));
+            String[] hl = enc(hostile).split("\n", -1);
+            int eLines = 0;
+            for (String l : hl) if (l.startsWith("E ")) eLines++;
+            check(eLines == 1 && hl[hl.length - 2].equals("E 5 0 1.000 2.000 3.000 - - - Evil%20Name%0AE%209%201%200%200%200%20%2D%20%2D%20%2D%20X"), "a label cannot start another line: " + hl[hl.length - 2]);
+            Snapshot big = new Snapshot();
+            big.wire = 6;
+            for (int i = 0; i < 5000; i++) big.entities.add(new Snapshot.Ent(i, 1, i, 64, i, 0.6f, 1.8f, 20f, "Zombie"));
+            check(enc(big).length() <= Snapshot.MAX_BYTES + 200 && enc(big).split("\n").length > 100, "the E lines stop at the datagram size budget");
         }
 
         // ---- v5: the session token is the second line, only at wire >= 5 and only when there is one ----

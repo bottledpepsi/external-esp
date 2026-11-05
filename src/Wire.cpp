@@ -269,6 +269,35 @@ ParseResult ParseDatagramEx(const char* data, size_t len, WorldSnapshot& out)
             long long mode = 1;
             c.mode = (Integer(smode, mode) && mode >= 1 && mode <= 3) ? static_cast<int>(mode) : 1;
         }
+        else if (tag == 'E' && version >= wire::kEntityVersion)
+        {
+            // E <id> <kind 0-5> <x> <y> <z> <w|-> <h|-> <health|-> <label|->
+            string_view sid, skind, sw, sh, shp, label;
+            if (!(ls.Next(sid) && ls.Next(skind) && ls.Next(sx) && ls.Next(sy) && ls.Next(sz) && ls.Next(sw) && ls.Next(sh) && ls.Next(shp) && ls.Next(label)))
+            {
+                ignore();
+                continue;
+            }
+            long long id = 0, kind = 0;
+            float x, y, z, w = 0, h = 0, hp = 0;
+            if (!Integer(sid, id) || id < 0 || id > 4294967295LL || !Integer(skind, kind) || kind < 0 || kind >= kEntityKindCount) { ignore(); continue; }
+            if (!Coord(sx, x) || !Coord(sy, y) || !Coord(sz, z)) { ignore(); continue; }
+            if (snap.entities.size() >= wire::kMaxEntities) { ignore(); continue; }
+            EntityState e;
+            e.id = static_cast<uint32_t>(id);
+            e.kind = static_cast<EntityKind>(kind);
+            e.pos = {x, y, z};
+            e.sizeValid = Num(sw, w, 1e-6, wire::kMaxBox) && Num(sh, h, 1e-6, wire::kMaxBox);
+            if (e.sizeValid)
+            {
+                e.width = w;
+                e.height = h;
+            }
+            e.healthValid = Num(shp, hp, 0.0, wire::kMaxHealth);
+            if (e.healthValid) e.health = hp;
+            e.label = wire::CleanText(PercentDecode(std::string(label)), wire::kMaxLabelBytes);
+            snap.entities.push_back(std::move(e));
+        }
         else if (tag == 'I' && version >= 3)
         {
             string_view sw, sh, scount, key, ench, tags;

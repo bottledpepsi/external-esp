@@ -43,6 +43,34 @@ struct ItemState
 
 // The game's camera as read by the agent. `fovValid` is false when the FOV method could not be found
 // (the configured FOV is used then). mode: 1 first person, 2 third person (behind), 3 third person (front).
+// What kind of thing a wire-v6 "E" record is. The agent decides from the entity's class (its name and its superclass names); `Other` = a living
+// thing it could not place. The overlay's category filters and colors are keyed by this (EspConfig / EspRenderer).
+enum class EntityKind : uint8_t
+{
+    Other = 0, // a mob / creature that matched none of the below (grey, hidden by default)
+    Hostile = 1,
+    Passive = 2,
+    Neutral = 3,
+    Projectile = 4,
+    Xp = 5, // experience orbs
+    Count
+};
+inline constexpr int kEntityKindCount = static_cast<int>(EntityKind::Count);
+
+// A non-player, non-item entity (wire v6 "E" line). `id` is the agent's stable id for the object while it lives (identity hash), so the overlay can
+// follow one entity from sample to sample; it can repeat after the object is gone and is never an index.
+struct EntityState
+{
+    uint32_t id = 0;
+    EntityKind kind = EntityKind::Other;
+    Vec3 pos;
+    float width = 0.6f, height = 1.8f;
+    bool sizeValid = false;
+    float health = 0;
+    bool healthValid = false;
+    std::string label; // the class's simple name ("Zombie"), may be empty
+};
+
 struct CameraState
 {
     bool valid = false;
@@ -59,6 +87,7 @@ struct WorldSnapshot
     CameraState camera;
     std::vector<PlayerState> players; // OTHER players only
     std::vector<ItemState> items;
+    std::vector<EntityState> entities; // wire v6; sent with the item list (hasItems), so the overlay keeps the previous ones when a datagram has neither
     std::string status; // agent status line
     uint64_t seq = 0; // increments per received datagram
     std::chrono::steady_clock::time_point arrived{};

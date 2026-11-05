@@ -99,9 +99,15 @@ public:
         // v4 datagrams without an item list keep the previous one
         const bool keepItems = !s.hasItems && haveCur_;
         std::vector<ItemState> keep;
+        std::vector<EntityState> keepEnt;
+        if (keepItems) keepEnt = std::move(cur_.entities); // the item and entity lists travel together (the F line)
         if (keepItems) keep = std::move(cur_.items);
         cur_ = s;
-        if (keepItems) cur_.items = std::move(keep);
+        if (keepItems)
+        {
+            cur_.items = std::move(keep);
+            cur_.entities = std::move(keepEnt);
+        }
         cur_.hasItems = true;
         haveCur_ = true;
 

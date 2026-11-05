@@ -23,11 +23,14 @@ namespace wire
     // ---- protocol versions this parser understands ----
     inline constexpr int kMinVersion = 1;
     inline constexpr int kTimestampVersion = 4; // first version with the T sample stamp: older agents work, but the smoothing is degraded
-    inline constexpr int kMaxVersion = 5; // what the overlay tells the agent it can read (agent option wire=N); v4 = T and F lines, v5 = + K (session token)
+    inline constexpr int kMaxVersion = 6; // what the overlay tells the agent it can read (agent option wire=N); v4 = T and F lines, v5 = + K (session token), v6 = + E (other entities)
+    inline constexpr int kEntityVersion = 6; // first version with the E lines
 
     // ---- limits (docs/wire.md) ----
     inline constexpr size_t kMaxPlayers = 256; // P lines kept per datagram
     inline constexpr size_t kMaxItems = 1024; // I lines kept per datagram
+    inline constexpr size_t kMaxEntities = 512; // E lines kept per datagram
+    inline constexpr size_t kMaxLabelBytes = 32; // an E line's class name
     inline constexpr size_t kMaxEnchants = 32; // per item
     inline constexpr size_t kMaxNameBytes = 64;
     inline constexpr size_t kMaxUuidBytes = 40;
