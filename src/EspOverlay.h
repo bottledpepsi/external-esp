@@ -11,6 +11,7 @@
 #include "Gfx.h"
 #include "HotkeyRegistry.h"
 #include "Bookmarks.h"
+#include "ControlFile.h"
 #include "DeathTracker.h"
 #include "EntityTracker.h"
 #include "Hud.h"
@@ -57,6 +58,14 @@ private:
     AppOptions opt_;
     hud::Text hudText_;
     hud::Mode lastHudMode_ = hud::Mode::Compact;
+    // The entity inspector: what is asked of the agent (a request in the control file, renewed every couple of seconds) and shown on the right.
+    enum class InspectMode { Off, Entity, Agent };
+    InspectMode inspectMode_ = InspectMode::Off;
+    uint32_t inspectId_ = 0;
+    bool inspectPick_ = false; // the hotkey was pressed: choose the entity at the crosshair on the next frame (that is when the camera is known)
+    Clock::time_point inspectWrittenAt_{};
+    void WriteInspectRequest(const std::string& text);
+    void SetInspect(InspectMode m, uint32_t id);
     Bookmarks bookmarks_; // replay: the places the user marked (<recording>.bookmarks.json)
     DeathTracker death_; // where the local player last died (DeathTracker.h)
     EntityTracker entTracker_; // follows the mobs from list to list (EntityTracker.h)

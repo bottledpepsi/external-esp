@@ -112,3 +112,7 @@ snapshot must satisfy `tests/wire_invariants.h`).
 | `label` | the class's simple name (`Zombie`), percent-encoded, at most 32 bytes, `-` when empty |
 
 The entity list travels with the item list: a datagram that has an `F 1` line carries both (either may be empty), one without it carries neither and the overlay keeps the previous lists. At most 512 `E` lines are kept per datagram (the rest count in `ignoredLines`), nearest first. An agent writes `E` lines only when the overlay said it reads v6 (`wire=6`); a v5 overlay ignores them anyway (an unknown line). Which kind an entity gets is decided by the agent from its class names; see docs/compatibility.md.
+
+## Inspector rows (v6, `X` lines)
+
+`X <id> <key> <value>` is one row of the entity inspector's answer: `id` is the entity the rows describe (the `E` line id; **0** = the agent's own discovery paths), `key` and `value` are percent-encoded text (at most 40 and 120 bytes; a bare `-` is "nothing", an escaped `%2D` is a dash). Every row of a datagram is about the first row's id (others are dropped and counted in `ignoredLines`); at most 64 are kept. They are sent only with the item / entity list (`F 1`) and only while the overlay's request in the control file is live (docs/ui.md); the Smoother keeps them with the lists, and a list without `X` lines clears them. An agent writes them only at wire 6; an older overlay ignores them as unknown lines.

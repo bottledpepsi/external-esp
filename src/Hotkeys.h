@@ -38,6 +38,8 @@ namespace hotkeys
         ToggleProjectiles,
         ToggleXp,
         ClearDeathMarker,
+        ToggleInspector,
+        InspectAgent,
         Count
     };
     inline constexpr int kActionCount = static_cast<int>(Action::Count);

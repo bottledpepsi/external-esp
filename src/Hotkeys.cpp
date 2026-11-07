@@ -26,6 +26,8 @@ namespace hotkeys
             {Action::ToggleProjectiles, "HotkeyToggleProjectiles", "Toggle projectiles", "", false, false},
             {Action::ToggleXp, "HotkeyToggleXp", "Toggle experience orbs", "", false, false},
             {Action::ClearDeathMarker, "HotkeyClearDeath", "Clear the death marker", "", false, false},
+            {Action::ToggleInspector, "HotkeyToggleInspector", "Inspect the entity at the crosshair", "", false, false},
+            {Action::InspectAgent, "HotkeyInspectAgent", "Inspect how the agent found things", "", false, false},
         };
 
         std::string Lower(std::string s)

@@ -417,6 +417,64 @@ void EspRenderer::DrawEntities(Gfx& g, const Settings& s, const Camera& cam, con
     }
 }
 
+const EntityState* EspRenderer::PickNearestCrosshair(const Settings& s, const Camera& cam, const std::vector<EntityState>& list, float maxPx) const
+{
+    const float maxDist = presets::EntityDist[static_cast<size_t>(std::clamp(s.entDistIdx, 0, static_cast<int>(presets::EntityDist.size()) - 1))];
+    const EntityState* best = nullptr;
+    float bestPx = maxPx;
+    for (const EntityState& e : list)
+    {
+        const int k = static_cast<int>(e.kind);
+        if (k < 0 || k >= kEntityKindCount || !s.entShow[k] || cam.Distance(e.pos) > maxDist) continue;
+        const bool small = e.kind == EntityKind::Projectile || e.kind == EntityKind::Xp;
+        const double h = e.sizeValid ? e.height : small ? 0.4 : kPlayerH;
+        float sx, sy;
+        if (!cam.Project({e.pos.x, e.pos.y + h * 0.5, e.pos.z}, sx, sy)) continue; // behind the camera
+        const float d = std::hypot(sx - cam.w * 0.5f, sy - cam.h * 0.5f);
+        if (d < bestPx)
+        {
+            bestPx = d;
+            best = &e;
+        }
+    }
+    return best;
+}
+
+void EspRenderer::DrawInspector(Gfx& g, const Settings& s, const Camera& cam, int winW, int winH, const InspectView& v)
+{
+    if (v.entity)
+    {
+        const EntityState& e = *v.entity;
+        const bool small = e.kind == EntityKind::Projectile || e.kind == EntityKind::Xp;
+        ScreenBox sb;
+        const double w = e.sizeValid ? e.width : small ? 0.4 : kPlayerW, h = e.sizeValid ? e.height : small ? 0.4 : kPlayerH;
+        if (ProjectBox(cam, e.pos, w, h, 6.f, sb)) g.Rect(sb.x0 - 3.f, sb.y0 - 3.f, sb.x1 - sb.x0 + 6.f, sb.y1 - sb.y0 + 6.f, Col{1.f, 1.f, 1.f, 0.95f}, 2.f);
+    }
+    (void)s;
+    constexpr float kW = 420.f, kRowH = 15.f;
+    const size_t nRows = v.rows ? std::min<size_t>(v.rows->size(), 34) : 0;
+    const float x = static_cast<float>(winW) - kW - 12.f;
+    const float h = 26.f + (nRows ? static_cast<float>(nRows) * kRowH : kRowH) + 10.f;
+    const float y = std::clamp(static_cast<float>(presets::MinimapSizes[std::clamp(s.minimapSizeIdx, 0, static_cast<int>(presets::MinimapSizes.size()) - 1)]) + 40.f, 40.f,
+                               std::max(40.f, static_cast<float>(winH) - h - 10.f));
+    g.FillRRect(x, y, kW, h, 6.f, Col{0.04f, 0.05f, 0.08f, 0.82f});
+    g.RRect(x, y, kW, h, 6.f, Col{0.45f, 0.55f, 0.85f, 0.8f}, 1.f);
+    g.Text(v.title, x + 8.f, y + 5.f, Font::Ui, Col{0.95f, 0.97f, 1.f, 1.f}, true);
+    float ry = y + 26.f;
+    if (!v.rows)
+    {
+        g.Text(v.note, x + 8.f, ry, Font::UiSmall, Col{0.95f, 0.8f, 0.4f, 1.f}, true);
+        return;
+    }
+    auto fit = [](const std::string& str, size_t n) { return str.size() <= n ? str : str.substr(0, n - 1) + "~"; };
+    for (size_t i = 0; i < nRows; ++i, ry += kRowH)
+    {
+        const InspectRow& r = (*v.rows)[i];
+        g.Text(fit(r.key, 30), x + 8.f, ry, Font::UiSmall, Col{0.62f, 0.67f, 0.80f, 1.f}, true);
+        g.Text(fit(r.value, 38), x + 176.f, ry, Font::UiSmall, Col{0.90f, 0.93f, 0.98f, 1.f}, true);
+    }
+}
+
 void EspRenderer::DrawGhosts(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& raw)
 {
     const Col ghost{1.f, 0.2f, 0.9f, 0.85f};

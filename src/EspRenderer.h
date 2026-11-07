@@ -27,6 +27,18 @@ public:
     void DrawDeathMarker(Gfx& g, const Settings& s, const Camera& cam, const Vec3& where, int winW, int winH);
     // The "Both" view: the agent's samples exactly as they arrived, as thin magenta outlines (players) and small squares (items), drawn under
     // the normal picture. No labels, tracers or health. `cam` belongs to the same raw snapshot (CameraFromSnapshot).
+    // The entity whose box centre is nearest the middle of the screen, within `maxPx` pixels, drawn on this frame's terms (in front of the camera, inside
+    // the entity distance, its category shown). Null when nothing qualifies. What the inspector selects.
+    const EntityState* PickNearestCrosshair(const Settings& s, const Camera& cam, const std::vector<EntityState>& list, float maxPx = 220.f) const;
+    // The inspector's panel (right edge, below the radar) and a bright frame round the inspected entity. `title`: what is inspected; `rows` null while the
+    // agent has not answered yet (`note` says what is awaited).
+    struct InspectView
+    {
+        std::string title, note;
+        const std::vector<InspectRow>* rows = nullptr;
+        const EntityState* entity = nullptr; // framed in the world when set
+    };
+    void DrawInspector(Gfx& g, const Settings& s, const Camera& cam, int winW, int winH, const InspectView& v);
     void DrawGhosts(Gfx& g, const Settings& s, const Camera& cam, const WorldSnapshot& raw);
     // Mobs, projectiles and experience orbs (wire v6): a box per entity in its category's color, a health bar for living ones, a name and distance
     // for mobs (through the same declutter pass as the players'). Call after DrawWorld() with the entities to show - the tracker's predictions, or the

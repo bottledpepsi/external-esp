@@ -1,5 +1,7 @@
 // App.h - command-line options shared by main / supervisor / overlay.
 #pragma once
+#include "ControlFile.h"
+#include "Paths.h"
 #include "Platform.h"
 #include <cstdint>
 #include <filesystem>
@@ -45,6 +47,7 @@ struct AppOptions
         if (pacingSeconds > 0) o += ";pacing=" + std::to_string(pacingSeconds);
         if (selftestSeconds > 0) o += ";selftest=" + std::to_string(selftestSeconds); // the report lands in the agent's export folder (= next to the jar)
         if (dumpStructure || selftestSeconds > 0) o += ";dump=1";
+        if (const std::string ctl = controlfile::AgentOption(ConfigDir() / controlfile::kFileName); !ctl.empty()) o += ";" + ctl; // the entity inspector's request file
         return o;
     }
 };

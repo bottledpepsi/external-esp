@@ -14,6 +14,7 @@ final class AgentConfig {
     volatile int port = 47615; // UDP port of the C++ radar on 127.0.0.1
     volatile int hz = 20;      // send rate (1..240); the overlay passes hz=120 by default
     String exportDir = System.getProperty("java.io.tmpdir");
+    String ctlFile;                // ctl=<path>: the control file the overlay writes inspector requests to (Inspector.java); null = none
     String username;           // override for the local player's name (normally auto-detected)
     /**
      * The newest wire protocol the overlay says it can read (option wire=N). An overlay that does not pass it (an older build, or a
@@ -62,6 +63,7 @@ final class AgentConfig {
         String tok = kv.get("token");
         if (tok != null && tok.matches("[0-9A-Za-z]{16,64}")) c.token = tok;
         if (kv.containsKey("export") && !kv.get("export").isEmpty()) c.exportDir = kv.get("export");
+        if (kv.containsKey("ctl") && Inspector.validPath(kv.get("ctl"))) c.ctlFile = kv.get("ctl");
         if (kv.containsKey("user") && !kv.get("user").isEmpty()) c.username = kv.get("user");
         return c;
     }
@@ -82,6 +84,7 @@ final class AgentConfig {
         if (given.containsKey("dump") && n.dump != dump) { sb.append("dump ").append(dump).append(" -> ").append(n.dump).append("; "); dump = n.dump; }
         if (given.containsKey("pacer") && !n.pacer.equals(pacer)) { sb.append("pacer ").append(pacer).append(" -> ").append(n.pacer).append("; "); pacer = n.pacer; }
         if (given.containsKey("pacing") && n.pacingSeconds != pacingSeconds) { sb.append("pacing report after ").append(n.pacingSeconds).append(" s; "); pacingSeconds = n.pacingSeconds; pacingReportDone = false; }
+        if (given.containsKey("ctl") && (n.ctlFile == null ? ctlFile != null : !n.ctlFile.equals(ctlFile))) { sb.append("control file ").append(n.ctlFile == null ? "removed" : "changed").append("; "); ctlFile = n.ctlFile; }
         final String old = token;
         if (old == null ? n.token != null : !old.equals(n.token)) { sb.append(n.token == null ? "session token removed; " : "session token replaced; "); token = n.token; }
         if (given.containsKey("export") && !n.exportDir.equals(exportDir)) sb.append("export folder change ignored (fixed while the agent runs); ");

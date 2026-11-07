@@ -16,6 +16,8 @@ A hotkey is a key, optionally with **Ctrl, Shift, Alt, Win**: `F6`, `Ctrl+Shift+
 | Cycle raw / smoothed view (Smoothed / Raw / Both) | `HotkeyCycleView` | not set |
 | Toggle performance graphs | `HotkeyToggleGraphs` | not set |
 | Clear the death marker | `HotkeyClearDeath` | not set |
+| Inspect the entity at the crosshair (press again to stop) | `HotkeyToggleInspector` | not set |
+| Inspect how the agent found things (player list, camera, items) | `HotkeyInspectAgent` | not set |
 | Toggle mobs / entities (master switch) | `HotkeyToggleEntities` | not set |
 | Toggle hostile mobs / passive mobs / neutral mobs / projectiles / experience orbs | `HotkeyToggleHostile`, `HotkeyTogglePassive`, `HotkeyToggleNeutral`, `HotkeyToggleProjectiles`, `HotkeyToggleXp` | not set |
 

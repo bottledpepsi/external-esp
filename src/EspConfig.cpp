@@ -48,9 +48,11 @@ std::string& EspConfig::HotkeyText(hotkeys::Action a)
     case Action::ToggleProjectiles: return HotkeyToggleProjectiles;
     case Action::ToggleXp: return HotkeyToggleXp;
     case Action::ClearDeathMarker: return HotkeyClearDeath;
+    case Action::ToggleInspector: return HotkeyToggleInspector;
+    case Action::InspectAgent: return HotkeyInspectAgent;
     case Action::Count: break;
     }
-    return HotkeyClearDeath; // not reachable for a real action
+    return HotkeyInspectAgent; // not reachable for a real action
 }
 
 const ColorKey& ColorKeyAt(int i)
@@ -81,7 +83,7 @@ std::string EspConfig::ToJson() const
         Kv("HotkeyCycleHud", S(HotkeyCycleHud)) + Kv("HotkeyCycleView", S(HotkeyCycleView)) + Kv("HotkeyToggleGraphs", S(HotkeyToggleGraphs)) +
         Kv("HotkeyToggleEntities", S(HotkeyToggleEntities)) + Kv("HotkeyToggleHostile", S(HotkeyToggleHostile)) + Kv("HotkeyTogglePassive", S(HotkeyTogglePassive)) +
         Kv("HotkeyToggleNeutral", S(HotkeyToggleNeutral)) + Kv("HotkeyToggleProjectiles", S(HotkeyToggleProjectiles)) + Kv("HotkeyToggleXp", S(HotkeyToggleXp)) +
-        Kv("HotkeyClearDeath", S(HotkeyClearDeath));
+        Kv("HotkeyClearDeath", S(HotkeyClearDeath)) + Kv("HotkeyToggleInspector", S(HotkeyToggleInspector)) + Kv("HotkeyInspectAgent", S(HotkeyInspectAgent));
     j += Kv("DistanceFormat", S(DistanceFormat)) + Kv("MaxLabelDist", N(MaxLabelDist)) +
         Kv("TextShadow", B(TextShadow));
     j += Kv("ShowPlayers", B(ShowPlayers)) + Kv("ShowPlayerNames", B(ShowPlayerNames)) + Kv("BoxStyle", S(BoxStyle)) +
@@ -137,6 +139,8 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HotkeyToggleProjectiles = GetString(o, "HotkeyToggleProjectiles", c.HotkeyToggleProjectiles);
     c.HotkeyToggleXp = GetString(o, "HotkeyToggleXp", c.HotkeyToggleXp);
     c.HotkeyClearDeath = GetString(o, "HotkeyClearDeath", c.HotkeyClearDeath);
+    c.HotkeyToggleInspector = GetString(o, "HotkeyToggleInspector", c.HotkeyToggleInspector);
+    c.HotkeyInspectAgent = GetString(o, "HotkeyInspectAgent", c.HotkeyInspectAgent);
     c.HudMode = GetString(o, "HudMode", c.HudMode);
     c.ViewMode = GetString(o, "ViewMode", c.ViewMode);
     c.ShowGraphs = GetBool(o, "ShowGraphs", c.ShowGraphs);

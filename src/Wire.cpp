@@ -298,6 +298,18 @@ ParseResult ParseDatagramEx(const char* data, size_t len, WorldSnapshot& out)
             e.label = wire::CleanText(PercentDecode(std::string(label)), wire::kMaxLabelBytes);
             snap.entities.push_back(std::move(e));
         }
+        else if (tag == 'X' && version >= wire::kEntityVersion)
+        {
+            // X <id> <key> <value>: one row of the inspector's answer; every row of a datagram is about the same id (the first one's)
+            string_view sid, key, value;
+            long long id = 0;
+            if (!(ls.Next(sid) && ls.Next(key) && ls.Next(value)) || !Integer(sid, id) || id < 0 || id > 4294967295LL) { ignore(); continue; }
+            if (snap.inspect.valid && snap.inspect.id != static_cast<uint32_t>(id)) { ignore(); continue; }
+            if (snap.inspect.rows.size() >= wire::kMaxInspectRows) { ignore(); continue; }
+            snap.inspect.valid = true;
+            snap.inspect.id = static_cast<uint32_t>(id);
+            snap.inspect.rows.push_back({wire::CleanText(PercentDecode(std::string(key)), wire::kMaxInspectKey), wire::CleanText(PercentDecode(std::string(value)), wire::kMaxInspectValue)});
+        }
         else if (tag == 'I' && version >= 3)
         {
             string_view sw, sh, scount, key, ench, tags;

@@ -82,6 +82,18 @@ struct EntityState
     std::string label; // the class's simple name ("Zombie"), may be empty
 };
 
+// The entity inspector's answer (wire v6 "X" lines): rows of key / value text about one entity, or about how the agent found things (id 0).
+struct InspectRow
+{
+    std::string key, value;
+};
+struct InspectState
+{
+    bool valid = false; // at least one X line was read
+    uint32_t id = 0; // the entity the rows describe; 0 = the agent / player discovery paths
+    std::vector<InspectRow> rows;
+};
+
 struct CameraState
 {
     bool valid = false;
@@ -98,6 +110,7 @@ struct WorldSnapshot
     CameraState camera;
     std::vector<PlayerState> players; // OTHER players only
     std::vector<ItemState> items;
+    InspectState inspect; // wire v6, sent with the lists while the overlay is inspecting; kept with them like the entities
     uint64_t listSeq = 0; // which item/entity list this is: the Smoother numbers each list it receives and keeps the number while it keeps the list
     std::vector<EntityState> entities; // wire v6; sent with the item list (hasItems), so the overlay keeps the previous ones when a datagram has neither
     std::string status; // agent status line

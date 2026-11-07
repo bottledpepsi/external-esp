@@ -80,6 +80,22 @@ final class ItemScanner {
         EntClass(int kind, String label, Probe.Model model) { this.kind = kind; this.label = label; this.model = model; }
     }
 
+    /** The inspector's rows for entity `id`: found among the entities the agent walks (by identity hash), described with its class model when it has one. */
+    private volatile Object[] lastElements;   // the entity list of the last poll(): what inspect() looks through
+    List<String[]> inspect(int id) {
+        Object[] el = lastElements;
+        if (el != null)
+            for (Object e : el) {
+                if (e == null || System.identityHashCode(e) != id) continue;
+                Object cached = entClasses.get(e.getClass());
+                EntClass ec = cached instanceof EntClass ? (EntClass) cached : null;
+                ItemClass ic = null;
+                try { ic = ec == null ? classify(e) : null; } catch (Throwable ignored) { }
+                return Inspector.describeEntity(e, id, ec == null ? null : ec.model, ec == null ? (ic != null ? -1 : EntityKinds.classify(e.getClass())) : ec.kind);
+            }
+        return Inspector.notFound(id);
+    }
+
     /** The entities found by the last poll(), nearest first, at most MAX_ENTITIES. Never null. */
     List<Snapshot.Ent> entities() { return entities; }
 
@@ -534,6 +550,7 @@ final class ItemScanner {
             if (elements == null) { best = null; return null; }
         }
 
+        lastElements = elements;
         ++gen;
         double[] pos = new double[3];
         float[] size = new float[2];

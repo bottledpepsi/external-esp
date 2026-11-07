@@ -56,3 +56,5 @@ With wire 6 (the default when the overlay is v6 or newer) the agent also reports
 
 The agent learns each entity class once (the same bounded search budget as the item classes, logged as `Entity class: ... -> kind N`), reads the position and hitbox through the same structure the players use, and the health through the same getter. Up to 128 entities are sent, nearest first; the agent does not look for them at all when the overlay only reads wire 5 or older.
 
+The inspector (docs/ui.md) is the quickest way to see *why* an entity has the category, position or health it has: it shows the class chain the category was decided from and the field path each value is read from. The agent option `ctl=<absolute path>` names its request file; the overlay passes it on attach, and a path containing `;` or `=` (the option separators) is not passed, which leaves the inspector off.
+

@@ -88,6 +88,11 @@ final class Probe {
     private final CameraScanner camScan = new CameraScanner(this);
     private final StructureDump dumper = new StructureDump(this);
     private final ItemScanner itemScan = new ItemScanner(this);
+    private final Inspector inspector = new Inspector();          // the overlay's entity inspector (ctl=<file>)
+    private String inspectorFile;
+    private List<String[]> lastInspect = new ArrayList<String[]>();
+    private int lastInspectId;
+    private boolean lastHasInspect;
     private boolean auxDone;
     private long auxNextTry, lastItemPoll;
     private double[] lastEye;                 // eye of the last snapshot; pollItemsIfDue() searches around it
@@ -108,6 +113,35 @@ final class Probe {
 
     boolean isReady() { return ready; }
     FieldPath localPath() { return localPath; }
+
+    /** Looks at the inspector's control file (once per item poll) and prepares the rows that go out with the lists. */
+    private void pollInspector() {
+        final String want = cfg.negotiatedWire() >= Snapshot.WIRE_ENTITIES ? cfg.ctlFile : null;     // nobody reads X lines below v6
+        if (want == null ? inspectorFile != null : !want.equals(inspectorFile)) { inspectorFile = want; inspector.setFile(want); }
+        lastHasInspect = false;
+        if (want == null) return;
+        final int mode = inspector.poll(System.currentTimeMillis());
+        try {
+            if (mode == Inspector.MODE_ENTITY) { lastInspect = itemScan.inspect(inspector.target()); lastInspectId = inspector.target(); lastHasInspect = true; }
+            else if (mode == Inspector.MODE_PLAYER) { lastInspect = inspectPlayerRows(); lastInspectId = 0; lastHasInspect = true; }
+        } catch (Throwable t) {
+            lastInspect = new ArrayList<String[]>();
+            lastInspect.add(new String[] {"error", "inspector: " + t});
+            lastInspectId = mode == Inspector.MODE_ENTITY ? inspector.target() : 0; lastHasInspect = true;
+        }
+    }
+
+    /** How the agent found things: the paths it discovered (player list, local player, camera, items) and what it is sending. */
+    List<String[]> inspectPlayerRows() {
+        List<String[]> r = new ArrayList<String[]>();
+        r.add(new String[] {"wire", "v" + cfg.negotiatedWire() + " at " + cfg.hz + " Hz"});
+        r.add(new String[] {"player list", containerPath == null ? "-" : containerPath.describe()});
+        r.add(new String[] {"local player", localPath == null ? "-" : localPath.describe()});
+        r.add(new String[] {"camera", camScan.describe == null ? "-" : camScan.describe});
+        r.add(new String[] {"items", itemScan.describe == null ? "-" : itemScan.describe});
+        r.add(new String[] {"scan", itemScan.summary()});
+        return r;
+    }
     List<FieldPath> entityContainerPaths() { return aux.entityContainers; }
     CameraScanner camera() { return camScan; }
     ItemScanner items() { return itemScan; }
@@ -516,6 +550,15 @@ final class Probe {
 
         boolean position(Object p, double[] o) { return pos.read(p, o); }
 
+        /** Where each value comes from, as text for the inspector (field names only, nothing is read from the game here). */
+        String describePos() {
+            if (pos == null) return "-";
+            if (pos.vec) return pos.vecField.describe() + " -> x,y,z";
+            return pos.xyz[0].describe() + ", " + pos.xyz[1].describe() + ", " + pos.xyz[2].describe();
+        }
+        String describeSize() { return bbField == null ? "-" : bbField.describe() + " (box of 6 doubles)"; }
+        String describeHealth() { return healthMethod == null ? "-" : healthMethod.getDeclaringClass().getSimpleName() + "." + healthMethod.getName() + "()"; }
+
         /** Hitbox size from the entity's AABB-like field: out[0] = width, out[1] = height. false if unavailable. */
         boolean size(Object p, float[] out) {
             if (bbField == null) return false;
@@ -856,7 +899,11 @@ final class Probe {
             // poll can never delay a camera sample, and they go on the wire only when they changed (itemsFresh).
             lastEye = eye;
             s.itemsFresh = itemsDirty;
-            if (itemsDirty) { s.items.addAll(lastItems); s.entities.addAll(lastEnts); itemsDirty = false; }
+            if (itemsDirty) {
+                s.items.addAll(lastItems); s.entities.addAll(lastEnts);
+                if (lastHasInspect) { s.hasInspect = true; s.inspectId = lastInspectId; s.inspect.addAll(lastInspect); }
+                itemsDirty = false;
+            }
             if (!camScan.describe.equals(exportedCam) || !itemScan.describe.equals(exportedItems)) {
                 exportedCam = camScan.describe; exportedItems = itemScan.describe;
                 exportLayout();
@@ -882,7 +929,10 @@ final class Probe {
         lastItemPoll = now;
         itemScan.wantEntities = cfg.negotiatedWire() >= Snapshot.WIRE_ENTITIES;     // nobody reads E lines below v6: do not even look for them
         List<Snapshot.Item> polled = itemScan.poll(eye, 48);
-        if (polled != null) { lastItems = polled; lastEnts = itemScan.entities(); itemsDirty = true; }   // null = transient read failure: keep the last frame
+        if (polled != null) {
+            lastItems = polled; lastEnts = itemScan.entities(); itemsDirty = true;
+            pollInspector();
+        }   // null = transient read failure: keep the last frame
     }
 
     /** Runs the second graph search (camera candidates + entity containers) once per discovery. */

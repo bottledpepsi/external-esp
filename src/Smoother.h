@@ -103,6 +103,8 @@ public:
         const bool keepItems = !s.hasItems && haveCur_;
         std::vector<ItemState> keep;
         std::vector<EntityState> keepEnt;
+        InspectState keepInsp;
+        if (keepItems) keepInsp = std::move(cur_.inspect);
         const uint64_t keepSeq = cur_.listSeq;
         const Clock::time_point keepArrived = listArrived_;
         if (keepItems) keepEnt = std::move(cur_.entities); // the item and entity lists travel together (the F line)
@@ -112,6 +114,7 @@ public:
         {
             cur_.items = std::move(keep);
             cur_.entities = std::move(keepEnt);
+            cur_.inspect = std::move(keepInsp);
             cur_.listSeq = keepSeq;
             listArrived_ = keepArrived;
         }

@@ -52,6 +52,9 @@ final class Snapshot {
     Cam camera;
     final List<Rec> players = new ArrayList<Rec>();
     final List<Item> items = new ArrayList<Item>();
+    final List<String[]> inspect = new ArrayList<String[]>();   // wire v6: the inspector's rows ({key, value}), sent with the lists while the overlay is inspecting
+    int inspectId;                                              // the entity they describe (0 = the player / the agent itself)
+    boolean hasInspect;
     final List<Ent> entities = new ArrayList<Ent>();   // wire v6: sent with the item list (itemsFresh), nearest first
 
     static final int WIRE_VERSION = 6;      // the newest protocol this encoder writes (v5 = v4 + the K session-token line, v6 = v5 + the E entity lines)
@@ -80,6 +83,8 @@ final class Snapshot {
      *   F 1                                                                 marks that the item list follows (possibly empty);
      *                                                                       snapshots without it keep the previous items
      *   I <x> <y> <z> <w|-> <h|-> <count> <key> <ench|-> <tags|->           one line per dropped item
+     *   X <id> <key> <value>                                                v6: one inspector row (key <= 32 and value <= 100 characters, percent-encoded);
+     *                                                                       id 0 = the agent / player discovery paths; sent only while the overlay inspects
      *   E <id> <kind> <x> <y> <z> <w|-> <h|-> <health|-> <label|->          v6: one line per other entity (mob, projectile, xp orb); kind 0 other,
      *                                                                       1 hostile, 2 passive, 3 neutral, 4 projectile, 5 xp; sent with the items
      * ("-" = unknown.) Angles in degrees, Minecraft convention: yaw 0 = +Z (south), pitch +90 = straight down.
@@ -118,8 +123,20 @@ final class Snapshot {
                 sb.append(one);
             }
         }
+        if (wire >= WIRE_ENTITIES && hasInspect) {
+            int rows = 0;
+            for (String[] kv : inspect) {
+                if (rows++ >= 48) break;
+                StringBuilder one = new StringBuilder(160);
+                one.append("X ").append(inspectId & 0xFFFFFFFFL).append(' ').append(pct(clip(kv[0], 32))).append(' ').append(pct(clip(kv[1], 100))).append('\n');
+                if (sb.length() + one.length() > MAX_BYTES) break;
+                sb.append(one);
+            }
+        }
         return sb.toString().getBytes(Charset.forName("UTF-8"));
     }
+
+    private static String clip(String s, int n) { return s == null ? "" : s.length() <= n ? s : s.substring(0, n); }
 
     private static void line(StringBuilder sb, char tag, Rec r) {
         String n = (r.name == null || r.name.isEmpty()) ? "?" : r.name.replaceAll("\\s", "_");

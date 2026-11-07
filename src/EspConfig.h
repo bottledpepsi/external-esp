@@ -38,7 +38,7 @@ struct EspConfig
     // A hotkey is a key, optionally with Ctrl / Shift / Alt / Win: "F6", "Ctrl+Shift+F5". "" = not bound (allowed except for the first two).
     std::string HotkeyToggle = "Delete", HotkeyConfig = "Insert", HotkeyExit = "End";
     std::string HotkeyTogglePlayers, HotkeyToggleItems, HotkeyToggleTracers, HotkeyToggleMinimap, HotkeyNextProfile, HotkeyCycleHud, HotkeyCycleView, HotkeyToggleGraphs, HotkeyToggleEntities,
-        HotkeyToggleHostile, HotkeyTogglePassive, HotkeyToggleNeutral, HotkeyToggleProjectiles, HotkeyToggleXp, HotkeyClearDeath;
+        HotkeyToggleHostile, HotkeyTogglePassive, HotkeyToggleNeutral, HotkeyToggleProjectiles, HotkeyToggleXp, HotkeyClearDeath, HotkeyToggleInspector, HotkeyInspectAgent;
     std::string& HotkeyText(hotkeys::Action a); // the field of an action
     // GENERAL
     std::string DistanceFormat = "Meters"; // Meters | Kilometers | Off

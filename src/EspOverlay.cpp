@@ -352,6 +352,15 @@ void EspOverlay::Perform(hotkeys::Action a)
         settings_.RequestSave();
         break;
     case Action::ToggleGraphs: settings_.showGraphs = !settings_.showGraphs; LOG_INFO("Performance graphs %s (hotkey)", settings_.showGraphs ? "on" : "off"); settings_.RequestSave(); break;
+    case Action::ToggleInspector:
+        if (replayMode_) LOG_INFO("Inspector: not available while replaying (there is no agent)");
+        else if (inspectMode_ == InspectMode::Entity) SetInspect(InspectMode::Off, 0);
+        else inspectPick_ = true;
+        break;
+    case Action::InspectAgent:
+        if (replayMode_) LOG_INFO("Inspector: not available while replaying (there is no agent)");
+        else SetInspect(inspectMode_ == InspectMode::Agent ? InspectMode::Off : InspectMode::Agent, 0);
+        break;
     case Action::ClearDeathMarker: death_.Clear(); LOG_INFO("Death marker cleared (hotkey)"); break;
     case Action::ToggleEntities: settings_.showEntities = !settings_.showEntities; LOG_INFO("Entities %s (hotkey)", settings_.showEntities ? "on" : "off"); settings_.RequestSave(); break;
     case Action::ToggleHostile: ToggleEntityKind(EntityKind::Hostile); break;
@@ -385,6 +394,20 @@ EspRenderer::MinimapExtras EspOverlay::MinimapExtrasFor(const std::vector<Entity
     x.hasDeath = death;
     if (death) x.death = death_.Marker();
     return x;
+}
+
+void EspOverlay::WriteInspectRequest(const std::string& text)
+{
+    std::string err;
+    if (!controlfile::Write(ConfigDir() / controlfile::kFileName, text, &err)) LOG_WARN("Inspector: the control file could not be written: %s", err.c_str());
+    inspectWrittenAt_ = Clock::now();
+}
+
+void EspOverlay::SetInspect(InspectMode m, uint32_t id)
+{
+    inspectMode_ = m;
+    inspectId_ = id;
+    WriteInspectRequest(m == InspectMode::Entity ? controlfile::RequestEntity(id) : m == InspectMode::Agent ? controlfile::RequestAgent() : controlfile::RequestOff());
 }
 
 void EspOverlay::ProbeJitter(const Camera& cam, const WorldSnapshot& snap)
@@ -916,6 +939,35 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
                 renderer_.DrawMinimap(gfx_, settings_, cam, snap, w, h, MinimapExtrasFor(settings_.showEntities ? &entPredicted_ : nullptr, showDeath));
             if (graphs) ProbeJitter(cam, snap);
         }
+            {
+                // the entity inspector: choose, keep the request alive, show the answer
+                const bool rawView = view == 1 && haveRaw;
+                const Camera& icam = rawView ? rawCam : cam;
+                const std::vector<EntityState>& shownEnts = rawView ? rawSnap_.entities : settings_.showEntities ? entPredicted_ : snap.entities;
+                if (inspectPick_)
+                {
+                    inspectPick_ = false;
+                    if (const EntityState* e = renderer_.PickNearestCrosshair(settings_, icam, shownEnts)) SetInspect(InspectMode::Entity, e->id);
+                    else LOG_INFO("Inspector: no entity near the crosshair (is \"Show entities\" on, and the category shown?)");
+                }
+                if (inspectMode_ != InspectMode::Off)
+                {
+                    if (std::chrono::duration<double>(now - inspectWrittenAt_).count() >= controlfile::kRenewSeconds)
+                        WriteInspectRequest(inspectMode_ == InspectMode::Entity ? controlfile::RequestEntity(inspectId_) : controlfile::RequestAgent());
+                    EspRenderer::InspectView v;
+                    const bool answered = snap.inspect.valid && snap.inspect.id == (inspectMode_ == InspectMode::Entity ? inspectId_ : 0u);
+                    if (inspectMode_ == InspectMode::Entity)
+                    {
+                        for (const EntityState& e : shownEnts)
+                            if (e.id == inspectId_) { v.entity = &e; break; }
+                        v.title = "Inspect: " + (v.entity && !v.entity->label.empty() ? v.entity->label : std::string("entity")) + "  #" + std::to_string(inspectId_);
+                    }
+                    else v.title = "Inspect: how the agent found things";
+                    v.note = "waiting for the agent (needs wire 6 and the control file option)";
+                    if (answered) v.rows = &snap.inspect.rows;
+                    renderer_.DrawInspector(gfx_, settings_, icam, w, h, v);
+                }
+            }
     }
 
     // HUD (top-left). The text is rebuilt four times a second (ten while the exit key is held), not every frame: the draw calls get the same

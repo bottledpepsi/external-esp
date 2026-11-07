@@ -103,6 +103,14 @@ public final class SnapshotTest {
         Snapshot v6 = fullSampleWithEntities();
         v6.wire = 6; v6.token = "0123456789abcdef0123456789abcdef"; v6.session = 0xABCDEF01; v6.seq = 7;
         write(dir, "full_v6.dgram", v6);
+        Snapshot ins = fullSampleWithEntities();
+        ins.wire = 6; ins.token = "0123456789abcdef0123456789abcdef"; ins.session = 0xABCDEF01; ins.seq = 8;
+        ins.hasInspect = true; ins.inspectId = 1234567;
+        ins.inspect.add(new String[] {"class", "Zombie > Monster > PathfinderMob > Mob > LivingEntity > Entity"});
+        ins.inspect.add(new String[] {"position path", "Entity.position -> x,y,z"});
+        ins.inspect.add(new String[] {"Entity.tickCount : int", "1200"});
+        ins.inspect.add(new String[] {"Mob.name : String", "\"Evil Name\\nX 9 k v\""});
+        write(dir, "inspect_v6.dgram", ins);
 
         Snapshot bare = new Snapshot();
         bare.itemsFresh = false;

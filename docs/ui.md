@@ -125,3 +125,15 @@ A theme file:
 
 Every key is optional. A bad value (a color that is not `#RRGGBB[AA]`, an unknown box style, a line width outside 0.5-8, an opacity outside 0-1, a font name with control characters or over 64 characters) is reported and ignored without stopping the rest, and unknown keys are ignored. A theme file is only read as data. Names are made safe for a file name (letters, digits, space, `-`, `_`, `.`; no paths, no reserved Windows names).
 
+## Entity inspector (hotkeys `HotkeyToggleInspector`, `HotkeyInspectAgent`)
+
+Shows what the agent knows about one thing, and how it found it. Both hotkeys are unbound until you pick keys (HOTKEYS tab).
+
+* **Inspect the entity at the crosshair** (`HotkeyToggleInspector`; press again to stop): the entity whose middle is nearest the centre of the screen (within 220 px, shown by the entity filters) is framed in white and a panel on the right lists, as the agent sees it:
+  * `class` - the class and every superclass, which is what decides the category; `category`; `id` (the identity the E lines carry).
+  * `position path`, `size path`, `health path` - *where in the game's objects each value is read from* (field names found by the agent), with what they read right now (`position`, `size`, `health`). A wrong-looking position or a missing health is answered here: the path is either not found (`-`) or it is not the one you expect.
+  * Up to 30 of the entity's own fields (`Class.field : type` and the value): numbers, text, enum names, array lengths and the sizes of collections. Other game objects show their type only: the agent never calls a game object's `toString()`, because that would run game code.
+* **Inspect how the agent found things** (`HotkeyInspectAgent`): the agent's discovery paths for the player list, the local player, the camera and the items, the wire version and rate, and the scan summary - the same information as `esp_agent.log`, live.
+* Needs the agent to speak wire 6 and to have been given the control file (`ctl=`, passed automatically on attach and in the printed `-javaagent` line). Until it answers the panel says `waiting for the agent`. Not available while replaying (there is no agent).
+
+**How it works.** The overlay writes a one-line request - `inspect <id>`, `inspect player` or `inspect off` - into `agent.ctl` in the settings folder and rewrites it every two seconds while it is inspecting; the file's modification time is the heartbeat. An agent that has not seen it renewed for six seconds stops (so a crashed overlay does not leave it inspecting), and an `inspect off` or a request for an id that is not in its entity list is answered at once. The answer travels in the normal datagram stream as `X` lines (docs/wire.md), only with the item / entity list and only while a request is live, so it costs nothing when the inspector is off. The agent only reads the request file; it never writes to the game.

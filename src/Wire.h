@@ -31,6 +31,7 @@ namespace wire
     inline constexpr size_t kMaxItems = 1024; // I lines kept per datagram
     inline constexpr size_t kMaxEntities = 512; // E lines kept per datagram
     inline constexpr size_t kMaxLabelBytes = 32; // an E line's class name
+    inline constexpr size_t kMaxInspectRows = 64, kMaxInspectKey = 40, kMaxInspectValue = 120; // X lines per datagram and their texts
     inline constexpr size_t kMaxEnchants = 32; // per item
     inline constexpr size_t kMaxNameBytes = 64;
     inline constexpr size_t kMaxUuidBytes = 40;
