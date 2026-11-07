@@ -55,7 +55,7 @@ public:
     // "Copy diagnostics" (GENERAL tab): the handler builds the report, puts it on the clipboard and returns the one-line result to show.
     void SetDiagnosticsHandler(std::function<std::string()> h) { diagnostics_ = std::move(h); }
     // shown in GENERAL (exact / reconstructed, FOV, perspective)
-    bool CapturingKeys() const { return rebindActive_ || friendFocus_ || profileFocus_ || itemFocus_; }
+    bool CapturingKeys() const { return rebindActive_ || friendFocus_ || profileFocus_ || itemFocus_ || themeFocus_; }
     // Esc was pressed with nothing waiting for input: the overlay closes the window (taken once).
     bool TakeCloseRequest()
     {
@@ -66,7 +66,7 @@ public:
 
     void ResetFocus()
     {
-        friendFocus_ = profileFocus_ = itemFocus_ = rebindActive_ = false;
+        friendFocus_ = profileFocus_ = itemFocus_ = themeFocus_ = rebindActive_ = false;
         dragging_ = false;
         sliderDrag_ = -1;
         nav_.OnMouse();
@@ -78,6 +78,7 @@ private:
     bool CycleRow(const std::string& label, int& idx, int count, const std::string& valueText);
     bool ToggleRow(const std::string& label, bool& v);
     void InfoRow(const std::string& text, bool warn = false);
+    void TabThemes();
     void Section(const std::string& title);
     bool Button(const std::string& label, float x, float w, float h = 20.f, const Col* bg = nullptr);
     // keyboard: registers the control at the layout cursor as a stop; true when focused (draws the ring); `act` receives the pending key action
@@ -127,7 +128,11 @@ private:
     std::string diagnosticsNote_;
     std::string cameraInfo_;
     std::string friendInput_, profileInput_, itemInput_; // itemInput_: a name pattern for the item filter
-    bool friendFocus_ = false, profileFocus_ = false, itemFocus_ = false;
+    bool friendFocus_ = false, profileFocus_ = false, itemFocus_ = false, themeFocus_ = false;
+    std::string themeInput_, themeNote_; // the name to save the current look under; the last theme message
+    bool themeNoteWarn_ = false;
+    std::vector<std::string> themeList_; // the user's saved themes (the themes folder), read when the tab is shown and after a change
+    bool themeListFresh_ = false;
     bool rebindActive_ = false;
     int rebindSlot_ = 0; // hotkeys::Action + 1
     long long frame_ = 0;

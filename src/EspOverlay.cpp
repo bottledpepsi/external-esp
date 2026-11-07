@@ -479,6 +479,7 @@ int EspOverlay::Run()
     rate_.SetRunning(injector_.Hz());
     lastSeenHz_ = settings_.agentHz;
     gfx_.SetAdapterPreference(opt_.adapter);
+    Gfx::SetPreferredFont(settings_.fontFamily); // a theme's font; the fonts are created in Init()
     if (!gfx_.Init(!opt_.legacyGfx))
     {
         LOG_ERROR("Direct2D/DirectWrite initialisation failed.");

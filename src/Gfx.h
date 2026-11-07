@@ -67,6 +67,8 @@ public:
     void InvalidatePlacement();
     // --adapter N|NAME: which GPU the overlay's device is created on (AdapterChoice.h); empty = automatic. Set before Init().
     void SetAdapterPreference(const std::string& arg) { adapterPref_ = gpuselect::ParsePreference(arg); }
+    // The family tried before the built-in list (empty = the list). Takes effect when the fonts are created, so: before Init() / after a restart.
+    static void SetPreferredFont(const std::string& utf8);
     bool WantsLegacy() const;
     bool DeviceLost() const;
     void SimulateLoss(bool persistent);

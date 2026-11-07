@@ -43,6 +43,17 @@ struct ItemState
 
 // The game's camera as read by the agent. `fovValid` is false when the FOV method could not be found
 // (the configured FOV is used then). mode: 1 first person, 2 third person (behind), 3 third person (front).
+// The colors of what the overlay draws (Theme.h sets them, Settings keeps them, the renderer reads them). Defaults = the look before themes existed.
+struct Rgba
+{
+    float r = 1, g = 1, b = 1, a = 1;
+};
+struct Colors
+{
+    Rgba enemy{1.00f, 0.16f, 0.16f, 1.f}, friendly{0.16f, 1.00f, 0.35f, 1.f}, text{1.f, 1.f, 1.f, 1.f}, distance{0.85f, 0.88f, 0.95f, 0.9f};
+    Rgba item{1.f, 1.f, 1.f, 1.f}, itemEnchanted{0.62f, 0.78f, 1.f, 1.f}, death{1.f, 0.25f, 0.25f, 1.f};
+};
+
 // What kind of thing a wire-v6 "E" record is. The agent decides from the entity's class (its name and its superclass names); `Other` = a living
 // thing it could not place. The overlay's category filters and colors are keyed by this (EspConfig / EspRenderer).
 enum class EntityKind : uint8_t

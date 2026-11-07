@@ -39,6 +39,8 @@ namespace
 
     // First installed family from a preference list (Segoe UI is missing on some stripped-down Windows
     // installs and under Wine). Returns the last candidate if none is found.
+    std::wstring g_preferredFamily; // Settings::fontFamily / a theme's font: tried before the list (Gfx::SetPreferredFont)
+
     std::wstring PickFamily(IDWriteFactory* dw)
     {
         static const wchar_t* const kCandidates[] = {
@@ -46,6 +48,12 @@ namespace
         };
         ComPtr<IDWriteFontCollection> coll;
         if (FAILED(dw->GetSystemFontCollection(coll.put(), FALSE))) return kCandidates[0];
+        if (!g_preferredFamily.empty())
+        {
+            UINT32 idx = 0;
+            BOOL exists = FALSE;
+            if (SUCCEEDED(coll->FindFamilyName(g_preferredFamily.c_str(), &idx, &exists)) && exists) return g_preferredFamily; // not installed: the list as usual
+        }
         for (const wchar_t* name : kCandidates)
         {
             UINT32 idx = 0;
@@ -78,6 +86,8 @@ ID2D1Factory* Gfx::Fac() const
 #endif
     return factory_.get();
 }
+
+void Gfx::SetPreferredFont(const std::string& utf8) { g_preferredFamily = ToWide(utf8); }
 
 bool Gfx::Init(bool allowGpu)
 {

@@ -100,3 +100,22 @@ Needs the agent to send wire v6 entities and class names it can read (docs/compa
 * **To players** (`TracerPlayers`, default on): the players' tracers, in their usual colors (friend / near-red to far-green / white). Turn it off to keep only the mobs' lines.
 * **Tracers to mobs** (`TracerHostile`, `TracerPassive`, `TracerNeutral`, `TracerProjectiles`, `TracerXp`, `TracerOtherMobs`): one switch per category, in the category's own color (ENTITIES section). Only hostile mobs have one by default. A line needs the mob to be shown, so a category that is hidden or beyond the entity distance has no tracer; thickness, opacity, fade and target point are the ones set for the players' tracers.
 
+## Themes (PROFILES tab, "THEMES")
+
+A theme is the overlay's *look* as data: seven colors - enemy (player boxes, tracers, radar dots), friend, name text, distance text, item boxes, enchanted item boxes and the death marker - plus, optionally, a box style, a line width, an opacity and a font. The colors are ordinary settings (`ColorEnemy`, `ColorFriend`, `ColorText`, `ColorDistance`, `ColorItem`, `ColorItemEnchanted`, `ColorDeath`, written as `#RRGGBB` or `#RRGGBBAA`; `FontFamily`), so they are saved with the rest and carried by profiles. The default colors are exactly the ones used before themes existed.
+
+* **Built in**: `default` (the colors only; applying it changes nothing else), `high-contrast` (yellow enemies, cyan friends, white text, sharp boxes, 3 px lines, fully opaque), `colorblind` (orange / blue instead of red / green), `soft` (muted, rounded, 1 px, 75 %).
+* **Your own**: type a name, SAVE - the current look is written to `themes\<name>.json` in the settings folder. USE applies one; DEL removes it. Drop a theme file into that folder by hand and it appears in the list.
+* **COPY JSON / PASTE**: the current look as JSON on the clipboard, and a theme from the clipboard applied at once. A theme of more than 16 KB is refused.
+* **What applying does**: the colors are always set. A box style, line width (box and tracer thickness, rounded to the nearest preset), opacity (item and tracer opacity, nearest preset) or font in the theme is applied too; one that is missing leaves your setting alone. **A font applies after a restart** (the fonts are created at start-up); a font that is not installed falls back to the built-in list.
+
+A theme file:
+
+```
+{ "name": "My theme", "enemy": "#FF2929", "friend": "#29FF59", "text": "#FFFFFF", "distance": "#D9E0F2E6",
+  "item": "#FFFFFF", "itemEnchanted": "#9EC7FF", "death": "#FF4040",
+  "boxStyle": "Sharp", "lineWidth": 2, "opacity": 0.75, "font": "Segoe UI" }
+```
+
+Every key is optional. A bad value (a color that is not `#RRGGBB[AA]`, an unknown box style, a line width outside 0.5-8, an opacity outside 0-1, a font name with control characters or over 64 characters) is reported and ignored without stopping the rest, and unknown keys are ignored. A theme file is only read as data. Names are made safe for a file name (letters, digits, space, `-`, `_`, `.`; no paths, no reserved Windows names).
+

@@ -2,6 +2,7 @@
 #include "ConfigSchema.h"
 #include "ConfigStore.h"
 #include "ItemFilter.h"
+#include "Theme.h"
 #include "Logger.h"
 #include "Paths.h"
 #include "Presets.h"
@@ -52,6 +53,15 @@ std::string& EspConfig::HotkeyText(hotkeys::Action a)
     return HotkeyClearDeath; // not reachable for a real action
 }
 
+const ColorKey& ColorKeyAt(int i)
+{
+    static const ColorKey k[kColorKeyCount] = {
+        {"ColorEnemy", &Colors::enemy, "#FF2929"},         {"ColorFriend", &Colors::friendly, "#29FF59"}, {"ColorText", &Colors::text, "#FFFFFF"},
+        {"ColorDistance", &Colors::distance, "#D9E0F2E6"}, {"ColorItem", &Colors::item, "#FFFFFF"},       {"ColorItemEnchanted", &Colors::itemEnchanted, "#9EC7FF"},
+        {"ColorDeath", &Colors::death, "#FF4040"}};
+    return k[i < 0 || i >= kColorKeyCount ? 0 : i];
+}
+
 const EntityKeys& EntityKeysFor(int kind)
 {
     static const EntityKeys k[kEntityKindCount] = {
@@ -90,6 +100,8 @@ std::string EspConfig::ToJson() const
     j += Kv("Fov", N(Fov)) + Kv("VSync", B(VSync)) + Kv("Smoothing", B(Smoothing)) + Kv("ShowHealth", B(ShowHealth)) +
         Kv("ShowItemEnchants", B(ShowItemEnchants)) + Kv("ShowItemTags", B(ShowItemTags)) + Kv("HudMode", S(HudMode));
     j += Kv("ViewMode", S(ViewMode)) + Kv("ShowGraphs", B(ShowGraphs));
+    for (int i = 0; i < kColorKeyCount; ++i) j += Kv(ColorKeyAt(i).key, S(ThemeColor[i]));
+    j += Kv("FontFamily", S(FontFamily));
     j += Kv("TracerMaxDist", S(TracerMaxDist)) + Kv("TracerPlayers", B(TracerPlayers));
     j += Kv("MinimapMode", S(MinimapMode)) + Kv("MinimapCorner", S(MinimapCorner)) + Kv("ShowDeathMarker", B(ShowDeathMarker));
     j += Kv("ShowEntities", B(ShowEntities)) + Kv("EntityMaxDist", S(EntityMaxDist)) + Kv("EntityLabels", B(EntityLabels));
@@ -128,6 +140,8 @@ EspConfig EspConfig::FromJson(const json::Object& o)
     c.HudMode = GetString(o, "HudMode", c.HudMode);
     c.ViewMode = GetString(o, "ViewMode", c.ViewMode);
     c.ShowGraphs = GetBool(o, "ShowGraphs", c.ShowGraphs);
+    for (int i = 0; i < kColorKeyCount; ++i) c.ThemeColor[i] = GetString(o, ColorKeyAt(i).key, c.ThemeColor[i]);
+    c.FontFamily = GetString(o, "FontFamily", c.FontFamily);
     c.TracerMaxDist = GetString(o, "TracerMaxDist", c.TracerMaxDist);
     c.TracerPlayers = GetBool(o, "TracerPlayers", c.TracerPlayers);
     c.MinimapMode = GetString(o, "MinimapMode", c.MinimapMode);
@@ -223,6 +237,14 @@ void Settings::Apply(const EspConfig& c)
 
     showTracers = c.ShowTracers;
     tracerOriginIdx = c.TracerOrigin == "Center" ? 1 : c.TracerOrigin == "Top" ? 2 : 0;
+    for (int i = 0; i < kColorKeyCount; ++i)
+    {
+        // the default text keeps the exact default floats (so an unthemed overlay looks exactly as before); anything else is parsed, a bad one falls back
+        Rgba parsed;
+        const Rgba def = Colors{}.*ColorKeyAt(i).member;
+        colors.*ColorKeyAt(i).member = (c.ThemeColor[i] == ColorKeyAt(i).defaultHex || !theme::ParseHex(c.ThemeColor[i], parsed)) ? def : parsed;
+    }
+    fontFamily = theme::GoodText(c.FontFamily, theme::kMaxFontLen) ? c.FontFamily : std::string();
     tracerPlayers = c.TracerPlayers;
     tracerMaxIdx = 3;
     for (size_t i = 0; i < presets::TracerDistLabels.size(); ++i)
@@ -318,6 +340,13 @@ EspConfig Settings::Build() const
     c.BoxFillOpacity = Opacities[boxFillIdx];
     c.ShowTracers = showTracers;
     c.TracerOrigin = tracerOriginIdx == 1 ? "Center" : tracerOriginIdx == 2 ? "Top" : "Bottom";
+    for (int i = 0; i < kColorKeyCount; ++i)
+    {
+        const Rgba cur = colors.*ColorKeyAt(i).member, def = Colors{}.*ColorKeyAt(i).member;
+        const bool isDefault = cur.r == def.r && cur.g == def.g && cur.b == def.b && cur.a == def.a;
+        c.ThemeColor[i] = isDefault ? ColorKeyAt(i).defaultHex : theme::ToHex(cur);
+    }
+    c.FontFamily = fontFamily;
     c.TracerPlayers = tracerPlayers;
     c.TracerMaxDist = presets::TracerDistLabels[static_cast<size_t>(std::clamp(tracerMaxIdx, 0, static_cast<int>(presets::TracerDistLabels.size()) - 1))];
     for (int k = 0; k < kEntityKindCount; ++k) c.TracerEntity[k] = tracerEntity[k];

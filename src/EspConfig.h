@@ -22,6 +22,16 @@ struct EntityKeys
 };
 const EntityKeys& EntityKeysFor(int kind); // by EntityKind; out of range -> Other
 
+// The theme colors in the settings file (Theme.h): "#RRGGBB" / "#RRGGBBAA" text, one key each. The member of Colors that each one sets.
+struct ColorKey
+{
+    const char* key;
+    Rgba Colors::* member;
+    const char* defaultHex;
+};
+inline constexpr int kColorKeyCount = 7;
+const ColorKey& ColorKeyAt(int i);
+
 struct EspConfig
 {
     // Hotkeys
@@ -78,6 +88,8 @@ struct EspConfig
     std::string ViewMode = "Smoothed"; // Smoothed | Raw | Both: what is drawn - the smoothed picture, the agent's samples as they arrive, or both (raw in magenta)
     // Entities (wire v6): mobs, projectiles, experience orbs. Master switch off by default so an update changes nothing until asked; each category
     // has its own switch and a palette color (presets::EntityPaletteNames). Indexed by EntityKind: Other, Hostile, Passive, Neutral, Projectile, Xp.
+    std::string ThemeColor[kColorKeyCount] = {"#FF2929", "#29FF59", "#FFFFFF", "#D9E0F2E6", "#FFFFFF", "#9EC7FF", "#FF4040"}; // ColorKeyAt(i).key
+    std::string FontFamily; // preferred font for all text ("" = the built-in list); read at start-up
     std::string MinimapMode = "North"; // North (the map keeps its orientation, a wedge shows where you look) | Rotate (the map turns so you always look up)
     std::string MinimapCorner = "TopRight"; // TopRight | TopLeft | BottomRight | BottomLeft
     bool ShowDeathMarker = true; // a marker where the local player last died (radar and world) - DeathTracker.h
@@ -147,6 +159,8 @@ struct Settings
     float itemMinPx = 6, playerMinPx = 2;
     int hudMode = 1; // hud::Mode
     bool showGraphs = false;
+    Colors colors; // the theme's colors (Theme.h)
+    std::string fontFamily;
     int minimapMode = 0, minimapCorner = 0; // 0 north-up / 1 rotate;  0 top right, 1 top left, 2 bottom right, 3 bottom left
     bool showDeath = true;
     int tracerMaxIdx = 3; // presets::TracerDist

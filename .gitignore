@@ -8,3 +8,4 @@
 /agent/test/out/
 /agent/test/out-smoke/
 /cmake-build-debug/
+/dist/

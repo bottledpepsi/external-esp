@@ -19,10 +19,8 @@ namespace
     constexpr double kPlayerH = 1.8, kPlayerW = 0.6; // Minecraft player hitbox (standing)
     constexpr double kDeg2Rad = 3.14159265358979323846 / 180.0;
 
-    const Col kEnemy{1.00f, 0.16f, 0.16f, 1.f};
-    const Col kFriend{0.16f, 1.00f, 0.35f, 1.f};
-    const Col kText{1, 1, 1, 1};
-    const Col kDistText{0.85f, 0.88f, 0.95f, 0.9f};
+    // The colors come from the settings (Theme.h): player boxes / tracers / dots, friends, name text, distance text, items, the death marker.
+    Col C(const Rgba& c) { return Col{c.r, c.g, c.b, c.a}; }
     constexpr float kDistLineH = 13.f; // the distance text under a box (Font::UiSmall, 11 px)
 
     Font NameFont(const Settings& s)
@@ -83,7 +81,7 @@ void EspRenderer::DrawLabels(Gfx& g, const Settings& s, const LabelReq& r)
         }
         if (draw)
         {
-            g.TextCentered(p.name, cx, y, f, (isFriend ? kFriend : kText).with(alpha), s.textShadow);
+            g.TextCentered(p.name, cx, y, f, (isFriend ? C(s.colors.friendly) : C(s.colors.text)).with(C(s.colors.text).a * alpha), s.textShadow);
             if (isFriend)
             {
                 // avatar placeholder (see Avatar.h)
@@ -92,7 +90,7 @@ void EspRenderer::DrawLabels(Gfx& g, const Settings& s, const LabelReq& r)
                 if (auto img = SkinCache::Get(p.name))
                 {
                     g.DrawImage(*img, ax, y + 1, a, a, alpha);
-                    g.Rect(ax - 0.5f, y + 0.5f, a + 1.f, a + 1.f, kFriend.with(0.8f * alpha), 1.f);
+                    g.Rect(ax - 0.5f, y + 0.5f, a + 1.f, a + 1.f, C(s.colors.friendly).with(0.8f * alpha), 1.f);
                 }
                 else
                 {
@@ -116,7 +114,7 @@ void EspRenderer::DrawLabels(Gfx& g, const Settings& s, const LabelReq& r)
             draw = placer_.Place(box, +1, kDistLineH, 2);
             y = box.y0;
         }
-        if (draw) g.TextCentered(d, r.cx, y, Font::UiSmall, kDistText.with(kDistText.a * alpha), s.textShadow);
+        if (draw) g.TextCentered(d, r.cx, y, Font::UiSmall, C(s.colors.distance).with(s.colors.distance.a * alpha), s.textShadow);
     }
 }
 
@@ -140,7 +138,7 @@ void EspRenderer::DrawTracer(Gfx& g, const Settings& s, const Camera& cam, const
     Col c;
     if (fixed) c = fixed->with(opacity);
     else if (s.tracerColorIdx == 1) c = Col{1, 1, 1, opacity};
-    else if (isFriend) c = kFriend.with(opacity);
+    else if (isFriend) c = C(s.colors.friendly).with(opacity);
     else
     {
         const float t = Clamp01((dist - TRACER_NEAR) / (TRACER_FAR - TRACER_NEAR));
@@ -179,7 +177,7 @@ void EspRenderer::DrawSkeleton(Gfx& g, const Settings& s, const Camera& cam, con
     const P2 handL = pr(J(-0.37, 0.06, 0.72)), handR = pr(J(0.37, 0.06, 0.72));
     const P2 footL = pr(J(-0.12, 0, 0)), footR = pr(J(0.12, 0, 0));
 
-    Col c = isFriend ? kFriend.with(0.95f) : kEnemy.with(0.95f);
+    Col c = isFriend ? C(s.colors.friendly).with(0.95f) : C(s.colors.enemy).with(0.95f);
     if (!isFriend && s.playerColorIdx == 1)
     {
         const float t = Clamp01((dist - BOX_NEAR) / (BOX_FAR - BOX_NEAR));
@@ -217,7 +215,7 @@ void EspRenderer::DrawPlayer(Gfx& g, const Settings& s, const Camera& cam, const
     const float minX = sb.x0, minY = sb.y0, maxX = sb.x1, maxY = sb.y1;
     const float bx = minX, by = minY, bw = maxX - minX, bh = maxY - minY;
 
-    const Col base = isFriend ? kFriend : kEnemy;
+    const Col base = isFriend ? C(s.colors.friendly) : C(s.colors.enemy);
     const float fill = presets::Opacities[s.boxFillIdx];
     if (fill > 0.f) g.FillRect(bx, by, bw, bh, base.with(fill));
 
@@ -270,7 +268,7 @@ void EspRenderer::DrawItem(Gfx& g, const Settings& s, const Camera& cam, const I
     const float minX = sb.x0, minY = sb.y0, maxX = sb.x1, maxY = sb.y1;
     const float op = presets::TraceOpacities[s.itemOpacityIdx];
     const bool enchanted = !it.enchants.empty();
-    const Col boxCol = enchanted ? Col{0.62f, 0.78f, 1.f, op} : Col{1, 1, 1, op};
+    const Col boxCol = (enchanted ? C(s.colors.itemEnchanted) : C(s.colors.item)).with(op * (enchanted ? s.colors.itemEnchanted.a : s.colors.item.a));
     g.Rect(minX, minY, maxX - minX, maxY - minY, boxCol, 1.f);
     const float alpha = labels::Fade(dist, s.labelDist, s.labelFadePct);
     if (alpha < 0.03f) return; // beyond the label distance (or all but gone)
@@ -414,7 +412,7 @@ void EspRenderer::DrawEntities(Gfx& g, const Settings& s, const Camera& cam, con
                 drawD = placer_.Place(box, +1, kDistLineH, 2);
                 dy = box.y0;
             }
-            if (drawD) g.TextCentered(d, r.cx, dy, Font::UiSmall, kDistText.with(kDistText.a * alpha), s.textShadow);
+            if (drawD) g.TextCentered(d, r.cx, dy, Font::UiSmall, C(s.colors.distance).with(s.colors.distance.a * alpha), s.textShadow);
         }
     }
 }
@@ -636,7 +634,7 @@ void EspRenderer::DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, cons
         float sx, sy;
         toScreen(p.pos.x - center.x, p.pos.z - center.z, sx, sy);
         clampRim(sx, sy); // clamp to the rim
-        g.FillCircle(cx + sx, cy + sy, 3.f, FriendList::Contains(p.name) ? kFriend : kEnemy);
+        g.FillCircle(cx + sx, cy + sy, 3.f, FriendList::Contains(p.name) ? C(s.colors.friendly) : C(s.colors.enemy));
     }
     if (extra.hasDeath)
     {
@@ -644,7 +642,7 @@ void EspRenderer::DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, cons
         toScreen(extra.death.x - center.x, extra.death.z - center.z, sx, sy);
         const bool pinned = std::hypot(sx, sy) > r - 4.f;
         clampRim(sx, sy);
-        const Col red{1.f, 0.25f, 0.25f, pinned ? 0.7f : 1.f};
+        const Col red = C(s.colors.death).with(s.colors.death.a * (pinned ? 0.7f : 1.f));
         g.Line(cx + sx - 4, cy + sy - 4, cx + sx + 4, cy + sy + 4, red, 2.f);
         g.Line(cx + sx - 4, cy + sy + 4, cx + sx + 4, cy + sy - 4, red, 2.f);
     }
@@ -667,12 +665,11 @@ void EspRenderer::DrawMinimap(Gfx& g, const Settings& s, const Camera& cam, cons
 
 void EspRenderer::DrawDeathMarker(Gfx& g, const Settings& s, const Camera& cam, const Vec3& where, int winW, int winH)
 {
-    (void)s;
     const double dist = cam.Distance(where);
     float sx = 0, sy = 0;
     const Vec3 above{where.x, where.y + 1.0, where.z};
     const bool front = cam.Project(above, sx, sy);
-    const Col red{1.f, 0.25f, 0.25f, 0.95f};
+    const Col red = C(s.colors.death).with(s.colors.death.a * 0.95f);
     if (!front || sx < 12 || sx > winW - 12 || sy < 12 || sy > winH - 12)
     {
         // off screen or behind: a small arrow-less tag at the nearest edge, so it is known to be somewhere there

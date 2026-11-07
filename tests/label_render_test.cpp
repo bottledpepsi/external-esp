@@ -179,6 +179,52 @@ int main()
         CHECK(Find(g, "Alice") != nullptr);
     }
 
+    // ---- the theme's colors are what gets drawn ----
+    {
+        Settings s = Defaults();
+        s.maxPlayerDistIdx = 3;
+        s.showItems = true;
+        s.itemOpacityIdx = static_cast<int>(presets::TraceOpacities.size()) - 1; // the most opaque preset
+        s.colors.text = Rgba{0.1f, 0.2f, 0.3f, 1.f};
+        s.colors.distance = Rgba{0.4f, 0.5f, 0.6f, 1.f};
+        s.colors.item = Rgba{0.7f, 0.8f, 0.9f, 1.f};
+        s.colors.itemEnchanted = Rgba{0.9f, 0.1f, 0.5f, 1.f};
+        s.colors.death = Rgba{0.2f, 0.9f, 0.2f, 1.f};
+        WorldSnapshot w;
+        w.players = {Player("Alice", 0, 20)};
+        ItemState plain, ench;
+        plain.pos = {-3, 0, 20};
+        plain.key = "minecraft:stick";
+        ench.pos = {3, 0, 20};
+        ench.key = "minecraft:iron_sword";
+        ench.enchants.push_back({"minecraft:sharpness", 3});
+        w.items = {plain, ench};
+        EspRenderer r;
+        Gfx g;
+        r.DrawWorld(g, s, cam, w);
+        const TextCall* name = Find(g, "Alice");
+        const TextCall* dist = Find(g, "20m");
+        CHECK(name && std::fabs(name->col.r - 0.1f) < 1e-4f && std::fabs(name->col.g - 0.2f) < 1e-4f && std::fabs(name->col.b - 0.3f) < 1e-4f);
+        CHECK(dist && std::fabs(dist->col.r - 0.4f) < 1e-4f && std::fabs(dist->col.b - 0.6f) < 1e-4f);
+        bool gotPlain = false, gotEnch = false;
+        for (const Col& c : g.rectCols)
+        {
+            gotPlain = gotPlain || (std::fabs(c.r - 0.7f) < 1e-4f && std::fabs(c.g - 0.8f) < 1e-4f && std::fabs(c.b - 0.9f) < 1e-4f);
+            gotEnch = gotEnch || (std::fabs(c.r - 0.9f) < 1e-4f && std::fabs(c.g - 0.1f) < 1e-4f && std::fabs(c.b - 0.5f) < 1e-4f);
+        }
+        CHECK(gotPlain && gotEnch); // the item boxes carry the item and enchanted colors
+        Gfx d;
+        r.DrawDeathMarker(d, s, cam, {0, 0, 30}, 1920, 1080);
+        CHECK(d.segs.size() == 4 && std::fabs(d.segs[0].col.r - 0.2f) < 1e-4f && std::fabs(d.segs[0].col.g - 0.9f) < 1e-4f);
+        // the default theme draws what was drawn before themes: a name in pure white, the distance in the old pale blue
+        Settings def = Defaults();
+        def.maxPlayerDistIdx = 3;
+        Gfx g0;
+        r.DrawWorld(g0, def, cam, w);
+        CHECK(Find(g0, "Alice") && Find(g0, "Alice")->col.r == 1.f && Find(g0, "Alice")->col.g == 1.f && std::fabs(Find(g0, "20m")->col.r - 0.85f) < 1e-6f &&
+              std::fabs(Find(g0, "20m")->col.a - 0.9f) < 1e-6f);
+    }
+
     // ---- tracers: origin, distance cap, players and mob categories ----
     {
         Settings s = Defaults();

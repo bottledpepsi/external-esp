@@ -1,4 +1,5 @@
 #include "ConfigSchema.h"
+#include "Theme.h"
 #include "Hotkeys.h"
 #include "Presets.h"
 #include "Tunables.h"
@@ -10,7 +11,7 @@ namespace configschema
 {
     namespace
     {
-        enum class Kind { Bool, Int, Float, Word, Hotkey, Text };
+        enum class Kind { Bool, Int, Float, Word, Hotkey, Text, Color };
 
         struct Spec
         {
@@ -44,6 +45,8 @@ namespace configschema
                 B("ShowTracers");
                 W("TracerOrigin", {"Bottom", "Center", "Top"});
                 W("TracerMaxDist", presets::TracerDistLabels);
+                for (int i = 0; i < kColorKeyCount; ++i) s.push_back({ColorKeyAt(i).key, Kind::Color, 0, 0, {}});
+                s.push_back({"FontFamily", Kind::Text, 0, static_cast<double>(theme::kMaxFontLen), {}});
                 B("TracerPlayers");
                 W("TracerColor", {"Dynamic", "White"});
                 { const auto r = mm(presets::TraceOpacities); F("TracerOpacity", r.first, r.second); }
@@ -167,6 +170,16 @@ namespace configschema
                     {
                         const std::string shown = v.type == json::Value::Type::String ? "'" + v.s + "'" : std::string(TypeName(v.type));
                         Warn(out, key, key + ": " + shown + " is not one of " + Join(sp.words) + " - using " + DefaultText(key));
+                        o.erase(it);
+                    }
+                    break;
+                }
+            case Kind::Color:
+                {
+                    Rgba tmp;
+                    if (v.type != json::Value::Type::String || !theme::ParseHex(v.s, tmp))
+                    {
+                        Warn(out, key, key + ": expected #RRGGBB or #RRGGBBAA - using the default");
                         o.erase(it);
                     }
                     break;

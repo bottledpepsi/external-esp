@@ -129,6 +129,7 @@ target_compile_definitions(token_test PRIVATE ESP_TEST_DATA_DIR="${CMAKE_CURRENT
 esp_add_test(wire_fuzz_test wire_fuzz_test.cpp)
 target_compile_definitions(wire_fuzz_test PRIVATE ESP_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 esp_add_test(entity_tracker_test entity_tracker_test.cpp)
+esp_add_test(theme_test theme_test.cpp)
 esp_add_test(death_tracker_test death_tracker_test.cpp)
 esp_add_test(entity_settings_test entity_settings_test.cpp)
 esp_add_test(wire_entities_test wire_entities_test.cpp)

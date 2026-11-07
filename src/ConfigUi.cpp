@@ -1,5 +1,8 @@
 #include "ConfigUi.h"
+#include "Clipboard.h"
 #include "ItemFilter.h"
+#include "Paths.h"
+#include "Theme.h"
 #include "Avatar.h"
 #include "FriendList.h"
 #include "Presets.h"
@@ -242,7 +245,7 @@ void ConfigUi::TabPlayers()
     if (Input(friendInput_, lx, inputW, friendFocus_, "friend name..."))
     {
         friendFocus_ = true;
-        profileFocus_ = itemFocus_ = false;
+        profileFocus_ = itemFocus_ = themeFocus_ = false;
     }
     if (Button("ADD", lx + inputW + 4, 60) && friendInput_.find_first_not_of(' ') != std::string::npos) submit();
     y_ += kRowH;
@@ -338,7 +341,7 @@ void ConfigUi::TabItems()
         if (Input(itemInput_, lx, inputW, itemFocus_, "pattern, e.g. diamond*  or  *_sword"))
         {
             itemFocus_ = true;
-            friendFocus_ = profileFocus_ = false;
+            friendFocus_ = profileFocus_ = themeFocus_ = false;
         }
         const bool hasText = itemInput_.find_first_not_of(' ') != std::string::npos;
         if (Button("ADD", lx + inputW + 4, 60) && hasText) submit();
@@ -430,7 +433,7 @@ void ConfigUi::TabProfiles()
     if (Input(profileInput_, lx, inputW, profileFocus_, "profile name..."))
     {
         profileFocus_ = true;
-        friendFocus_ = itemFocus_ = false;
+        friendFocus_ = itemFocus_ = themeFocus_ = false;
     }
     if (Button("SAVE", lx + inputW + 4, 70) && profileInput_.find_first_not_of(' ') != std::string::npos) submit();
     if (profileFocus_)
@@ -459,6 +462,108 @@ void ConfigUi::TabProfiles()
         if (Button("DEL", px_ + kW - 60 - kPad, 54, 18)) ProfileManager::Delete(name);
         y_ += kRowH;
     }
+
+    TabThemes();
+}
+
+// Themes (Theme.h): the colors, box style, line width, opacity and font as data. Built-in ones, the user's saved ones (themes\*.json in the settings
+// folder), and a JSON copy/paste so a look can be shared. Applying one changes the settings like any other control; profiles carry the result.
+void ConfigUi::TabThemes()
+{
+    const std::filesystem::path dir = ConfigDir() / "themes";
+    const float lx = px_ + kPad, inputW = kW - kPad * 2 - 78;
+    if (!themeListFresh_)
+    {
+        themeList_ = theme::List(dir);
+        themeListFresh_ = true;
+    }
+    auto report = [&](const std::string& msg, bool warn)
+    {
+        themeNote_ = msg;
+        themeNoteWarn_ = warn;
+    };
+    auto apply = [&](const theme::ParseResult& r, const std::string& label)
+    {
+        if (!r.ok)
+        {
+            report(label + ": " + (r.warnings.empty() ? std::string("not a theme") : r.warnings[0]), true);
+            return;
+        }
+        theme::Apply(r.theme, s_);
+        Save();
+        report("Applied " + label + (r.warnings.empty() ? std::string() : " (" + std::to_string(r.warnings.size()) + " warning(s): " + r.warnings[0] + ")") +
+                   (r.theme.font.empty() ? "" : ". The font changes after a restart."),
+               !r.warnings.empty());
+    };
+
+    y_ += 6;
+    Section("THEMES");
+    for (const theme::Theme& t : theme::BuiltIn())
+    {
+        g_->Text(t.name + "  (built in)", lx + 4, y_ + 3, Font::Ui, kText);
+        if (Button("USE", px_ + kW - 60 - kPad, 54, 18))
+        {
+            theme::ParseResult r;
+            r.ok = true;
+            r.theme = t;
+            apply(r, "\"" + t.name + "\"");
+        }
+        y_ += kRowH;
+    }
+    const std::vector<std::string> names = themeList_; // a copy: DEL changes the list under the loop
+    for (const std::string& name : names)
+    {
+        g_->Text(name, lx + 4, y_ + 3, Font::Ui, kText);
+        if (Button("USE", px_ + kW - 120 - kPad, 54, 18)) apply(theme::Load(dir, name), "\"" + name + "\"");
+        if (Button("DEL", px_ + kW - 60 - kPad, 54, 18))
+        {
+            theme::Delete(dir, name);
+            themeListFresh_ = false;
+            report("Deleted \"" + name + "\"", false);
+        }
+        y_ += kRowH;
+    }
+    {
+        auto submit = [&]()
+        {
+            std::string err, as;
+            const theme::Theme t = theme::FromSettings(s_, themeInput_.empty() ? std::string("my-theme") : themeInput_);
+            if (theme::Save(dir, t, &err, &as))
+            {
+                report("Saved as \"" + as + "\" (themes folder in " + ConfigDir().string() + ")", false);
+                themeInput_.clear();
+                themeFocus_ = false;
+                themeListFresh_ = false;
+            }
+            else report("Could not save: " + err, true);
+        };
+        if (Input(themeInput_, lx, inputW, themeFocus_, "name for the current look"))
+        {
+            themeFocus_ = true;
+            friendFocus_ = profileFocus_ = itemFocus_ = false;
+        }
+        if (Button("SAVE", lx + inputW + 4, 70)) submit();
+        y_ += kRowH;
+        if (themeFocus_)
+            for (int vk : in_->keys) if (vk == VK_RETURN)
+            {
+                submit();
+                break;
+            }
+    }
+    if (Button("COPY JSON", lx, 96, 18))
+        report(clipboard::SetText(theme::ToJson(theme::FromSettings(s_, themeInput_.empty() ? std::string("my-theme") : themeInput_))) ? "The current look is on the clipboard"
+                                                                                                                                            : "Could not use the clipboard",
+               false);
+    if (Button("PASTE", lx + 104, 80, 18))
+    {
+        std::string text;
+        if (!clipboard::GetText(text, theme::kMaxFileBytes)) report("The clipboard has no text (or more than 16 KB)", true);
+        else apply(theme::Parse(text), "the pasted theme");
+    }
+    y_ += kRowH;
+    if (!themeNote_.empty()) InfoRow(themeNote_, themeNoteWarn_);
+    InfoRow("A theme is colors, box style, line width, opacity and font. Fonts apply after a restart.");
 }
 
 void ConfigUi::HotkeyRow(hotkeys::Action a)
@@ -475,7 +580,7 @@ void ConfigUi::HotkeyRow(hotkeys::Action a)
     {
         rebindActive_ = true;
         rebindSlot_ = slot;
-        friendFocus_ = profileFocus_ = itemFocus_ = false;
+        friendFocus_ = profileFocus_ = itemFocus_ = themeFocus_ = false;
         hotkeyNote_.clear();
     }
     if (!d.required && cur.Bound() && !rebinding && Button("CLEAR", col + 168.f, 52, 20))
@@ -631,6 +736,7 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
         friendFocus_ = false;
         profileFocus_ = false;
         itemFocus_ = false;
+        themeFocus_ = false;
     } // widgets re-focus themselves if clicked
     auto typing = [&](std::string& buf, size_t maxLen, bool focus)
     {
@@ -641,8 +747,9 @@ void ConfigUi::Draw(Gfx& g, const UiInput& in, int winW, int winH)
     typing(friendInput_, 24, friendFocus_);
     typing(profileInput_, 32, profileFocus_);
     typing(itemInput_, itemfilter::kMaxPatternLen, itemFocus_);
-    if ((friendFocus_ || profileFocus_ || itemFocus_)) for (int vk : in.keys) if (vk == VK_ESCAPE) friendFocus_ = profileFocus_ = itemFocus_ =
-        false;
+    typing(themeInput_, theme::kMaxNameLen, themeFocus_);
+    if ((friendFocus_ || profileFocus_ || itemFocus_ || themeFocus_)) for (int vk : in.keys) if (vk == VK_ESCAPE) friendFocus_ = profileFocus_ = itemFocus_ =
+        themeFocus_ = false;
     if (rebindActive_)
     {
         for (int vk : in.keys)
