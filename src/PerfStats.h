@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include "Types.h"
 #include <string>
 
 namespace perf
@@ -155,7 +156,42 @@ namespace perf
         Ring<kN> cpuMs; // what the overlay itself spent per frame
         Ring<kN> ageMs; // how old the newest agent sample was when the frame was drawn
         JitterMeter jitter; // the nearest player's box on the screen
-        std::string frameText, ageText, jitterText;
+        Ring<kN> wireKBps; // the agent's datagrams in KB per second, one value per Refresh()
+        double wireBytesPerSec = 0, wireDgramsPerSec = 0, wireBytesPerDgram = 0; // the last window
+        int entKind[kEntityKindCount] = {}; // entities drawn per category in the last frame (the overlay copies them in at Refresh time)
+        int entSeen = 0;
+        std::string frameText, ageText, jitterText, wireText, pipeText;
+
+        // One reading of the datagram counters over `dtSec` seconds (the overlay calls it once per Refresh, with the deltas of StreamIngest's counters).
+        void PushWire(double dtSec, uint64_t dBytes, uint64_t dDgrams)
+        {
+            if (!(dtSec > 0.0) || !std::isfinite(dtSec)) return;
+            wireBytesPerSec = static_cast<double>(dBytes) / dtSec;
+            wireDgramsPerSec = static_cast<double>(dDgrams) / dtSec;
+            wireBytesPerDgram = dDgrams > 0 ? static_cast<double>(dBytes) / static_cast<double>(dDgrams) : 0.0;
+            wireKBps.Push(static_cast<float>(wireBytesPerSec / 1024.0));
+        }
+
+        // The latency of what is on the screen, in pieces (ms, averages over the window): how old the newest sample was when the frame was drawn,
+        // the wait between frames, what the overlay itself spent; and how often the agent sends. `total` = the first three.
+        struct Pipeline
+        {
+            double ageMs = 0, frameMs = 0, cpuMs = 0, agentIntervalMs = 0, total = 0;
+            bool valid = false;
+        };
+        Pipeline Breakdown() const
+        {
+            Pipeline p;
+            const RingStats a = ageMs.Summarize(), f = frameMs.Summarize(), c = cpuMs.Summarize();
+            if (a.n == 0 || f.n == 0) return p;
+            p.ageMs = a.avg;
+            p.frameMs = f.avg;
+            p.cpuMs = c.avg;
+            p.agentIntervalMs = wireDgramsPerSec > 0 ? 1000.0 / wireDgramsPerSec : 0.0;
+            p.total = p.ageMs + p.frameMs + p.cpuMs;
+            p.valid = true;
+            return p;
+        }
 
         void Clear()
         {
@@ -166,6 +202,12 @@ namespace perf
             frameText.clear();
             ageText.clear();
             jitterText.clear();
+            wireText.clear();
+            pipeText.clear();
+            wireKBps.Clear();
+            wireBytesPerSec = wireDgramsPerSec = wireBytesPerDgram = 0;
+            for (int& n : entKind) n = 0;
+            entSeen = 0;
         }
 
         void Refresh()
@@ -190,6 +232,18 @@ namespace perf
                 jitterText = b;
             }
             else jitterText = "jitter: no player in view";
+            if (wireKBps.Size() > 0)
+            {
+                std::snprintf(b, sizeof b, "wire %.1f KB/s  |  %.1f datagrams/s  |  %.0f B each", wireBytesPerSec / 1024.0, wireDgramsPerSec, wireBytesPerDgram);
+                wireText = b;
+            }
+            else wireText.clear();
+            if (const Pipeline p = Breakdown(); p.valid)
+            {
+                std::snprintf(b, sizeof b, "latency %.1f = age %.1f + frame %.1f + cpu %.2f ms  (agent every %.0f ms)", p.total, p.ageMs, p.frameMs, p.cpuMs, p.agentIntervalMs);
+                pipeText = b;
+            }
+            else pipeText.clear();
         }
     };
 } // namespace perf

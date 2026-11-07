@@ -179,6 +179,69 @@ int main()
         CHECK(Find(g, "Alice") != nullptr);
     }
 
+    // ---- the extra diagnostics: wire graph, latency bar, entity histogram ----
+    {
+        EspRenderer r;
+        perf::PerfHistory h;
+        for (int i = 0; i < 100; ++i)
+        {
+            h.frameMs.Push(8.f);
+            h.ageMs.Push(20.f);
+            h.cpuMs.Push(2.f);
+            h.PushWire(0.25, 4096, 5);
+        }
+        h.Refresh();
+        Settings s = Defaults();
+        {
+            Gfx g;
+            r.DrawPerfPanel(g, 1080, h, &s);
+            CHECK(Find(g, h.wireText) && Find(g, h.pipeText) && Find(g, "16 KB/s") == nullptr); // 16 KB/s = 4096 B x 4 per second: the graph tops at 32 (16 * 1.1 rounds up)
+            CHECK(Find(g, "32 KB/s") != nullptr);
+            // the latency bar: three segments, 20 : 8 : 2 of the 260 px
+            std::vector<Gfx::Fill> seg;
+            for (const auto& f : g.fills) if (std::fabs(f.h - 10.f) < 1e-3f) seg.push_back(f);
+            CHECK(seg.size() == 3);
+            if (seg.size() == 3)
+            {
+                CHECK(std::fabs(seg[0].w - 260.f * 20.f / 30.f) < 0.1f && std::fabs(seg[1].w - 260.f * 8.f / 30.f) < 0.1f && std::fabs(seg[2].w - 260.f * 2.f / 30.f) < 0.1f);
+                CHECK(std::fabs(seg[1].x - (seg[0].x + seg[0].w)) < 1e-3f && std::fabs(seg[0].x - 10.f) < 1e-3f);
+            }
+            CHECK(Find(g, "hostile") == nullptr); // entity display off: no histogram
+        }
+        // histogram: bars per category, tallest = the biggest count, colors by category, hidden categories dimmer, nothing past the screen
+        s.showEntities = true;
+        s.entShow[static_cast<int>(EntityKind::Xp)] = false;
+        h.entKind[static_cast<int>(EntityKind::Hostile)] = 10;
+        h.entKind[static_cast<int>(EntityKind::Passive)] = 5;
+        h.entKind[static_cast<int>(EntityKind::Xp)] = 2;
+        {
+            Gfx g;
+            r.DrawPerfPanel(g, 1080, h, &s);
+            CHECK(Find(g, "hostile") && Find(g, "passive") && Find(g, "xp") && Find(g, "10") && Find(g, "5") && Find(g, "2") && Find(g, "0"));
+            std::vector<Gfx::Fill> bars;
+            for (const auto& f : g.fills) if (std::fabs(f.w - (260.f / 6.f - 8.f)) < 0.01f) bars.push_back(f);
+            CHECK(bars.size() == 3); // hostile, passive, xp (the zeros have no bar)
+            if (bars.size() == 3)
+            {
+                CHECK(std::fabs(bars[0].h - 28.f) < 1e-3f && std::fabs(bars[1].h - 14.f) < 1e-3f && std::fabs(bars[2].h - 5.6f) < 1e-2f); // 10 : 5 : 2 of 28 px
+                CHECK(std::fabs(bars[0].col.r - presets::EntityPaletteRgb[0].r) < 1e-4f && bars[2].col.a < 0.5f && bars[0].col.a > 0.8f); // red; the hidden category is dim
+            }
+            for (const TextCall& t : g.texts) CHECK(t.y >= 0 && t.y < 1080 && t.x >= 0 && t.x < 300);
+        }
+        // a small window: only the two basic graphs and the jitter line (no wire graph, bar or histogram)
+        {
+            Gfx g;
+            r.DrawPerfPanel(g, 600, h, &s);
+            CHECK(Find(g, h.wireText) == nullptr && Find(g, h.pipeText) == nullptr && Find(g, "hostile") == nullptr);
+        }
+        // without the settings: no histogram either
+        {
+            Gfx g;
+            r.DrawPerfPanel(g, 1080, h);
+            CHECK(Find(g, "hostile") == nullptr && Find(g, h.wireText) != nullptr);
+        }
+    }
+
     // ---- the replay progress bar ----
     {
         EspRenderer r;
@@ -647,7 +710,7 @@ int main()
         perf::PerfHistory empty;
         Gfx g2;
         r.DrawPerfPanel(g2, 1080, empty);
-        CHECK(g2.lines == 2 && g2.texts.size() == 2); // empty history: the frames, no curve, no captions (the two "N ms" tops)
+        CHECK(g2.lines == 3 && g2.texts.size() == 3); // empty history: the three frames with their half-way lines, no curves, no captions (the three tops)
     }
 
     // ---- the raw "ghost" outlines ----

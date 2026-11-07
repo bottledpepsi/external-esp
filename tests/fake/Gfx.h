@@ -32,11 +32,13 @@ public:
     std::vector<Col> rectCols; // the color of every Rect() outline, in call order
     std::vector<Seg> segs; // every Line(): where, and in what color
     std::vector<Disc> discs; // every FillCircle()
+    struct Fill { float x, y, w, h; Col col; };
+    std::vector<Fill> fills; // every FillRect()
     std::vector<Box> panels; // every FillRRect() (the radar's background, labels' plates ...)
 
     void Line(float x0, float y0, float x1, float y1, Col c, float = 1.f) { ++lines; segs.push_back({x0, y0, x1, y1, c}); }
     void Rect(float, float, float, float, Col c, float = 1.f) { ++rects; rectCols.push_back(c); }
-    void FillRect(float, float, float, float, Col) { ++rects; }
+    void FillRect(float x, float y, float w, float h, Col c) { ++rects; fills.push_back({x, y, w, h, c}); }
     void RRect(float, float, float, float, float, Col, float = 1.f) { ++rects; }
     void FillRRect(float x, float y, float w, float h, float, Col) { ++rects; panels.push_back({x, y, w, h}); }
     void Circle(float, float, float, Col, float = 1.f) { ++rects; }

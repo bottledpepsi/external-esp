@@ -90,6 +90,39 @@ int main()
         CHECK(w.Get().n == 0);
     }
 
+    // ---- wire meter and the latency breakdown ----
+    {
+        PerfHistory h;
+        h.PushWire(0.0, 100, 1);
+        h.PushWire(-1.0, 100, 1);
+        h.PushWire(std::nan(""), 100, 1);
+        CHECK(h.wireKBps.Size() == 0); // a bad interval is ignored
+        h.PushWire(0.25, 5120, 5); // 5 datagrams of 1024 bytes in a quarter second
+        CHECK(h.wireKBps.Size() == 1 && Near(h.wireKBps.At(0), 20.f) && Near(static_cast<float>(h.wireBytesPerSec), 20480.f) && Near(static_cast<float>(h.wireDgramsPerSec), 20.f) &&
+              Near(static_cast<float>(h.wireBytesPerDgram), 1024.f));
+        h.PushWire(0.25, 0, 0); // a silent window: zero rate, no division by zero
+        CHECK(h.wireKBps.Size() == 2 && h.wireBytesPerSec == 0 && h.wireBytesPerDgram == 0);
+        h.PushWire(0.25, 5120, 5);
+        CHECK(!h.Breakdown().valid); // no frame data yet
+        for (int i = 0; i < 50; ++i)
+        {
+            h.frameMs.Push(8.f);
+            h.cpuMs.Push(0.5f);
+            h.ageMs.Push(20.f);
+        }
+        const PerfHistory::Pipeline p = h.Breakdown();
+        CHECK(p.valid && Near(static_cast<float>(p.ageMs), 20.f) && Near(static_cast<float>(p.frameMs), 8.f) && Near(static_cast<float>(p.cpuMs), 0.5f) && Near(static_cast<float>(p.total), 28.5f) &&
+              Near(static_cast<float>(p.agentIntervalMs), 50.f)); // 20 datagrams/s: every 50 ms
+        h.Refresh();
+        CHECK(h.wireText == "wire 20.0 KB/s  |  20.0 datagrams/s  |  1024 B each");
+        CHECK(h.pipeText == "latency 28.5 = age 20.0 + frame 8.0 + cpu 0.50 ms  (agent every 50 ms)");
+        PerfHistory quiet;
+        quiet.Refresh();
+        CHECK(quiet.wireText.empty() && quiet.pipeText.empty());
+        h.Clear();
+        CHECK(h.wireKBps.Size() == 0 && h.wireText.empty() && h.pipeText.empty() && h.wireDgramsPerSec == 0);
+    }
+
     // ---- PerfHistory texts ----
     {
         PerfHistory h;

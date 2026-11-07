@@ -82,6 +82,8 @@ public:
     std::shared_ptr<const WorldSnapshot> Latest() const; // never blocks on I/O
     Clock::time_point LastPacketTime() const; // time_point{} if nothing yet
     uint64_t PacketCount() const { return count_.load(); } // snapshots published
+    uint64_t BytesTotal() const { return bytes_.load(); } // datagram bytes received (a replay adds what it plays back): the wire-size meter takes the rate
+    void AddBytes(size_t n) { bytes_ += n; }
     uint64_t RejectedCount() const { return rejected_.load(); } // datagrams that did not parse
 
     // "" when the agent and this overlay understand each other, else a one-line explanation for the HUD:
@@ -106,7 +108,7 @@ private:
     uint64_t seq_ = 0; // producer thread only
     std::atomic<bool> have_{false};
     std::atomic<int64_t> lastNs_{0};
-    std::atomic<uint64_t> count_{0}, rejected_{0};
+    std::atomic<uint64_t> count_{0}, rejected_{0}, bytes_{0};
     // which warnings were already logged: bit v of unsupportedLogged_ = "unsupported version v", bit (why*8+min(v,7)) of authLogged_ = one line
     // per (reason, version) however the failures interleave, so a hostile or mixed stream cannot flood the log
     std::atomic<uint64_t> unsupportedLogged_{0};

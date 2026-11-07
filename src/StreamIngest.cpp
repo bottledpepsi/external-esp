@@ -6,6 +6,7 @@
 
 bool StreamIngest::OnDatagram(const char* data, size_t len, Clock::time_point arrived)
 {
+    bytes_ += len; // every datagram that reached us, readable or not
     auto snap = std::make_shared<WorldSnapshot>();
     const ParseResult r = ParseDatagramEx(data, len, *snap);
     if (r.status != ParseStatus::Ok)

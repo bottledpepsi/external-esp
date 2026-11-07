@@ -64,6 +64,8 @@ private:
     WorldSnapshot rawSnap_; // the "raw" view: a copy of the smoother's newest sample, kept so its vectors keep their capacity
     perf::PerfHistory perfHist_; // the graphs' data; filled only while Settings::showGraphs is on
     Clock::time_point lastFrameT_{};
+    Clock::time_point lastWireT_{}; // the datagram counters at the last Refresh (the wire meter takes deltas)
+    uint64_t lastWireBytes_ = 0, lastWireCount_ = 0;
     bool graphsWereOn_ = false;
     perf::CacheCounters cachePrev_; // the text-cache counters at the last HUD refresh
     Clock::time_point nextHud_{}, hudWinStart_{};

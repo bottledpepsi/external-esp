@@ -115,6 +115,22 @@ int main()
         CHECK(none.Count() == 0 && none.Position() == 0);
     }
 
+    // ---- the byte counter: a replay counts what it plays, in step with the datagram count ----
+    {
+        ReplayPlayer rp;
+        CHECK(rp.Load("seek.esprec"));
+        StreamIngest in;
+        CHECK(in.BytesTotal() == 0);
+        rp.Pump(in, At(0));
+        const uint64_t one = in.BytesTotal();
+        CHECK(one > 40 && one < 200 && in.PacketCount() == 1);
+        rp.Pump(in, At(1000));
+        CHECK(in.PacketCount() == 11 && in.BytesTotal() > one * 10 && in.BytesTotal() < one * 12);
+        const char junk[] = "hello";
+        in.OnDatagram(junk, 5);
+        CHECK(in.BytesTotal() > one * 10 && in.RejectedCount() == 1); // a datagram that does not parse still crossed the wire
+    }
+
     // ---- Bookmarks ----
     {
         Bookmarks b;

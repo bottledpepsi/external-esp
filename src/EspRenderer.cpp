@@ -464,13 +464,13 @@ bool EspRenderer::ProbeNearestPlayer(const Settings& s, const Camera& cam, const
     return found;
 }
 
-void EspRenderer::DrawGraph(Gfx& g, float x, float y, float w, float h, const perf::Ring<perf::PerfHistory::kN>& r, const std::string& caption)
+void EspRenderer::DrawGraph(Gfx& g, float x, float y, float w, float h, const perf::Ring<perf::PerfHistory::kN>& r, const std::string& caption, const char* unit)
 {
     const float top = perf::NiceCeiling(r.Summarize().max * 1.1f); // ms at the top edge of the graph
     g.FillRRect(x, y, w, h, 4.f, Col{0.04f, 0.05f, 0.08f, 0.72f});
     g.Line(x, y + h * 0.5f, x + w, y + h * 0.5f, Col{1, 1, 1, 0.10f}, 1.f); // half way
     char t[24];
-    std::snprintf(t, sizeof t, "%.0f ms", top); // a handful of distinct strings (4, 8, 16, 32 ...): the text cache keeps hitting
+    std::snprintf(t, sizeof t, "%.0f %s", top, unit); // a handful of distinct strings (4, 8, 16, 32 ...): the text cache keeps hitting
     g.Text(t, x + 4, y + 1, Font::Hint, Col{0.7f, 0.75f, 0.85f, 0.7f});
     const int n = r.Size();
     if (n >= 2)
@@ -515,15 +515,64 @@ void EspRenderer::DrawReplayBar(Gfx& g, int winW, int winH, const ReplayBar& bar
                    Col{0.85f, 0.88f, 0.95f, 0.95f}, true);
 }
 
-void EspRenderer::DrawPerfPanel(Gfx& g, int winH, const perf::PerfHistory& hst)
+void EspRenderer::DrawPerfPanel(Gfx& g, int winH, const perf::PerfHistory& hst, const Settings* s)
 {
     constexpr float kW = 260.f, kH = 56.f, kGap = 22.f; // a graph, and the caption under it
+    constexpr float kBarH = 10.f, kHistH = 40.f;
+    const bool extras = winH >= 800; // the wire graph, the latency bar and the histogram need room; a small window keeps the two basic graphs
+    const bool hist = extras && s && s->showEntities;
+    const int nGraphs = extras ? 3 : 2;
     const float x = 10.f;
-    float y = static_cast<float>(winH) - 10.f - 16.f /* jitter line */ - 2.f * (kH + kGap);
+    float y = static_cast<float>(winH) - 10.f - 16.f /* jitter line */ - static_cast<float>(nGraphs) * (kH + kGap) - (extras ? kBarH + 22.f : 0.f) - (hist ? kHistH + 22.f : 0.f);
     DrawGraph(g, x, y, kW, kH, hst.frameMs, hst.frameText);
     y += kH + kGap;
     DrawGraph(g, x, y, kW, kH, hst.ageMs, hst.ageText);
     y += kH + kGap;
+    if (extras)
+    {
+        DrawGraph(g, x, y, kW, kH, hst.wireKBps, hst.wireText, "KB/s");
+        y += kH + kGap;
+        // the latency of what is on the screen in pieces: the age of the newest sample, the wait between frames, the overlay's own time
+        const perf::PerfHistory::Pipeline p = hst.Breakdown();
+        g.FillRRect(x, y, kW, kBarH, 3.f, Col{0.04f, 0.05f, 0.08f, 0.72f});
+        if (p.valid && p.total > 0.0)
+        {
+            const double seg[3] = {p.ageMs, p.frameMs, p.cpuMs};
+            const Col col[3] = {Col{0.35f, 0.85f, 1.f, 0.95f}, Col{0.45f, 0.55f, 1.f, 0.95f}, Col{0.40f, 0.90f, 0.45f, 0.95f}};
+            float sx = x;
+            for (int i = 0; i < 3; ++i)
+            {
+                const float sw = static_cast<float>(seg[i] / p.total) * kW;
+                if (sw > 0.5f) g.FillRect(sx, y, sw, kBarH, col[i]);
+                sx += sw;
+            }
+        }
+        g.Rect(x, y, kW, kBarH, Col{1, 1, 1, 0.18f}, 1.f);
+        if (!hst.pipeText.empty()) g.Text(hst.pipeText, x, y + kBarH + 2.f, Font::UiSmall, Col{0.62f, 0.67f, 0.80f, 0.95f}, true);
+        y += kBarH + 22.f;
+    }
+    if (hist)
+    {
+        // entities by category, as bars: hostile, passive, neutral, projectile, xp, other
+        static const EntityKind order[] = {EntityKind::Hostile, EntityKind::Passive, EntityKind::Neutral, EntityKind::Projectile, EntityKind::Xp, EntityKind::Other};
+        static const char* const names[] = {"hostile", "passive", "neutral", "proj.", "xp", "other"};
+        int mx = 1;
+        for (int n : hst.entKind) mx = std::max(mx, n);
+        const float slot = kW / 6.f;
+        for (int i = 0; i < 6; ++i)
+        {
+            const int k = static_cast<int>(order[i]);
+            const int n = hst.entKind[k];
+            const presets::Rgb c = presets::EntityPaletteRgb[static_cast<size_t>(std::clamp(s->entColor[k], 0, static_cast<int>(presets::EntityPaletteRgb.size()) - 1))];
+            const float bh = static_cast<float>(n) / static_cast<float>(mx) * (kHistH - 12.f);
+            const float bx = x + slot * static_cast<float>(i) + 4.f;
+            if (n > 0) g.FillRect(bx, y + kHistH - bh, slot - 8.f, bh, Col{c.r, c.g, c.b, s->entShow[k] ? 0.9f : 0.35f});
+            g.TextCentered(std::to_string(n), bx + (slot - 8.f) * 0.5f, y + kHistH - bh - 12.f, Font::Hint, Col{0.80f, 0.84f, 0.92f, 0.95f});
+            g.TextCentered(names[i], bx + (slot - 8.f) * 0.5f, y + kHistH + 1.f, Font::Hint, Col{0.62f, 0.67f, 0.80f, 0.95f});
+        }
+        g.Line(x, y + kHistH, x + kW, y + kHistH, Col{1, 1, 1, 0.18f}, 1.f);
+        y += kHistH + 22.f;
+    }
     if (!hst.jitterText.empty()) g.Text(hst.jitterText, x, y - 4.f, Font::UiSmall, Col{0.62f, 0.67f, 0.80f, 0.95f}, true);
 }
 

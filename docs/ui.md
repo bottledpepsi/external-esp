@@ -74,6 +74,12 @@ Off by default; while off nothing is recorded or drawn. On, the bottom-left corn
 * **Data age** - how old the newest agent sample was at the moment each frame was drawn, in ms: the latency of what you see. With a 20 Hz agent it is a sawtooth between 0 and 50.
 * **Jitter** - the same measure the golden tests use (tests/golden.h), on the box of the nearest player who is on the screen: the distance of each frame's position from the midpoint of the two neighbouring frames, in pixels, as RMS / 95th percentile / maximum over the last 240 frames. Smooth motion gives about 0; a box that vibrates around a smoothly moving target gives a large number. "no player in view" while nobody qualifies (in front of the camera, at least 1.5 m away, inside the screen plus 10 %).
 
+In a window at least 800 px high the panel also shows:
+
+* **Wire**: the agent's datagrams in KB per second as a graph, with `wire 12.3 KB/s | 20.0 datagrams/s | 614 B each` under it (a window of a quarter second each; a replay counts what it plays back). A line that is flat at 0 while the game runs means no datagrams are arriving; a size that grows into the thousands of bytes means the entity / item lists are big.
+* **Latency bar**: one bar split into *age* (how old the newest sample is when the frame is drawn), *frame* (the wait between frames) and *cpu* (the overlay's own time), with the sum and how often the agent sends: `latency 28.5 = age 20.0 + frame 8.0 + cpu 0.50 ms (agent every 50 ms)`. This is what you see lagging behind the game; the biggest piece is where to look.
+* **Entities by category**: six bars (hostile, passive, neutral, projectile, xp, other) with the count the last frame drew, in the category colors; a category that is switched off is dim. Only while "Show entities" is on.
+
 The scale of a graph steps through 4, 8, 16, 32 ... ms so it does not jump about with every frame; its top is written in the corner. The texts are rebuilt four times a second.
 
 ## Entities: mobs, projectiles, experience orbs (ITEMS tab, "ENTITIES")

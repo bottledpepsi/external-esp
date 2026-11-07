@@ -1019,8 +1019,19 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
             cachePrev_ = cc;
         }
         hudText_.Build(hudMode, f);
-        if (graphs) perfHist_.Refresh();
-        lastStatus_ = status + (linkText.empty() ? std::string() : "  |  " + linkText); // for the diagnostics report
+        if (graphs)
+        {
+            const uint64_t bytes = Src().BytesTotal(), count = Src().PacketCount();
+            if (lastWireT_ != Clock::time_point{} && bytes >= lastWireBytes_ && count >= lastWireCount_)
+                perfHist_.PushWire(std::chrono::duration<double>(now - lastWireT_).count(), bytes - lastWireBytes_, count - lastWireCount_);
+            lastWireT_ = now;
+            lastWireBytes_ = bytes;
+            lastWireCount_ = count;
+            for (int k = 0; k < kEntityKindCount; ++k) perfHist_.entKind[k] = renderer_.EntityKindShown(k);
+            perfHist_.entSeen = renderer_.EntitiesSeen();
+            perfHist_.Refresh();
+        }
+        else lastWireT_ = Clock::time_point{};        lastStatus_ = status + (linkText.empty() ? std::string() : "  |  " + linkText); // for the diagnostics report
     }
     static const Col kHudMain{0.80f, 0.85f, 1.f, 0.95f}, kHudDim{0.62f, 0.67f, 0.80f, 0.9f}, kHudAlert{1.f, 0.6f, 0.4f, 1.f};
     for (int i = 0; i < hudText_.Lines(); ++i)
@@ -1039,7 +1050,7 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
     }
 
     if (graphs && !(visible_ && haveCam)) perfHist_.jitter.PushMissing(); // nothing was drawn: the chain of frames is broken
-    if (graphs && visible_) renderer_.DrawPerfPanel(gfx_, h, perfHist_);
+    if (graphs && visible_) renderer_.DrawPerfPanel(gfx_, h, perfHist_, &settings_);
     if (replayMode_ && visible_ && replayPlayer_.Count() > 0)
     {
         float marks[Bookmarks::kMax];

@@ -45,7 +45,8 @@ public:
         int nMarks = 0;
     };
     void DrawReplayBar(Gfx& g, int winW, int winH, const ReplayBar& bar);
-    void DrawPerfPanel(Gfx& g, int winH, const perf::PerfHistory& h);
+    // With `s` the entity histogram uses the category colors; without it (or with the entity display off) the histogram is left out.
+    void DrawPerfPanel(Gfx& g, int winH, const perf::PerfHistory& h, const Settings* s = nullptr);
     // Where the nearest player's box centre is on the screen, for the jitter meter (the golden tests' "player" probe: in front by 1.5 m or more,
     // inside the viewport plus 10 %). False when no player qualifies.
     bool ProbeNearestPlayer(const Settings& s, const Camera& cam, const WorldSnapshot& snap, double& x, double& y) const;
@@ -56,7 +57,7 @@ public:
     int ItemsFiltered() const { return itemsFiltered_; }
 
 private:
-    void DrawGraph(Gfx& g, float x, float y, float w, float h, const perf::Ring<perf::PerfHistory::kN>& r, const std::string& caption);
+    void DrawGraph(Gfx& g, float x, float y, float w, float h, const perf::Ring<perf::PerfHistory::kN>& r, const std::string& caption, const char* unit = "ms");
     // `fixed` = a category color (entities); null = the players' own colors (friend / near-red to far-green / white).
     // A line from the screen origin (bottom / center / top) to `target`, clamped to the screen edge when it is off to the side. `fixed`: a category
     // color (entities); null = the players' own colors (friend / near-red to far-green / white). Nothing beyond the tracer distance.
