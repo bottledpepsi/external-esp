@@ -179,6 +179,37 @@ int main()
         CHECK(Find(g, "Alice") != nullptr);
     }
 
+    // ---- the replay progress bar ----
+    {
+        EspRenderer r;
+        const float marks[] = {0.25f, 0.5f, 7.f, -3.f}; // out-of-range marks are clamped onto the bar
+        EspRenderer::ReplayBar bar;
+        bar.elapsedSec = 62;
+        bar.totalSec = 190;
+        bar.speed = 0.5;
+        bar.paused = true;
+        bar.marks = marks;
+        bar.nMarks = 4;
+        Gfx g;
+        r.DrawReplayBar(g, 1920, 1080, bar);
+        CHECK(g.segs.size() == 4 && Find(g, "1:02 / 3:10   0.5x   paused"));
+        const float x0 = 960.f - 320.f, x1 = 960.f + 320.f;
+        for (const auto& s : g.segs) CHECK(s.x0 >= x0 - 1e-3f && s.x0 <= x1 + 1e-3f && s.x0 == s.x1);
+        CHECK(std::fabs(g.segs[0].x0 - (x0 + 640.f * 0.25f)) < 1e-3f && std::fabs(g.segs[2].x0 - x1) < 1e-3f && std::fabs(g.segs[3].x0 - x0) < 1e-3f);
+        const TextCall* t = Find(g, "1:02 / 3:10   0.5x   paused");
+        CHECK(t && t->y > 1000 && t->y < 1080);
+        // nothing to play yet / no marks / an unknown length: no crash, a sensible bar
+        EspRenderer::ReplayBar empty;
+        Gfx g2;
+        r.DrawReplayBar(g2, 800, 600, empty);
+        CHECK(g2.segs.empty() && Find(g2, "0:00 / 0:00   1x"));
+        bar.nMarks = 0;
+        bar.paused = false;
+        Gfx g3;
+        r.DrawReplayBar(g3, 1920, 1080, bar);
+        CHECK(g3.segs.empty() && Find(g3, "1:02 / 3:10   0.5x"));
+    }
+
     // ---- the theme's colors are what gets drawn ----
     {
         Settings s = Defaults();

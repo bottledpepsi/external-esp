@@ -36,6 +36,15 @@ public:
     int EntitiesSeen() const { return entSeen_; } // ... and in the list
     int EntityKindShown(int kind) const { return kind < 0 || kind >= kEntityKindCount ? 0 : entKindShown_[kind]; }
     // The performance graphs (bottom-left): frame time and data age as 240-frame line graphs with their summary text, and the jitter line.
+    // A replay's progress bar at the bottom: elapsed / total time, speed, a mark for every bookmark. `marks` are 0..1 positions along the bar.
+    struct ReplayBar
+    {
+        double elapsedSec = 0, totalSec = 0, speed = 1;
+        bool paused = false;
+        const float* marks = nullptr;
+        int nMarks = 0;
+    };
+    void DrawReplayBar(Gfx& g, int winW, int winH, const ReplayBar& bar);
     void DrawPerfPanel(Gfx& g, int winH, const perf::PerfHistory& h);
     // Where the nearest player's box centre is on the screen, for the jitter meter (the golden tests' "player" probe: in front by 1.5 m or more,
     // inside the viewport plus 10 %). False when no player qualifies.

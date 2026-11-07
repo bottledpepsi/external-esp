@@ -490,6 +490,31 @@ void EspRenderer::DrawGraph(Gfx& g, float x, float y, float w, float h, const pe
     if (!caption.empty()) g.Text(caption, x, y + h + 2.f, Font::UiSmall, Col{0.62f, 0.67f, 0.80f, 0.95f}, true);
 }
 
+void EspRenderer::DrawReplayBar(Gfx& g, int winW, int winH, const ReplayBar& bar)
+{
+    const float w = std::min(640.f, winW * 0.5f), h = 8.f, x = (winW - w) * 0.5f, y = static_cast<float>(winH) - 46.f;
+    const float frac = bar.totalSec > 0 ? Clamp01(static_cast<float>(bar.elapsedSec / bar.totalSec)) : 0.f;
+    g.FillRRect(x, y, w, h, 3.f, Col{0.05f, 0.06f, 0.09f, 0.75f});
+    if (frac > 0.f) g.FillRRect(x, y, w * frac, h, 3.f, bar.paused ? Col{1.f, 0.75f, 0.25f, 0.95f} : Col{0.35f, 0.75f, 1.f, 0.95f});
+    g.RRect(x, y, w, h, 3.f, Col{1, 1, 1, 0.25f}, 1.f);
+    for (int i = 0; i < bar.nMarks; ++i)
+    {
+        const float mx = x + w * Clamp01(bar.marks[i]);
+        g.Line(mx, y - 4.f, mx, y + h + 4.f, Col{1.f, 0.85f, 0.25f, 1.f}, 2.f);
+    }
+    auto clock = [](double s)
+    {
+        const int t = static_cast<int>(std::max(0.0, s));
+        char b[24];
+        std::snprintf(b, sizeof b, "%d:%02d", t / 60, t % 60);
+        return std::string(b);
+    };
+    char sp[16];
+    std::snprintf(sp, sizeof sp, "%.2gx", bar.speed);
+    g.TextCentered(clock(bar.elapsedSec) + " / " + clock(bar.totalSec) + "   " + sp + (bar.paused ? "   paused" : ""), x + w * 0.5f, y + h + 6.f, Font::UiSmall,
+                   Col{0.85f, 0.88f, 0.95f, 0.95f}, true);
+}
+
 void EspRenderer::DrawPerfPanel(Gfx& g, int winH, const perf::PerfHistory& hst)
 {
     constexpr float kW = 260.f, kH = 56.f, kGap = 22.f; // a graph, and the caption under it

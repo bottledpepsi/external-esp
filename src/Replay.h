@@ -41,6 +41,14 @@ public:
     // While paused: publish exactly the next datagram (and move the playhead to it).
     bool Step(StreamIngest& ingest, Clock::time_point now);
 
+    // Jump: the next datagram published is record `index` (clamped to the end) and the playhead moves to its time. Running, the next Pump() delivers
+    // it at once and continues from there; paused, the playhead is left a nanosecond before it and Step() shows it. Works backwards too. The datagrams in between are not published, so the
+    // item / entity lists on screen are the ones from before the jump until the next list arrives.
+    void Seek(size_t index);
+    uint64_t TimeNsOf(size_t index) const { return index < recs_.size() ? recs_[index].t : loopLen_; } // recording time of a record (the end for index >= Count())
+    size_t IndexAtNs(uint64_t ns) const; // the first record at or after `ns`; Count() when there is none
+    double PlayheadNs() const { return playhead_; }
+
     size_t Count() const { return recs_.size(); }
     size_t Position() const { return next_; } // datagrams published in this pass
     uint64_t DurationNs() const { return loopLen_; }
@@ -65,7 +73,7 @@ private:
     uint64_t skipped_ = 0;
 
     double speed_ = 1.0;
-    bool loop_ = false, paused_ = false, started_ = false;
+    bool loop_ = false, paused_ = false, started_ = false, seekPending_ = false;
     Clock::time_point lastNow_{};
     double playhead_ = 0; // ns of recording time
     size_t next_ = 0;
@@ -96,6 +104,10 @@ public:
     bool Paused() const { return paused_.load(); }
     double Speed() const { return speed_.load(); }
     size_t Position() const { return pos_.load(); }
+    double PlayheadNs() const { return playheadNs_.load(); }
+    // any thread: jump to a record / by seconds of recording time (negative = back), executed by the driver thread; while paused the frame is shown
+    void RequestSeekIndex(size_t index) { seekIdx_ = index; }
+    void RequestSeekRelative(double seconds) { seekRelSec_.fetch_add(seconds); }
     bool Finished() const { return finished_.load(); }
 
 private:
@@ -104,5 +116,7 @@ private:
     std::atomic<bool> togglePause_{false}, step_{false}, paused_{false}, finished_{false};
     std::atomic<double> speedReq_{0}, speed_{1.0};
     std::atomic<size_t> pos_{0};
+    std::atomic<size_t> seekIdx_{static_cast<size_t>(-1)};
+    std::atomic<double> seekRelSec_{0}, playheadNs_{0};
     std::jthread thread_;
 };

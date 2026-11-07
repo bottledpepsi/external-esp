@@ -79,7 +79,8 @@ size_t ReplayPlayer::Pump(StreamIngest& ingest, Clock::time_point now)
     {
         started_ = true;
         lastNow_ = now;
-        playhead_ = 0;
+        if (!seekPending_) playhead_ = 0;
+        seekPending_ = false;
     }
     if (!paused_) playhead_ += std::chrono::duration<double, std::nano>(now - lastNow_).count() * speed_;
     lastNow_ = now;
@@ -104,13 +105,29 @@ size_t ReplayPlayer::Pump(StreamIngest& ingest, Clock::time_point now)
     return n;
 }
 
+void ReplayPlayer::Seek(size_t index)
+{
+    if (recs_.empty()) return;
+    next_ = std::min(index, recs_.size());
+    playhead_ = static_cast<double>(TimeNsOf(next_));
+    if (paused_ && next_ < recs_.size()) playhead_ -= 1.0; // paused: just before it, so Pump() does not publish it - Step() shows it
+    seekPending_ = !started_; // a jump before the first Pump(): the playhead must not be reset to 0 there
+}
+
+size_t ReplayPlayer::IndexAtNs(uint64_t ns) const
+{
+    const auto it = std::lower_bound(recs_.begin(), recs_.end(), ns, [](const Rec& r, uint64_t t) { return r.t < t; });
+    return static_cast<size_t>(it - recs_.begin());
+}
+
 bool ReplayPlayer::Step(StreamIngest& ingest, Clock::time_point now)
 {
     if (recs_.empty() || !paused_) return false;
     if (!started_)
     {
         started_ = true;
-        playhead_ = 0;
+        if (!seekPending_) playhead_ = 0;
+        seekPending_ = false;
     }
     lastNow_ = now;
     if (next_ >= recs_.size())
@@ -139,11 +156,26 @@ void ReplayDriver::Start()
             if (const double s = speedReq_.exchange(0)) player_.SetSpeed(s);
             if (togglePause_.exchange(false)) player_.SetPaused(!player_.Paused());
             const auto now = ReplayPlayer::Clock::now();
+            bool seeked = false;
+            if (const size_t idx = seekIdx_.exchange(static_cast<size_t>(-1)); idx != static_cast<size_t>(-1))
+            {
+                player_.Seek(idx);
+                seeked = true;
+            }
+            if (const double rel = seekRelSec_.exchange(0); rel != 0)
+            {
+                const double target = player_.PlayheadNs() + rel * 1e9;
+                const double len = static_cast<double>(player_.DurationNs());
+                player_.Seek(player_.IndexAtNs(static_cast<uint64_t>(std::clamp(target, 0.0, len))));
+                seeked = true;
+            }
+            if (seeked && player_.Paused()) player_.Step(ingest_, now); // paused: show the frame that was jumped to
             if (step_.exchange(false)) player_.Step(ingest_, now);
             player_.Pump(ingest_, now);
             speed_ = player_.Speed();
             paused_ = player_.Paused();
             pos_ = player_.Position();
+            playheadNs_ = player_.PlayheadNs();
             finished_ = player_.Finished();
             std::this_thread::sleep_for(1ms);
         }

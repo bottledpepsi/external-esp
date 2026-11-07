@@ -10,6 +10,7 @@
 #include "EspRenderer.h"
 #include "Gfx.h"
 #include "HotkeyRegistry.h"
+#include "Bookmarks.h"
 #include "DeathTracker.h"
 #include "EntityTracker.h"
 #include "Hud.h"
@@ -56,6 +57,7 @@ private:
     AppOptions opt_;
     hud::Text hudText_;
     hud::Mode lastHudMode_ = hud::Mode::Compact;
+    Bookmarks bookmarks_; // replay: the places the user marked (<recording>.bookmarks.json)
     DeathTracker death_; // where the local player last died (DeathTracker.h)
     EntityTracker entTracker_; // follows the mobs from list to list (EntityTracker.h)
     std::vector<EntityState> entPredicted_; // what the tracker says they look like now

@@ -274,6 +274,26 @@ void EspOverlay::HandleReplayKeys()
     if (KeyEdge(VK_F7)) replayDriver_.RequestStep();
     if (KeyEdge(VK_F8)) replayDriver_.SetSpeed(replayDriver_.Speed() * 0.5);
     if (KeyEdge(VK_F9)) replayDriver_.SetSpeed(replayDriver_.Speed() * 2.0);
+    // seeking: [ and ] jump 10 s back / forward (Shift: a minute); , and . go to the previous / next bookmark; B marks the current place
+    const bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    if (KeyEdge(VK_OEM_4)) replayDriver_.RequestSeekRelative(shift ? -60.0 : -10.0);
+    if (KeyEdge(VK_OEM_6)) replayDriver_.RequestSeekRelative(shift ? 60.0 : 10.0);
+    const size_t pos = replayDriver_.Position(); // records published so far: the one on screen is pos - 1
+    const size_t cur = pos > 0 ? pos - 1 : 0;
+    if (KeyEdge(VK_OEM_COMMA))
+        if (const Bookmarks::Mark* m = bookmarks_.Prev(cur)) replayDriver_.RequestSeekIndex(m->index);
+    if (KeyEdge(VK_OEM_PERIOD))
+        if (const Bookmarks::Mark* m = bookmarks_.Next(cur)) replayDriver_.RequestSeekIndex(m->index);
+    if (KeyEdge('B'))
+    {
+        const std::string label = "mark " + std::to_string(bookmarks_.Size() + 1);
+        if (bookmarks_.Add(cur, label))
+        {
+            std::string err;
+            if (!bookmarks_.Save(Bookmarks::PathFor(opt_.replayPath), &err)) LOG_WARN("Replay: bookmarks not saved: %s", err.c_str());
+            else LOG_INFO("Replay: bookmark at record %zu", cur);
+        }
+    }
 }
 
 namespace
@@ -529,6 +549,12 @@ int EspOverlay::Run()
         replayPlayer_.SetSpeed(opt_.replaySpeed > 0 ? opt_.replaySpeed : 1.0);
         replayPlayer_.SetLoop(opt_.replayLoop);
         replayIngest_.SetSeqCheck(false); // a looping recording restarts its datagram numbers
+        {
+            std::vector<std::string> warn;
+            if (!bookmarks_.Load(Bookmarks::PathFor(opt_.replayPath), replayPlayer_.Count(), &warn)) LOG_WARN("Replay: the bookmarks file could not be read - starting with none");
+            for (const std::string& w : warn) LOG_WARN("Replay bookmarks: %s", w.c_str());
+            if (bookmarks_.Size()) LOG_INFO("Replay: %zu bookmark(s)", bookmarks_.Size());
+        }
         replayDriver_.Start();
     }
     else if (!opt_.demo)
@@ -1014,6 +1040,21 @@ void EspOverlay::RenderFrame(const RECT& r, bool /*gameFocused*/)
 
     if (graphs && !(visible_ && haveCam)) perfHist_.jitter.PushMissing(); // nothing was drawn: the chain of frames is broken
     if (graphs && visible_) renderer_.DrawPerfPanel(gfx_, h, perfHist_);
+    if (replayMode_ && visible_ && replayPlayer_.Count() > 0)
+    {
+        float marks[Bookmarks::kMax];
+        const int nMarks = static_cast<int>(std::min<size_t>(bookmarks_.Size(), Bookmarks::kMax));
+        const double total = static_cast<double>(replayPlayer_.DurationNs());
+        for (int i = 0; i < nMarks; ++i) marks[i] = total > 0 ? static_cast<float>(static_cast<double>(replayPlayer_.TimeNsOf(bookmarks_.At(static_cast<size_t>(i)).index)) / total) : 0.f;
+        EspRenderer::ReplayBar bar;
+        bar.elapsedSec = replayDriver_.PlayheadNs() / 1e9;
+        bar.totalSec = total / 1e9;
+        bar.speed = replayDriver_.Speed();
+        bar.paused = replayDriver_.Paused();
+        bar.marks = marks;
+        bar.nMarks = nMarks;
+        renderer_.DrawReplayBar(gfx_, w, h, bar);
+    }
 
     if (configOpen_)
     {

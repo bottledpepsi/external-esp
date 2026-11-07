@@ -58,6 +58,12 @@ mcesp --replay session.esprec [--replay-speed 0.5] [--replay-loop]
 
 The overlay covers the whole monitor (like `--screen`), does not look for Minecraft and does not inject the agent. Keys while it runs:
 **F6** pause/resume, **F7** step one datagram while paused, **F8** half speed, **F9** double speed (speed is limited to 0.05x-20x).
+
+**Seeking and bookmarks** (replay keys, fixed like F6-F9):
+
+* **`[`** and **`]`** jump 10 seconds of recording time back / forward (**Shift** + the key: a minute). Running, playback continues from the new place; paused, the frame at the new place is shown. A jump publishes nothing in between, so the item / entity lists on screen are the old ones until the next list in the recording arrives.
+* **`B`** marks the current place; **`,`** and **`.`** go to the previous / next mark. Bookmarks are saved next to the recording as `<recording>.esprec.bookmarks.json` - a JSON array of `"<record index> <label>"` strings, at most 200, labels of printable ASCII up to 40 characters (the keyboard adds `mark N`; edit the file to rename them). An entry whose index is past the end of the recording, or that is not in that form, is dropped with a log line and the rest are kept.
+* A **progress bar** at the bottom of the screen shows elapsed / total time, the speed, `paused`, and a yellow tick for every bookmark.
 The HUD shows `REPLAY n/total  speed  [PAUSED]`.
 
 What is replayed, in `src/Replay.*`: every datagram in order, parsed by the same `ParseDatagram` and published by the same
