@@ -93,10 +93,14 @@ public:
     }
     bool CloseRequested() const { return closeRequested_; }
 
+    // Called every frame with the tab being shown. Only a CHANGE of tab brings that tab's focused control into view: the config window calls this on
+    // every frame, and flagging the focus as "moved" each time made ScrollFor() put the scroll back on the focused control after every wheel notch
+    // (with the focus on the first control: back to the top), so a tab taller than the window could not be scrolled down.
     void SetTab(int t)
     {
-        tab_ = std::clamp(t, 0, kMaxTabs - 1);
-        moved_ = true; // bring the new tab's focus into view
+        const int n = std::clamp(t, 0, kMaxTabs - 1);
+        if (n != tab_) moved_ = true; // bring the new tab's focus into view
+        tab_ = n;
     }
     int Tab() const { return tab_; }
 

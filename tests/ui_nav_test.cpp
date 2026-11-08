@@ -141,6 +141,62 @@ int main()
         CHECK(up < 500.f && up <= n6.Focus() * 24.f);
     }
 
+    // ---- the window's real frame sequence: BeginFrame, SetTab(the same tab) on EVERY frame, layout, ScrollFor. The wheel must be able to scroll down. ----
+    {
+        const float viewH = 390.f;
+        const int stops = 30; // a tab taller than the window
+        UiNav nav;
+        float scroll = 0.f;
+        auto frame = [&](std::vector<int> keys, int tab)
+        {
+            nav.BeginFrame(keys, false, false, false, stops);
+            nav.SetTab(tab);
+            Layout(nav, stops);
+            scroll = nav.ScrollFor(scroll, viewH);
+        };
+        frame({}, 0);
+        CHECK(scroll == 0.f);
+        // the user scrolls with the wheel (the window changes `scroll` between frames, then calls ScrollFor after the layout)
+        for (int i = 0; i < 10; ++i)
+        {
+            scroll += 28.f; // a wheel notch down
+            const float before = scroll;
+            frame({}, 0);
+            CHECK(scroll == before); // not pulled back to the focused control (the first one: that would be the top)
+        }
+        CHECK(scroll == 280.f);
+        // the focus ring on the first control, still not fought
+        frame({K::kDown}, 0); // first key only shows the ring
+        scroll = 200.f;
+        frame({}, 0);
+        CHECK(scroll == 200.f);
+        // keyboard movement still scrolls to the focused control: End -> the last one comes into view
+        frame({K::kEnd}, 0);
+        CHECK(scroll > 200.f && 29 * 24.f + 22.f + 6.f - scroll <= viewH + 0.01f);
+        const float atEnd = scroll;
+        frame({}, 0); // and the next frame leaves it where it is
+        CHECK(scroll == atEnd);
+        // switching tab brings the new tab's focused control into view once (a tab whose focus is far down opens scrolled to it) ...
+        UiNav n2;
+        n2.BeginFrame({K::kDown, K::kEnd}, false, false, false, stops);
+        n2.SetTab(0);
+        Layout(n2, stops);
+        float s2 = n2.ScrollFor(0.f, viewH);
+        CHECK(s2 > 0);
+        n2.BeginFrame({}, false, false, false, stops);
+        n2.SetTab(2); // another tab
+        Layout(n2, stops);
+        CHECK(n2.ScrollFor(300.f, viewH) == 0.f); // its focus is the first control: shown from the top
+        n2.BeginFrame({}, false, false, false, stops);
+        n2.SetTab(2); // the same tab again: the user may scroll
+        Layout(n2, stops);
+        CHECK(n2.ScrollFor(300.f, viewH) == 300.f);
+        n2.BeginFrame({}, false, false, false, stops);
+        n2.SetTab(99); // clamped to the last tab, which is a change
+        Layout(n2, stops);
+        CHECK(n2.Tab() == UiNav::kMaxTabs - 1 && n2.ScrollFor(300.f, viewH) == 0.f);
+    }
+
     if (fails) std::printf("%d failure(s)\n", fails); else std::puts("ui_nav_test: all passed");
     return fails ? 1 : 0;
 }
