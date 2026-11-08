@@ -109,11 +109,14 @@ int main()
         std::filesystem::last_write_time(file, t1 - std::chrono::seconds(30)); // pretend it was written a while ago
         CHECK(Write(file, RequestEntity(5))); // the same text again is a new write: this is the keep-alive
         CHECK(std::filesystem::last_write_time(file) > t1 - std::chrono::seconds(30));
-        std::ifstream f(file);
-        std::string line;
-        std::getline(f, line);
-        CHECK(line == "inspect 5");
-        std::filesystem::remove_all(dir);
+        {
+            std::ifstream f(file);
+            std::string line;
+            std::getline(f, line);
+            CHECK(line == "inspect 5");
+        } // closed: Windows cannot delete a file that is still open
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec); // a leftover temp folder is not a failure
     }
 
     // ---- picking the entity at the crosshair ----

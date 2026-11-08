@@ -3,6 +3,7 @@
 #include "DiagnosticsApp.h"
 #include "FriendList.h"
 #include "Logger.h"
+#include "Paths.h"
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -17,6 +18,7 @@ using diag::Redactor;
 
 int main()
 {
+    paths::ConfigDirOverride() = std::filesystem::current_path(); // friends.json below is written in the working directory; on Windows the default config folder is %APPDATA%
     // ---- names: whole word, any case, stable labels ----
     {
         Redactor r;

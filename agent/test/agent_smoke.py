@@ -223,7 +223,18 @@ CASES = {
 
 # extra agent options and the negotiation line expected in esp_agent.log, per case (default: wire=4, no token)
 EXTRA_OPTS = {"fake-v5": "wire=5;token=" + TOKEN + ";verbose=1", "fake-dump": "wire=4;dump=1"}
-NEGOTIATION = {"fake-v5": "overlay reads up to v5, agent writes up to v5 -> sending v5, session token set"}
+def agent_wire_version():
+    """the newest wire version the agent writes: Snapshot.WIRE_VERSION in the source, so a version bump does not need an edit here"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "..", "src", "mcradar", "Snapshot.java"), encoding="utf-8") as f:
+        m = re.search(r"WIRE_VERSION\s*=\s*(\d+)", f.read())
+    if not m:
+        raise SystemExit("agent_smoke: WIRE_VERSION not found in Snapshot.java")
+    return int(m.group(1))
+
+
+AGENT_MAX = agent_wire_version()
+NEGOTIATION = {"fake-v5": "overlay reads up to v5, agent writes up to v%d -> sending v5, session token set" % AGENT_MAX}
 
 
 def done(case, dgs):
@@ -282,7 +293,7 @@ def run_case(case, java_home, jar, timeout):
         problems.append("agent log line without the common format: %r" % bad[0])
     if (case == "fake-v5") != ("[DEBUG] [agent] verbose logging is on" in agent_log):
         problems.append("DEBUG line 'verbose logging is on' present=%s but verbose option was %s" % ("[DEBUG]" in agent_log, case == "fake-v5"))
-    want = NEGOTIATION.get(case, "overlay reads up to v4, agent writes up to v5 -> sending v4")
+    want = NEGOTIATION.get(case, "overlay reads up to v4, agent writes up to v%d -> sending v4" % AGENT_MAX)
     if want not in agent_log:
         problems.append("agent log has no wire-version negotiation line %r (esp_agent.log: %r)" % (want, agent_log[:300]))
     return dgs, problems, time.time() - t0

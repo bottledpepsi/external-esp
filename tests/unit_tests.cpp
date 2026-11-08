@@ -6,10 +6,12 @@
 #include "FriendList.h"
 #include "Presets.h"
 #include "ProfileManager.h"
+#include "Paths.h"
 #include "Smoother.h"
 #include "Wire.h"
 #include <cassert>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 static int fails = 0;
@@ -19,6 +21,10 @@ static bool near(double a, double b, double e = 1e-3) { return std::fabs(a - b) 
 static bool angNear(double a, double b, double e = 1e-2) { double d = std::fmod(a - b, 360.0); if (d > 180) d -= 360; if (d < -180) d += 360; return std::fabs(d) <= e; }
 
 int main() {
+    // The config folder is %APPDATA%\external-esp on Windows (the current directory elsewhere). The friends / settings / profile checks below read and
+    // write files in the working directory (a fresh folder per run, see run_clean.cmake), so the config folder is pinned there on every platform - which
+    // also keeps this test from writing "Bob" into a developer's real friends.json.
+    paths::ConfigDirOverride() = std::filesystem::current_path();
     // --- JSON from the ORIGINAL C# tool (PascalCase, 2.0 floats, extra unknown key) loads
     std::string csharp = R"({"HotkeyToggle":"F6","HotkeyConfig":"Insert","HotkeyExit":"End","DistanceFormat":"Kilometers",
       "MaxLabelDist":50,"TextShadow":false,"BoxStyle":"Corner-only","CornerRadius":6.0,"BoxThickness":3,"BoxColorMode":"Gradient",
