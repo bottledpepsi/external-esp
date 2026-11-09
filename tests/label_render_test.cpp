@@ -88,9 +88,9 @@ int main()
         Gfx g;
         EspRenderer r;
         r.DrawWorld(g, s, cam, w);
-        const TextCall* near = Find(g, "Near");
+        const TextCall* nearLabel = Find(g, "Near"); // (not named near / far: <windows.h> defines those as macros)
         const TextCall* edge = Find(g, "Edge");
-        CHECK(near && std::fabs(near->col.a - 1.f) < 1e-4f); // inside 70 m: fully opaque
+        CHECK(nearLabel && std::fabs(nearLabel->col.a - 1.f) < 1e-4f); // inside 70 m: fully opaque
         CHECK(edge && std::fabs(edge->col.a - (1.f - 20.f / 30.f)) < 0.01f); // 90 m: a third left
         CHECK(Find(g, "Gone") == nullptr); // beyond the label distance
         CHECK(Find(g, "20m") && Find(g, "90m") && !Find(g, "105m")); // distance texts follow the same rule
@@ -545,8 +545,8 @@ int main()
             const auto& a = g.segs[g.segs.size() - 2];
             CHECK(a.col.r == 1.f && a.col.g < 0.5f && a.col.a == 1.f);
             x.death = {0, 0, 9000};
-            const Gfx far = panel(s, w, x);
-            CHECK(far.segs.back().col.a < 1.f); // pinned: dimmer
+            const Gfx farAway = panel(s, w, x);
+            CHECK(farAway.segs.back().col.a < 1.f); // pinned: dimmer
         }
     }
 

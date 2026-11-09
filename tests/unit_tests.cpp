@@ -14,6 +14,13 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+// <windows.h> (reached through Paths.h on Windows) defines `near` and `far` as empty macros, which breaks the helper named near() below.
+#ifdef near
+#undef near
+#endif
+#ifdef far
+#undef far
+#endif
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL line %d: %s\n", __LINE__, #c); ++fails; } } while (0)
 static bool near(double a, double b, double e = 1e-3) { return std::fabs(a - b) <= e; }
