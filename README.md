@@ -32,7 +32,7 @@ Do not use `-static`: it fails on CLion 2026's bundled GCC 15 (`undefined refere
 ## Continuous integration
 `.github/workflows/ci.yml` runs on every push and pull request: the core tests on Linux, the agent on JDK 17/21/25 (build, Java tests, smoke test against the
 fake games) and a Windows MinGW-w64 build with the native tests. The Windows job prints its `g++` version in the step summary (it uses MSYS2's current
-UCRT64 GCC, which may differ from CLion's bundled GCC 15.2) and uploads `mcesp.exe` and `esp-agent.jar` as the `mcesp-windows-x64` artifact (plus `libwinpthread-1.dll` only if the exe still imports it, i.e. the static link fell back).
+UCRT64 GCC, which may differ from CLion's bundled GCC 15.2) and uploads `mcesp.exe`, `esp-agent.jar` and `libwinpthread-1.dll` as the `mcesp-windows-x64` artifact.
 
 ### Sanitizers
 `cmake -S tests -B build/san -DESP_SANITIZE=address,undefined && cmake --build build/san -j && ctest --test-dir build/san --output-on-failure` runs the core tests under

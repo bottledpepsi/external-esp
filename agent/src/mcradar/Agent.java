@@ -154,13 +154,12 @@ public final class Agent {
                     maybeReportPacing(cfg);
                     snap.sampleNs = tSample;
                     snap.hasSampleTime = true;
-                    final AgentConfig.Route route = cfg.route();   // port, token and wire from ONE moment: a reload may be switching all three
-                    snap.wire = route.wire;
-                    snap.token = route.token;
+                    snap.wire = cfg.negotiatedWire();
+                    snap.token = cfg.token;
                     snap.session = session;
                     snap.seq = ++seqCounter;
                     byte[] data = snap.encode();
-                    try { sock.send(new DatagramPacket(data, data.length, lo, route.port)); datagramsSent++; } catch (Throwable ignored) { sendErrors++; }
+                    try { sock.send(new DatagramPacket(data, data.length, lo, cfg.port)); datagramsSent++; } catch (Throwable ignored) { sendErrors++; }
                     SelfTestRun st = selfTest;
                     if (st != null) { try { st.observe(probe, snap); } catch (Throwable t) { Log.warn("Self-test observe failed: " + t); } }
 

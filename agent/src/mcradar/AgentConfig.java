@@ -75,24 +75,6 @@ final class AgentConfig {
      * an overlay that no longer sends one means "no token".
      */
     String reloadFrom(AgentConfig n, java.util.Map<String, String> given) {
-        synchronized (this) { return reloadLocked(n, given); }
-    }
-
-    /**
-     * Where the next datagram goes and who it says it is from, read together. A reload replaces port and token one after the other (port first); a send
-     * that read the token before and the port after it went to the NEW overlay's port carrying the OLD token - one stray datagram the new overlay drops
-     * (and that the reload smoke test counted as a failure, now and then). reloadFrom() and route() take the same lock, so a datagram is always the old
-     * pair or the new pair, never a mix.
-     */
-    static final class Route {
-        final int port, wire;
-        final String token;
-        Route(int port, String token, int wire) { this.port = port; this.token = token; this.wire = wire; }
-    }
-
-    synchronized Route route() { return new Route(port, token, negotiatedWire()); }
-
-    private String reloadLocked(AgentConfig n, java.util.Map<String, String> given) {
         StringBuilder sb = new StringBuilder();
         if (given.containsKey("port") && n.port != port) { sb.append("port ").append(port).append(" -> ").append(n.port).append("; "); port = n.port; }
         if (given.containsKey("hz") && n.hz != hz) { sb.append("hz ").append(hz).append(" -> ").append(n.hz).append("; "); hz = n.hz; }

@@ -2,8 +2,8 @@
 #   core-linux  platform-independent core (Smoother, Wire, Camera math, config...) - native tests on every push
 #   sanitizers  the core tests under ASan+UBSan (+float-cast-overflow) and under TSan
 #   agent       Java agent build + Java-side tests + agent smoke test on JDK 17 / 21 / 25
-#   windows     MinGW-w64 build of mcesp.exe (no -static: -static-libgcc -static-libstdc++, libwinpthread linked statically),
-#               the same native tests built with MinGW, a start-up check of the exe, and the exe/jar (+ the DLL only if still imported) as an artifact
+#   windows     MinGW-w64 build of mcesp.exe (no -static: -static-libgcc -static-libstdc++ + libwinpthread-1.dll),
+#               the same native tests built with MinGW, a start-up check of the exe, and the exe/jar/DLL as an artifact
 name: CI
 
 on:
@@ -152,25 +152,20 @@ jobs:
         run: |
           g++ -std=c++20 -Wall -Wextra tests/windows/wintrack_probe.cpp src/WindowTracker.cpp -o wintrack_probe.exe -luser32 -lgdi32 -static-libgcc -static-libstdc++
           ./wintrack_probe.exe
-      - name: Collect exe + jar (+ DLL only if the exe still needs it)
+      - name: Collect exe + jar + DLL
         shell: msys2 {0}
         run: |
           set -e
           mkdir -p dist
           cp build/win/mcesp.exe dist/
           cp agent/esp-agent.jar dist/
+          cp "$(dirname "$(command -v g++)")/libwinpthread-1.dll" dist/
           cp toolchain.txt dist/
-          # libgcc/libstdc++ must be linked in, and by default libwinpthread is linked statically too (ESP_STATIC_WINPTHREAD, CMakeLists.txt): then the
-          # exe imports no MinGW DLL at all. Only when the toolchain could not do that does it import libwinpthread-1.dll, which then has to ship with it.
+          ls -l dist
+          # no -static, but libgcc/libstdc++ must be linked in; only libwinpthread may remain as a MinGW DLL
           objdump -p dist/mcesp.exe | grep 'DLL Name' | sort -u | tee dist-imports.txt
           if grep -qiE 'libstdc\+\+|libgcc_s' dist-imports.txt; then echo '::error::libstdc++/libgcc DLL is still imported (-static-libgcc -static-libstdc++ lost?)'; exit 1; fi
-          if grep -qi 'libwinpthread-1.dll' dist-imports.txt; then
-            echo '::warning::mcesp.exe imports libwinpthread-1.dll (the static link fell back, see the Build mcesp log): shipping the DLL next to it'
-            cp "$(dirname "$(command -v g++)")/libwinpthread-1.dll" dist/
-          else
-            echo 'libwinpthread is linked statically: nothing to ship but the exe and the jar'
-          fi
-          ls -l dist
+          grep -qi 'libwinpthread-1.dll' dist-imports.txt || { echo '::error::expected libwinpthread-1.dll to be imported'; exit 1; }
       - name: Start-up check (plain Windows PATH, nothing from MSYS2)
         shell: cmd
         run: |
@@ -178,7 +173,7 @@ jobs:
           cd dist
           mcesp.exe --help
           if errorlevel 1 exit /b 1
-      - name: Upload exe and jar (and the DLL if it was needed)
+      - name: Upload exe, jar and DLL
         uses: actions/upload-artifact@v4
         with:
           name: mcesp-windows-x64
