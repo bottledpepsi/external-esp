@@ -9,6 +9,39 @@ public final class AgentConfigTest {
         if (!ok) { fails++; System.out.println("FAIL: " + what); }
     }
 
+    /**
+     * A reload switches port and token one after the other; a datagram built while that happens must carry either the old pair or the new pair
+     * (a mixed pair is a datagram for the new overlay with the old overlay's token). One thread keeps reloading A <-> B, the other reads the route.
+     */
+    private static void reloadIsAtomic() {
+        final AgentConfig cfg = AgentConfig.parse("port=40001;wire=5;token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        final java.util.Map<String, String> toB = new java.util.HashMap<String, String>(), toA = new java.util.HashMap<String, String>();
+        final AgentConfig b = AgentConfig.parse("port=40002;wire=5;token=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", toB);
+        final AgentConfig a = AgentConfig.parse("port=40001;wire=5;token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", toA);
+        final boolean[] stop = new boolean[1];
+        Thread flipper = new Thread(new Runnable() {
+            public void run() {
+                boolean toBnext = true;
+                while (!stop[0]) { cfg.reloadFrom(toBnext ? b : a, toBnext ? toB : toA); toBnext = !toBnext; }
+            }
+        });
+        flipper.start();
+        int mixed = 0, seenA = 0, seenB = 0;
+        long end = System.nanoTime() + 1500000000L;
+        while (System.nanoTime() < end) {
+            AgentConfig.Route r = cfg.route();
+            boolean isA = r.port == 40001 && r.token.charAt(0) == 'a', isB = r.port == 40002 && r.token.charAt(0) == 'b';
+            if (isA) seenA++; else if (isB) seenB++; else mixed++;
+        }
+        stop[0] = true;
+        try { flipper.join(); } catch (InterruptedException ignored) { }
+        check(mixed == 0, "a datagram's port and token always belong together (mixed pairs: " + mixed + ")");
+        check(seenA > 0 && seenB > 0, "the test saw both configurations (" + seenA + " / " + seenB + "), so it really ran against a changing config");
+        AgentConfig.Route r = AgentConfig.parse("port=40009;wire=9;token=cccccccccccccccccccccccccccccccc").route();
+        check(r.port == 40009 && r.token.startsWith("cc") && r.wire == Snapshot.WIRE_VERSION, "route() carries the port, token and negotiated wire");
+        check(AgentConfig.parse("port=40009").route().token == null && AgentConfig.parse("port=40009").route().wire == Snapshot.WIRE_MIN, "no token: null, and the wire the config asked for");
+    }
+
     public static void main(String[] args) {
         AgentConfig d = AgentConfig.parse(null);
         check(d.port == 47615 && d.hz == 20 && d.wire == 4, "defaults: port 47615, hz 20, wire 4 (an overlay that passes no wire= option is treated as v4)");
@@ -48,6 +81,7 @@ public final class AgentConfigTest {
         Snapshot s = new Snapshot();
         check(new String(s.encode(), java.nio.charset.Charset.forName("UTF-8")).startsWith("MCRADAR 4\n"), "default header is v4");
 
+        reloadIsAtomic();
         System.out.println(fails == 0 ? "ALL OK (" + checks + " checks)" : fails + " FAILURES of " + checks);
         System.exit(fails == 0 ? 0 : 1);
     }
